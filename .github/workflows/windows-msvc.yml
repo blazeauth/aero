@@ -1,0 +1,72 @@
+name: Windows MSVC
+
+on:
+  push:
+    branches: ["main", "feature/*"]
+    paths-ignore: ["**/*.md", "docs/**"]
+  pull_request:
+    branches: main
+    paths-ignore: ["**/*.md", "docs/**"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Test (${{ matrix.tls.name }})
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug]
+        std: [23]
+        tls:
+          - name: No TLS
+            cmake_arg: ""
+            build_dir: build-no-tls
+            use_vcpkg: false
+          - name: wolfSSL
+            cmake_arg: "-DAERO_TLS_BACKEND=wolfssl -DAERO_BUILD_NETWORK_TLS_TESTS=ON"
+            build_dir: build-wolfssl
+            use_vcpkg: true
+
+    env:
+      VCPKG_DEFAULT_TRIPLET: x64-windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup vcpkg
+        if: matrix.tls.use_vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 29f10019c26142cc4689b53b8c91da519db09e5c
+
+      - name: Install wolfSSL (vcpkg)
+        if: matrix.tls.use_vcpkg
+        run: |
+          & "$env:VCPKG_ROOT\vcpkg.exe" install "wolfssl[asio]" --triplet "$env:VCPKG_DEFAULT_TRIPLET"
+
+      - name: Configure CMake
+        shell: pwsh
+        run: |
+          $vcpkgCmakeArgs = @()
+          if ("${{ matrix.tls.use_vcpkg }}" -eq "true") {
+            $vcpkgCmakeArgs += "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+            $vcpkgCmakeArgs += "-DVCPKG_TARGET_TRIPLET=$env:VCPKG_DEFAULT_TRIPLET"
+          }
+
+          cmake -B "${{ github.workspace }}/${{ matrix.tls.build_dir }}" `
+            -DCMAKE_CXX_STANDARD=${{ matrix.std }} `
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON `
+            -DCMAKE_CXX_EXTENSIONS=OFF `
+            -DCMAKE_CXX_FLAGS_DEBUG="/bigobj" `
+            ${{ matrix.tls.cmake_arg }} `
+            $vcpkgCmakeArgs
+
+      - name: Build
+        run: cmake --build "${{ github.workspace }}/${{ matrix.tls.build_dir }}" --config ${{ matrix.build_type }} --parallel
+
+      - name: Test
+        working-directory: ${{ github.workspace }}/${{ matrix.tls.build_dir }}
+        run: ctest --output-on-failure -C ${{ matrix.build_type }}

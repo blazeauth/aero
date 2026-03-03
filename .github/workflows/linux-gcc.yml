@@ -1,0 +1,85 @@
+name: Linux GCC
+
+on:
+  push:
+    branches: ["main", "feature/*"]
+    paths-ignore: ["**/*.md", "docs/**"]
+  pull_request:
+    branches: main
+    paths-ignore: ["**/*.md", "docs/**"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Test (${{ matrix.tls.name }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    container:
+      image: gcc:15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug]
+        gcc: [15.2]
+        std: [23]
+        tls:
+          - name: No TLS
+            cmake_arg: ""
+            build_dir: build-no-tls
+            use_vcpkg: false
+          - name: wolfSSL
+            cmake_arg: "-DAERO_TLS_BACKEND=wolfssl -DAERO_BUILD_NETWORK_TLS_TESTS=ON"
+            build_dir: build-wolfssl
+            use_vcpkg: true
+
+    env:
+      CC: gcc
+      CXX: g++
+      VCPKG_DEFAULT_TRIPLET: x64-linux
+
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates cmake git python3 curl zip unzip tar pkg-config
+          update-ca-certificates
+
+      - uses: actions/checkout@v4
+
+      - name: Setup vcpkg
+        if: matrix.tls.use_vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 29f10019c26142cc4689b53b8c91da519db09e5c
+
+      - name: Install wolfSSL (vcpkg)
+        if: matrix.tls.use_vcpkg
+        run: |
+          "$VCPKG_ROOT/vcpkg" install "wolfssl[asio]" --triplet "${VCPKG_DEFAULT_TRIPLET}"
+
+      - name: Configure CMake
+        shell: bash
+        run: |
+          vcpkg_cmake_args=()
+          if [[ "${{ matrix.tls.use_vcpkg }}" == "true" ]]; then
+            vcpkg_cmake_args+=("-DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
+            vcpkg_cmake_args+=("-DVCPKG_TARGET_TRIPLET=${VCPKG_DEFAULT_TRIPLET}")
+          fi
+
+          cmake -S . -B "${{ matrix.tls.build_dir }}" \
+            -DCMAKE_BUILD_TYPE="${{ matrix.build_type }}" \
+            -DCMAKE_CXX_STANDARD="${{ matrix.std }}" \
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+            -DCMAKE_CXX_EXTENSIONS=OFF \
+            ${{ matrix.tls.cmake_arg }} \
+            "${vcpkg_cmake_args[@]}"
+        env:
+          CXXFLAGS: -g3
+
+      - name: Build
+        run: cmake --build "${{ matrix.tls.build_dir }}" --parallel
+
+      - name: Test
+        working-directory: "${{ matrix.tls.build_dir }}"
+        run: ctest --output-on-failure --parallel

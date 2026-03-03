@@ -1,0 +1,9 @@
+InheritParentConfig: true
+Checks: >
+  -*-magic-numbers,
+  -google-build-explicit-make-pair,
+  -*-signed-bitwise,
+  -*-special-member-functions,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -bugprone-use-after-move,
+  -hicpp-invalid-access-moved,

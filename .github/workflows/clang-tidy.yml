@@ -1,0 +1,89 @@
+name: Clang Tidy
+
+on:
+  push:
+    branches: ["main", "feature/*"]
+    paths-ignore: ["**/*.md", "docs/**"]
+  pull_request:
+    branches: main
+    paths-ignore: ["**/*.md", "docs/**"]
+  workflow_dispatch:
+
+jobs:
+  verify_tidy:
+    name: Run
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      VCPKG_TARGET_TRIPLET: x64-linux
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg-binary-cache,readwrite
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup clang and libc++
+        run: |
+          sudo apt-get update
+          sudo apt-get install -yq --no-install-recommends wget ca-certificates gnupg lsb-release
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 20
+          sudo apt-get install -yq --no-install-recommends clang-20 clang-tidy-20 libc++-20-dev libc++abi-20-dev
+
+          echo "CC=clang-20" >> $GITHUB_ENV
+          echo "CXX=clang++-20" >> $GITHUB_ENV
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -yq --no-install-recommends git curl zip unzip tar pkg-config ninja-build
+
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-${{ env.VCPKG_TARGET_TRIPLET }}-${{ hashFiles('.github/workflows/**') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-${{ env.VCPKG_TARGET_TRIPLET }}-
+
+      - name: Install vcpkg
+        run: |
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git "${VCPKG_ROOT}"
+          "${VCPKG_ROOT}/bootstrap-vcpkg.sh" -disableMetrics
+
+      - name: Install dependencies via vcpkg
+        run: |
+          "${VCPKG_ROOT}/vcpkg" install asio utfcpp magic-enum gtest wolfssl[asio] --triplet "${VCPKG_TARGET_TRIPLET}"
+
+      - name: Generate build
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_C_COMPILER="$CC" \
+            -DCMAKE_CXX_COMPILER="$CXX" \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
+            -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET="${VCPKG_TARGET_TRIPLET}"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+
+      - name: Run clang tidy
+        run: |
+          wget -q -O run-clang-tidy.py https://raw.githubusercontent.com/llvm/llvm-project/refs/heads/release/20.x/clang-tools-extra/clang-tidy/tool/run-clang-tidy.py
+          python3 -u run-clang-tidy.py \
+            -clang-tidy-binary clang-tidy-20 \
+            -p build \
+            -j 0 \
+            -checks=-clang-analyzer-* \
+            -source-filter "^${GITHUB_WORKSPACE}/(src|tests|examples)/" \
+            -header-filter "^${GITHUB_WORKSPACE}/(include|tests|examples)/" \
+            -exclude-header-filter "^${GITHUB_WORKSPACE}/build/_deps/" \
+            -extra-arg=-std=c++23 \
+            -extra-arg=-stdlib=libc++ \
+            -allow-no-checks
