@@ -5,13 +5,12 @@
 #include <string>
 #include <vector>
 
-#include "asio/ssl/verify_context.hpp"
+#include <asio/ssl/verify_context.hpp>
 
 #include <openssl/ssl.h>
 #include <openssl/x509_vfy.h>
 
 #include "aero/tls/detail/x509_verify_error.hpp"
-#include "x509_verify_error.hpp"
 
 #include <wincrypt.h>
 #pragma comment(lib, "crypt32.lib")

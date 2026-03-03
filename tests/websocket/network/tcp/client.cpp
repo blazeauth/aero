@@ -16,6 +16,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <asio/error.hpp>
+
 #include "aero/deadline.hpp"
 
 #include "aero/websocket/client.hpp"
@@ -23,7 +25,6 @@
 #include "aero/websocket/error.hpp"
 #include "aero/websocket/message.hpp"
 
-#include "asio/error.hpp"
 #include "websocket/test_helpers.hpp"
 
 namespace websocket = aero::websocket;
