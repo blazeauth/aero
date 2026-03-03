@@ -1,4 +1,4 @@
-<img width="1920" height="900" alt="Github aero Image" src="https://github.com/user-attachments/assets/d4030253-8805-4cf2-b164-62886c289318" />
+<img width="1920" height="900" alt="Github aero Image" src="https://github.com/user-attachments/assets/a82220ca-678b-4850-b1b6-44454ff9b0d3" />
 
 # aero – Lightweight Websocket Client for C++23
 
