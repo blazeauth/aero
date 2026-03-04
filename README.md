@@ -216,14 +216,13 @@ class basic_client {
 
   ...
 
-  std::error_code set_handshake_header(std::string name, std::string value);
-  std::error_code set_handshake_headers(http::headers headers);
-  void remove_handshake_header(std::string_view name);
-  void clear_handshake_headers();
-
   auto async_connect(websocket::uri uri, CompletionToken&& token);
   auto async_connect(std::expected<websocket::uri, std::error_code> parsed_uri, CompletionToken&& token);
   auto async_connect(std::string_view uri, CompletionToken&& token);
+
+  auto async_connect(websocket::uri uri, http::headers headers, CompletionToken&& token);
+  auto async_connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers, CompletionToken&& token);
+  auto async_connect(std::string_view uri, http::headers headers, CompletionToken&& token);
 
   auto async_send_text(std::string_view text, CompletionToken&& token);
   auto async_send_binary(std::span<const std::byte> data, CompletionToken&& token);
@@ -248,6 +247,13 @@ class basic_client {
   std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri, duration timeout);
   std::expected<http::headers, std::error_code> connect(std::string_view uri_string);
   std::expected<http::headers, std::error_code> connect(std::string_view uri_string, duration timeout);
+
+  std::expected<http::headers, std::error_code> connect(websocket::uri uri, http::headers headers);
+  std::expected<http::headers, std::error_code> connect(websocket::uri uri, http::headers headers, duration timeout);
+  std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers);
+  std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers, duration timeout);
+  std::expected<http::headers, std::error_code> connect(std::string_view uri_string, http::headers headers);
+  std::expected<http::headers, std::error_code> connect(std::string_view uri_string, http::headers headers, duration timeout);
 
   std::error_code send_text(std::string_view text);
   std::error_code send_binary(std::span<const std::byte> data);
@@ -355,7 +361,6 @@ Please note that all references to functions apply to both synchronous and async
 
 |Operation|Contract|
 |-|-|
-|`set_handshake_header`, `set_handshake_headers`, `remove_handshake_header`, `clear_handshake_headers`|Threadsafe but not safe to rely on concurrently with an outstanding `async_connect` if you expect the header to affect that specific handshake.|
 |`async_connect`|No other `async_connect` should be outstanding and no read/close is active. Exclusive phase, concurrent usage with `async_connect`, `async_read`, `async_close` is forbidden.|
 |`async_send_text`, `async_send_binary`, `async_ping`, `async_pong`|Can be called concurrently with any operation except `async_connect`. Transport layer should serialize all write operations using strand/mutex/etc. Not meaningful concurrently with `async_connect` before open, because it returns `protocol_error::connection_closed`. Can be called concurenntly with `async_close`, but the result depends on strand ordering - once in closing, it will return `protocol_error::connection_closed`.|
 |`async_close`|Threadsafe, but correct usage is only one close at a time. A second concurrent call returns `protocol_error::already_closing`. Forbidden concurrently with `async_connect` (possible competing reads). Allowed to use with `async_read` concurrently, and if `async_close` starts first, it may start reading and an external `async_read` will return `protocol_error::already_reading`|
