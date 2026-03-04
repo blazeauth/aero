@@ -32,11 +32,6 @@ namespace aero::websocket::concepts {
            http::headers handshake_headers, std::string_view header_name_view, std::string_view text,
            std::span<const std::byte> bytes, websocket::close_code close_code, std::string close_reason,
            typename Client::duration timeout) {
-      { client.set_handshake_header(header_name, header_value) } -> std::same_as<std::error_code>;
-      { client.set_handshake_headers(handshake_headers) } -> std::same_as<std::error_code>;
-      { client.remove_handshake_header(header_name_view) } -> std::same_as<void>;
-      { client.clear_handshake_headers() } -> std::same_as<void>;
-
       {
         client.async_connect(uri_string, asio::as_tuple(asio::use_awaitable))
       } -> std::same_as<asio::awaitable<std::tuple<std::error_code, http::headers>>>;
@@ -47,6 +42,18 @@ namespace aero::websocket::concepts {
 
       {
         client.async_connect(uri, asio::as_tuple(asio::use_awaitable))
+      } -> std::same_as<asio::awaitable<std::tuple<std::error_code, http::headers>>>;
+
+      {
+        client.async_connect(uri_string, handshake_headers, asio::as_tuple(asio::use_awaitable))
+      } -> std::same_as<asio::awaitable<std::tuple<std::error_code, http::headers>>>;
+
+      {
+        client.async_connect(parsed_uri, handshake_headers, asio::as_tuple(asio::use_awaitable))
+      } -> std::same_as<asio::awaitable<std::tuple<std::error_code, http::headers>>>;
+
+      {
+        client.async_connect(uri, handshake_headers, asio::as_tuple(asio::use_awaitable))
       } -> std::same_as<asio::awaitable<std::tuple<std::error_code, http::headers>>>;
 
       {
@@ -88,6 +95,13 @@ namespace aero::websocket::concepts {
       {
         client.async_read(asio::as_tuple(asio::use_awaitable))
       } -> std::same_as<asio::awaitable<std::tuple<std::error_code, websocket::message>>>;
+
+      { client.connect(uri, handshake_headers) } -> std::same_as<std::expected<http::headers, std::error_code>>;
+      { client.connect(uri, handshake_headers, timeout) } -> std::same_as<std::expected<http::headers, std::error_code>>;
+      { client.connect(parsed_uri, handshake_headers) } -> std::same_as<std::expected<http::headers, std::error_code>>;
+      { client.connect(parsed_uri, handshake_headers, timeout) } -> std::same_as<std::expected<http::headers, std::error_code>>;
+      { client.connect(uri_string, handshake_headers) } -> std::same_as<std::expected<http::headers, std::error_code>>;
+      { client.connect(uri_string, handshake_headers, timeout) } -> std::same_as<std::expected<http::headers, std::error_code>>;
 
       { client.connect(uri) } -> std::same_as<std::expected<http::headers, std::error_code>>;
       { client.connect(uri, timeout) } -> std::same_as<std::expected<http::headers, std::error_code>>;

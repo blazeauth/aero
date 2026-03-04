@@ -31,6 +31,7 @@
 #include "aero/deadline.hpp"
 #include "aero/detail/final_action.hpp"
 #include "aero/error.hpp"
+#include "aero/http/headers.hpp"
 #include "aero/io_runtime.hpp"
 #include "aero/net/concepts/transport.hpp"
 #include "aero/websocket/client_handshaker.hpp"
@@ -130,30 +131,11 @@ namespace aero::websocket {
         transport_(std::move(strand), std::forward<TransportArgs>(transport_args)...,
           options.max_message_size + detail::max_frame_header_size) {}
 
-    std::error_code set_handshake_header(std::string name, std::string value) {
-      return run_on_strand([this, name = std::move(name), value = std::move(value)]() mutable {
-        return client_handshaker_.set_header(std::move(name), std::move(value));
-      });
-    }
-
-    std::error_code set_handshake_headers(http::headers headers) {
-      return run_on_strand(
-        [this, headers = std::move(headers)]() mutable { return client_handshaker_.set_headers(std::move(headers)); });
-    }
-
-    void remove_handshake_header(std::string_view name) {
-      run_on_strand([this, name]() mutable { client_handshaker_.remove_header(name); });
-    }
-
-    void clear_handshake_headers() {
-      run_on_strand([this]() mutable noexcept { client_handshaker_.clear_headers(); });
-    }
-
     template <typename CompletionToken>
-    auto async_connect(websocket::uri uri, CompletionToken&& token) {
+    auto async_connect(websocket::uri uri, http::headers headers, CompletionToken&& token) {
       return asio::async_initiate<CompletionToken, void(std::error_code, http::headers)>(
         asio::co_composed<void(std::error_code, http::headers)>(
-          [this](auto, websocket::uri uri) -> void {
+          [this](auto, websocket::uri uri, http::headers headers) -> void {
             reset_connection_state(state::connecting);
 
             auto [connect_ec] =
@@ -164,9 +146,13 @@ namespace aero::websocket {
             }
 
             // Build bodyless HTTP websocket upgrade request
-            handshake_request handshake = client_handshaker_.build_request(uri);
+            auto handshake = client_handshaker_.build_request(uri, std::move(headers));
+            if (!handshake) {
+              std::ignore = co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_return {handshake.error(), http::headers{}};
+            }
 
-            auto [write_ec, bytes_written] = co_await transport_.async_write(handshake.bytes(), return_as_deferred_tuple());
+            auto [write_ec, bytes_written] = co_await transport_.async_write(handshake->bytes(), return_as_deferred_tuple());
             if (write_ec) {
               std::ignore = co_await async_finalize_session({}, return_as_deferred_tuple());
               co_return {write_ec, http::headers{}};
@@ -195,7 +181,7 @@ namespace aero::websocket {
             std::string_view handshake_response{reinterpret_cast<const char*>(response_buffer.data()), bytes_read};
 
             // Perform upgrade challenge with server handshake response
-            auto parsed_headers = client_handshaker_.parse_response(handshake_response, handshake.sec_websocket_key);
+            auto parsed_headers = client_handshaker_.parse_response(handshake_response, handshake->sec_websocket_key);
             if (!parsed_headers.has_value()) {
               std::ignore = co_await async_finalize_session({}, return_as_deferred_tuple());
               co_return {parsed_headers.error(), http::headers{}};
@@ -206,28 +192,46 @@ namespace aero::websocket {
           },
           transport_.get_strand()),
         token,
-        std::move(uri));
+        std::move(uri),
+        std::move(headers));
     }
 
     template <typename CompletionToken>
-    auto async_connect(std::expected<websocket::uri, std::error_code> parsed_uri, CompletionToken&& token) {
+    auto async_connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers,
+      CompletionToken&& token) {
       return asio::async_initiate<CompletionToken, void(std::error_code, http::headers)>(
         asio::co_composed<void(std::error_code, http::headers)>(
-          [this](auto, std::expected<websocket::uri, std::error_code> parsed_uri) -> void {
+          [this](auto, std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers) -> void {
             if (!parsed_uri.has_value()) {
               co_return {parsed_uri.error(), http::headers{}};
             }
 
-            co_return co_await this->async_connect(std::move(*parsed_uri), return_as_deferred_tuple());
+            co_return co_await this->async_connect(std::move(*parsed_uri), std::move(headers), return_as_deferred_tuple());
           },
           transport_.get_strand()),
         token,
-        std::move(parsed_uri));
+        std::move(parsed_uri),
+        std::move(headers));
+    }
+
+    template <typename CompletionToken>
+    auto async_connect(std::string_view uri, http::headers headers, CompletionToken&& token) {
+      return async_connect(websocket::uri::parse(uri), std::move(headers), std::forward<CompletionToken>(token));
+    }
+
+    template <typename CompletionToken>
+    auto async_connect(websocket::uri uri, CompletionToken&& token) {
+      return async_connect(std::move(uri), http::headers{}, std::forward<CompletionToken>(token));
+    }
+
+    template <typename CompletionToken>
+    auto async_connect(std::expected<websocket::uri, std::error_code> parsed_uri, CompletionToken&& token) {
+      return async_connect(std::move(parsed_uri), http::headers{}, std::forward<CompletionToken>(token));
     }
 
     template <typename CompletionToken>
     auto async_connect(std::string_view uri, CompletionToken&& token) {
-      return async_connect(websocket::uri::parse(uri), std::forward<CompletionToken>(token));
+      return async_connect(uri, http::headers{}, std::forward<CompletionToken>(token));
     }
 
     // Caller must ensure that given buffer remains valid until the operation is completed
@@ -534,36 +538,64 @@ namespace aero::websocket {
         token);
     }
 
-    std::expected<http::headers, std::error_code> connect(websocket::uri uri) {
-      return synchronize_awaitable<http::headers>(async_connect(std::move(uri), return_as_awaitable_tuple()));
-    }
-
-    std::expected<http::headers, std::error_code> connect(websocket::uri uri, duration timeout) {
+    std::expected<http::headers, std::error_code> connect(websocket::uri uri, http::headers headers) {
       return synchronize_awaitable<http::headers>(
-        async_connect(std::move(uri), asio::cancel_after(timeout, return_as_awaitable_tuple())));
+        async_connect(std::move(uri), std::move(headers), return_as_awaitable_tuple()));
     }
 
-    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri) {
+    std::expected<http::headers, std::error_code> connect(websocket::uri uri, http::headers headers, duration timeout) {
+      return synchronize_awaitable<http::headers>(
+        async_connect(std::move(uri), std::move(headers), asio::cancel_after(timeout, return_as_awaitable_tuple())));
+    }
+
+    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
+      http::headers headers) {
       if (!parsed_uri) {
         return std::unexpected(parsed_uri.error());
       }
-      return connect(std::move(parsed_uri.value()));
+      return connect(std::move(parsed_uri.value()), std::move(headers));
+    }
+
+    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
+      http::headers headers, duration timeout) {
+      if (!parsed_uri) {
+        return std::unexpected(parsed_uri.error());
+      }
+      return connect(std::move(parsed_uri.value()), std::move(headers), timeout);
+    }
+
+    std::expected<http::headers, std::error_code> connect(std::string_view uri_string, http::headers headers) {
+      return connect(websocket::uri::parse(uri_string), std::move(headers));
+    }
+
+    std::expected<http::headers, std::error_code> connect(std::string_view uri_string, http::headers headers,
+      duration timeout) {
+      return connect(websocket::uri::parse(uri_string), std::move(headers), timeout);
+    }
+
+    std::expected<http::headers, std::error_code> connect(websocket::uri uri) {
+      return connect(std::move(uri), http::headers{});
+    }
+
+    std::expected<http::headers, std::error_code> connect(websocket::uri uri, duration timeout) {
+      return connect(std::move(uri), http::headers{}, timeout);
+    }
+
+    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri) {
+      return connect(std::move(parsed_uri), http::headers{});
     }
 
     std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
       duration timeout) {
-      if (!parsed_uri) {
-        return std::unexpected(parsed_uri.error());
-      }
-      return connect(std::move(parsed_uri.value()), timeout);
+      return connect(std::move(parsed_uri), http::headers{}, timeout);
     }
 
     std::expected<http::headers, std::error_code> connect(std::string_view uri_string) {
-      return connect(websocket::uri::parse(uri_string));
+      return connect(uri_string, http::headers{});
     }
 
     std::expected<http::headers, std::error_code> connect(std::string_view uri_string, duration timeout) {
-      return connect(websocket::uri::parse(uri_string), timeout);
+      return connect(uri_string, http::headers{}, timeout);
     }
 
     // Caller must ensure that given buffer remains valid until the operation is completed
@@ -945,36 +977,6 @@ namespace aero::websocket {
         return e.code();
       } catch (...) {
         return std::make_error_code(std::errc::io_error);
-      }
-    }
-
-    template <std::invocable F>
-    auto run_on_strand(F&& function) {
-      if (transport_.get_strand().running_in_this_thread()) {
-        return std::forward<F>(function)();
-      }
-
-      using result_type = std::invoke_result_t<F>;
-
-      if constexpr (std::is_void_v<result_type>) {
-        std::packaged_task<void()> task(std::forward<F>(function));
-        std::future<void> future = asio::post(transport_.get_strand(), std::move(task));
-        future.get();
-        return;
-      } else if constexpr (std::is_same_v<result_type, std::error_code>) {
-        std::packaged_task<result_type()> task(std::forward<F>(function));
-        std::future<result_type> future = asio::post(transport_.get_strand(), std::move(task));
-        try {
-          return future.get();
-        } catch (const std::future_error& e) {
-          return e.code();
-        } catch (...) {
-          return std::make_error_code(std::errc::io_error);
-        }
-      } else {
-        std::packaged_task<result_type()> task(std::forward<F>(function));
-        std::future<result_type> future = asio::post(transport_.get_strand(), std::move(task));
-        return future.get();
       }
     }
 

@@ -54,10 +54,14 @@ namespace aero::websocket {
     explicit client_handshaker(handshake_options options)
       : subprotocols_(std::move(options.subprotocols)), origin_(std::move(options.origin)) {}
 
-    [[nodiscard]] handshake_request build_request(const aero::websocket::uri& uri,
-      std::optional<std::string> sec_websocket_key = std::nullopt) {
-      auto request_target = build_request_target(uri);
-      auto host_header_value = build_request_host(uri);
+    [[nodiscard]] std::expected<handshake_request, std::error_code> build_request(const aero::websocket::uri& uri,
+      http::headers headers, std::optional<std::string> sec_websocket_key = std::nullopt) {
+      if (contains_reserved_header(headers)) {
+        return std::unexpected(handshake_error::header_name_reserved);
+      }
+
+      std::string request_target = build_request_target(uri);
+      std::string host_header_value = build_request_host(uri);
 
       auto request_line = http::request_line{
         .method = http::method::get,
@@ -79,7 +83,14 @@ namespace aero::websocket {
         {"Sec-Websocket-Key", websocket_key},
         {"Sec-Websocket-Version", "13"},
       };
-      handshake_headers.merge(this->headers_);
+
+      if (!headers.empty()) {
+        handshake_headers.merge(std::move(headers));
+      }
+
+      if (this->headers_.has_value()) {
+        handshake_headers.merge(*this->headers_);
+      }
 
       if (!origin_.empty()) {
         handshake_headers.add("Origin", origin_);
@@ -159,17 +170,8 @@ namespace aero::websocket {
       subprotocols_ = subprotocols;
     }
 
-    std::error_code set_header(std::string name, std::string value) {
-      if (is_reserved_header(name)) {
-        return handshake_error::header_name_reserved;
-      }
-
-      headers_.set(std::move(name), std::move(value));
-      return {};
-    }
-
     std::error_code set_headers(http::headers headers) {
-      if (has_any_reserved_headers(headers)) {
+      if (contains_reserved_header(headers)) {
         return handshake_error::header_name_reserved;
       }
 
@@ -178,15 +180,15 @@ namespace aero::websocket {
     }
 
     void clear_headers() noexcept {
-      headers_.clear();
-    }
-
-    void remove_header(std::string_view name) {
-      headers_.remove(name);
+      headers_.reset();
     }
 
    private:
-    [[nodiscard]] bool has_any_reserved_headers(const http::headers& headers) const noexcept {
+    [[nodiscard]] bool contains_reserved_header(const http::headers& headers) const noexcept {
+      if (headers.empty()) {
+        return false;
+      }
+
       return std::ranges::any_of(headers.names_view(), [this](std::string_view name) { return is_reserved_header(name); });
     }
 
@@ -198,7 +200,7 @@ namespace aero::websocket {
     [[nodiscard]] std::string build_request_target(const aero::websocket::uri& uri) const {
       std::string target;
 
-      auto path = uri.path();
+      std::string_view path = uri.path();
       if (path.empty()) {
         target.push_back('/');
       } else {
@@ -208,7 +210,7 @@ namespace aero::websocket {
         target.append(path);
       }
 
-      auto query = uri.query();
+      std::span query = uri.query();
       if (!query.empty()) {
         target.push_back('?');
         for (std::size_t i{}; i < query.size(); ++i) {
@@ -228,15 +230,16 @@ namespace aero::websocket {
 
     [[nodiscard]] std::string build_request_host(const aero::websocket::uri& uri) const {
       std::string host_str{uri.host()};
-      auto port = uri.port();
-      auto default_port = uri.default_port();
+      std::uint16_t port = uri.port();
+      std::uint16_t default_port = uri.default_port();
+
       if (port != 0 && port != default_port) {
         host_str += ':' + std::to_string(port);
       }
       return host_str;
     }
 
-    http::headers headers_;
+    std::optional<http::headers> headers_;
     std::vector<std::string> subprotocols_;
     std::string origin_;
   };
