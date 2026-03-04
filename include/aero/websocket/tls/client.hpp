@@ -9,6 +9,7 @@
 #include <asio/ssl/context.hpp>
 #include <asio/ssl/verify_mode.hpp>
 
+#include "aero/http/headers.hpp"
 #include "aero/net/tls_transport.hpp"
 #include "aero/tls/system_context.hpp"
 #include "aero/tls/verify_mode.hpp"
@@ -48,20 +49,20 @@ namespace aero::websocket::tls {
       : tls_context_(tls_context.context()),
         basic_client_(std::move(options), std::in_place_type<transport_type>, tls_context_) {}
 
-    std::error_code set_handshake_header(std::string name, std::string value) {
-      return basic_client_.set_handshake_header(std::move(name), std::move(value));
+    template <typename CompletionToken>
+    auto async_connect(std::string_view uri, http::headers headers, CompletionToken&& token) {
+      return basic_client_.async_connect(uri, std::move(headers), std::forward<CompletionToken>(token));
     }
 
-    std::error_code set_handshake_headers(http::headers headers) {
-      return basic_client_.set_handshake_headers(std::move(headers));
+    template <typename CompletionToken>
+    auto async_connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers,
+      CompletionToken&& token) {
+      return basic_client_.async_connect(std::move(parsed_uri), std::move(headers), std::forward<CompletionToken>(token));
     }
 
-    void remove_handshake_header(std::string_view name) {
-      basic_client_.remove_handshake_header(name);
-    }
-
-    void clear_handshake_headers() {
-      basic_client_.clear_handshake_headers();
+    template <typename CompletionToken>
+    auto async_connect(websocket::uri uri, http::headers headers, CompletionToken&& token) {
+      return basic_client_.async_connect(std::move(uri), std::move(headers), std::forward<CompletionToken>(token));
     }
 
     template <typename CompletionToken>
@@ -144,6 +145,33 @@ namespace aero::websocket::tls {
     template <typename CompletionToken>
     auto async_read(CompletionToken&& token) {
       return basic_client_.async_read(std::forward<CompletionToken>(token));
+    }
+
+    std::expected<http::headers, std::error_code> connect(websocket::uri uri, http::headers headers) {
+      return basic_client_.connect(std::move(uri), std::move(headers));
+    }
+
+    std::expected<http::headers, std::error_code> connect(websocket::uri uri, http::headers headers, duration timeout) {
+      return basic_client_.connect(std::move(uri), std::move(headers), timeout);
+    }
+
+    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
+      http::headers headers) {
+      return basic_client_.connect(std::move(parsed_uri), std::move(headers));
+    }
+
+    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
+      http::headers headers, duration timeout) {
+      return basic_client_.connect(std::move(parsed_uri), std::move(headers), timeout);
+    }
+
+    std::expected<http::headers, std::error_code> connect(std::string_view uri_string, http::headers headers) {
+      return basic_client_.connect(uri_string, std::move(headers));
+    }
+
+    std::expected<http::headers, std::error_code> connect(std::string_view uri_string, http::headers headers,
+      duration timeout) {
+      return basic_client_.connect(uri_string, std::move(headers), timeout);
     }
 
     std::expected<http::headers, std::error_code> connect(websocket::uri uri) {
