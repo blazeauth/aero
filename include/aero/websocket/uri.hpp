@@ -40,11 +40,14 @@ namespace aero::websocket {
 
    public:
     uri() = default;
+
+    // \todo: We should probably get rid of this, this API design seems really bad
     explicit uri(std::string_view uri_text) {
       if (auto result = uri::parse(uri_text); result) {
         *this = *result;
       }
     }
+
     explicit uri(uri_parts parts): parts_(std::move(parts)) {}
 
     [[nodiscard]] std::uint16_t default_port() const noexcept {
@@ -413,13 +416,14 @@ namespace aero::websocket {
 
    private:
     [[nodiscard]] static bool is_valid_ipv6_address(std::string_view address) {
-      return std::ranges::any_of(address, [](char ch) {
-        if (std::isalnum(static_cast<unsigned char>(ch))) {
+      constexpr std::string_view allowed_ipv6_chars = ":-._~!$&'()*+,;=%";
+
+      return std::ranges::all_of(address, [allowed_ipv6_chars](char character) {
+        if (std::isalnum(static_cast<unsigned char>(character))) {
           return true;
         }
-        constexpr std::string_view allowed_ipv6_chars = ":-._~!$&'()*+,;=%";
-        auto is_invalid_ipv6_character = !allowed_ipv6_chars.contains(ch);
-        return is_invalid_ipv6_character;
+
+        return allowed_ipv6_chars.contains(character);
       });
     }
 
