@@ -128,8 +128,8 @@ namespace aero::websocket::tls {
 
     // Caller must ensure that 'reason' buffer remains valid until the operation is completed
     template <typename CompletionToken>
-    auto async_close(websocket::close_code code, std::string reason, CompletionToken&& token) {
-      return basic_client_.async_close(code, std::move(reason), std::forward<CompletionToken>(token));
+    auto async_close(websocket::close_code code, std::string_view reason, CompletionToken&& token) {
+      return basic_client_.async_close(code, reason, std::forward<CompletionToken>(token));
     }
 
     template <typename CompletionToken>
@@ -241,7 +241,7 @@ namespace aero::websocket::tls {
       return basic_client_.close(code);
     }
 
-    std::error_code close(websocket::close_code code, std::string reason) {
+    std::error_code close(websocket::close_code code, std::string_view reason) {
       return basic_client_.close(code, reason);
     }
 

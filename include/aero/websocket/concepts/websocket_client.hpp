@@ -30,7 +30,7 @@ namespace aero::websocket::concepts {
     } && requires(Client client, std::string_view uri_string, websocket::uri uri,
            std::expected<websocket::uri, std::error_code> parsed_uri, std::string header_name, std::string header_value,
            http::headers handshake_headers, std::string_view header_name_view, std::string_view text,
-           std::span<const std::byte> bytes, websocket::close_code close_code, std::string close_reason,
+           std::span<const std::byte> bytes, websocket::close_code close_code, std::string_view close_reason,
            typename Client::duration timeout) {
       {
         client.async_connect(uri_string, asio::as_tuple(asio::use_awaitable))

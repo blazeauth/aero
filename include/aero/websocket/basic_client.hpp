@@ -640,7 +640,7 @@ namespace aero::websocket {
       return synchronize_awaitable<std::error_code>(async_close(code, return_as_awaitable_tuple()));
     }
 
-    std::error_code close(websocket::close_code code, std::string reason) {
+    std::error_code close(websocket::close_code code, std::string_view reason) {
       return synchronize_awaitable<std::error_code>(async_close(code, reason, return_as_awaitable_tuple()));
     }
 
