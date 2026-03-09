@@ -13,6 +13,7 @@
 #include <asio/async_result.hpp>
 #include <asio/awaitable.hpp>
 #include <asio/basic_stream_socket.hpp>
+#include <asio/bind_allocator.hpp>
 #include <asio/buffer.hpp>
 #include <asio/co_composed.hpp>
 #include <asio/co_spawn.hpp>
@@ -25,6 +26,7 @@
 #include <asio/strand.hpp>
 #include <asio/write.hpp>
 
+#include "aero/detail/aligned_allocator.hpp"
 #include "aero/net/concepts/transport.hpp"
 
 namespace aero::net::detail {
@@ -70,7 +72,9 @@ namespace aero::net::detail {
 
     template <typename CompletionToken>
     auto async_read_some(CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code, const_buffer)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code, const_buffer)>(
         asio::co_composed<void(std::error_code, const_buffer)>(
           [this](auto) -> void {
             auto [read_ec, bytes_read] = co_await stream_.async_read_some(get_mutable_buffer(), asio::as_tuple(asio::deferred));
@@ -80,7 +84,7 @@ namespace aero::net::detail {
             co_return {std::error_code{}, get_buffer_view(0, bytes_read)};
           },
           strand_),
-        token);
+        bound_token);
     }
 
     template <typename CompletionToken>
@@ -90,7 +94,9 @@ namespace aero::net::detail {
 
     template <typename CompletionToken>
     auto async_read_exactly(std::size_t bytes_count, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code, const_buffer)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code, const_buffer)>(
         asio::co_composed<void(std::error_code, const_buffer)>(
           [this, bytes_count](auto) -> void {
             auto [read_ec, bytes_read] = co_await asio::async_read(stream_,
@@ -103,12 +109,14 @@ namespace aero::net::detail {
             co_return {std::error_code{}, get_buffer_view(0, bytes_read)};
           },
           strand_),
-        token);
+        bound_token);
     }
 
     template <typename CompletionToken>
     auto async_write(const_buffer buffer, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code, std::size_t)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code, std::size_t)>(
         asio::co_composed<void(std::error_code, std::size_t)>(
           [this](auto, const_buffer buffer) -> void {
             asio::const_buffer asio_buffer(buffer.data(), buffer.size());
@@ -128,7 +136,7 @@ namespace aero::net::detail {
             co_return {write_request->result.ec, write_request->result.bytes_written};
           },
           strand_),
-        token,
+        bound_token,
         buffer);
     }
 

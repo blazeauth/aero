@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <asio/async_result.hpp>
+#include <asio/bind_allocator.hpp>
 #include <asio/co_composed.hpp>
 #include <asio/connect.hpp>
 #include <asio/error.hpp>
@@ -19,6 +20,7 @@
 #include <asio/ssl/stream.hpp>
 #include <asio/strand.hpp>
 
+#include "aero/detail/aligned_allocator.hpp"
 #include "aero/net/concepts/transport.hpp"
 #include "aero/net/detail/basic_transport.hpp"
 #include "aero/net/error.hpp"
@@ -71,7 +73,9 @@ namespace aero::net {
 
     template <typename CompletionToken>
     auto async_connect(std::string host, port_type port, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto, std::string host, port_type port) -> void {
             using net::error::connect_error;
@@ -121,14 +125,16 @@ namespace aero::net {
             co_return co_await this->async_handshake(asio::as_tuple(asio::deferred));
           },
           get_strand()),
-        token,
+        bound_token,
         std::move(host),
         port);
     }
 
     template <typename CompletionToken>
     auto async_shutdown(CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto) -> void {
             resolver_.cancel();
@@ -150,7 +156,7 @@ namespace aero::net {
             co_return shutdown_ec ? shutdown_ec : close_ec;
           },
           get_strand()),
-        token);
+        bound_token);
     }
 
     template <typename CompletionToken>
@@ -200,7 +206,9 @@ namespace aero::net {
 
     template <typename CompletionToken>
     auto async_handshake(CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto) -> void {
             using tls::detail::x509_verify_error;
@@ -231,7 +239,7 @@ namespace aero::net {
             co_return handshake_ec;
           },
           get_strand()),
-        token);
+        bound_token);
     }
 
     net::detail::basic_transport<stream_type> basic_transport_;

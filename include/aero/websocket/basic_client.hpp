@@ -18,6 +18,7 @@
 
 #include <asio/as_tuple.hpp>
 #include <asio/async_result.hpp>
+#include <asio/bind_allocator.hpp>
 #include <asio/cancel_after.hpp>
 #include <asio/cancellation_state.hpp>
 #include <asio/co_composed.hpp>
@@ -29,6 +30,7 @@
 #include <asio/use_future.hpp>
 
 #include "aero/deadline.hpp"
+#include "aero/detail/aligned_allocator.hpp"
 #include "aero/detail/final_action.hpp"
 #include "aero/error.hpp"
 #include "aero/http/headers.hpp"
@@ -133,7 +135,9 @@ namespace aero::websocket {
 
     template <typename CompletionToken>
     auto async_connect(websocket::uri uri, http::headers headers, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code, http::headers)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code, http::headers)>(
         asio::co_composed<void(std::error_code, http::headers)>(
           [this](auto, websocket::uri uri, http::headers headers) -> void {
             reset_connection_state(state::connecting);
@@ -191,7 +195,7 @@ namespace aero::websocket {
             co_return {std::error_code{}, std::move(*parsed_headers)};
           },
           transport_.get_strand()),
-        token,
+        bound_token,
         std::move(uri),
         std::move(headers));
     }
@@ -199,7 +203,9 @@ namespace aero::websocket {
     template <typename CompletionToken>
     auto async_connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers,
       CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code, http::headers)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code, http::headers)>(
         asio::co_composed<void(std::error_code, http::headers)>(
           [this](auto, std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers) -> void {
             if (!parsed_uri.has_value()) {
@@ -209,7 +215,7 @@ namespace aero::websocket {
             co_return co_await this->async_connect(std::move(*parsed_uri), std::move(headers), return_as_deferred_tuple());
           },
           transport_.get_strand()),
-        token,
+        bound_token,
         std::move(parsed_uri),
         std::move(headers));
     }
@@ -237,7 +243,9 @@ namespace aero::websocket {
     // Caller must ensure that given buffer remains valid until the operation is completed
     template <typename CompletionToken>
     auto async_send_text(std::string_view text, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto, std::string_view text) -> void {
             if (!is_current_state(state::open) || is_close_received()) {
@@ -252,14 +260,16 @@ namespace aero::websocket {
             co_return co_await async_write_bytes(*frame, return_as_deferred_tuple());
           },
           transport_.get_strand()),
-        token,
+        bound_token,
         text);
     }
 
     // Caller must ensure that given buffer remains valid until the operation is completed
     template <typename CompletionToken>
     auto async_send_binary(std::span<const std::byte> data, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto, std::span<const std::byte> data) -> void {
             if (!is_current_state(state::open) || is_close_received()) {
@@ -274,7 +284,7 @@ namespace aero::websocket {
             co_return co_await async_write_bytes(*frame, return_as_deferred_tuple());
           },
           transport_.get_strand()),
-        token,
+        bound_token,
         data);
     }
 
@@ -291,7 +301,9 @@ namespace aero::websocket {
 
     template <typename CompletionToken>
     auto async_ping(std::span<const std::byte> data, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto, std::span<const std::byte> data) -> void {
             if (!is_current_state(state::open) || is_close_received()) {
@@ -306,13 +318,15 @@ namespace aero::websocket {
             co_return co_await async_write_bytes(*frame, return_as_deferred_tuple());
           },
           transport_.get_strand()),
-        token,
+        bound_token,
         data);
     }
 
     template <typename CompletionToken>
     auto async_pong(std::span<const std::byte> data, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto, std::span<const std::byte> data) -> void {
             if (!is_current_state(state::open, state::closing) || is_close_received()) {
@@ -327,7 +341,7 @@ namespace aero::websocket {
             co_return co_await async_write_bytes(*frame, return_as_deferred_tuple());
           },
           transport_.get_strand()),
-        token,
+        bound_token,
         data);
     }
 
@@ -344,7 +358,9 @@ namespace aero::websocket {
 
     template <typename CompletionToken>
     auto async_close(websocket::close_code code, std::string_view reason, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto, websocket::close_code close_code, std::string_view close_reason) -> void {
             if (is_close_code_server_only(close_code)) {
@@ -430,7 +446,7 @@ namespace aero::websocket {
             }
           },
           transport_.get_strand()),
-        token,
+        bound_token,
         code,
         reason);
     }
@@ -443,12 +459,14 @@ namespace aero::websocket {
     // Tear down transport without performing close handshake
     template <typename CompletionToken>
     auto async_force_close(CompletionToken&& token) {
-      return async_finalize_session(std::error_code{}, token);
+      return async_finalize_session(std::error_code{}, std::forward<CompletionToken>(token));
     }
 
     template <typename CompletionToken>
     auto async_read(CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code, websocket::message)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code, websocket::message)>(
         asio::co_composed<void(std::error_code, websocket::message)>(
           [this](auto) -> void {
             // Prevent concurrent async_read operations (one read at a time)
@@ -535,7 +553,7 @@ namespace aero::websocket {
             }
           },
           transport_.get_strand()),
-        token);
+        bound_token);
     }
 
     std::expected<http::headers, std::error_code> connect(websocket::uri uri, http::headers headers) {
@@ -726,7 +744,9 @@ namespace aero::websocket {
 
     template <typename CompletionToken>
     auto async_write_bytes(std::span<const std::byte> frame, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto, std::span<const std::byte> frame) -> void {
             auto [write_ec, bytes_written] = co_await transport_.async_write(frame, return_as_deferred_tuple());
@@ -749,13 +769,15 @@ namespace aero::websocket {
             co_return co_await async_finalize_session(write_ec, return_as_deferred_tuple());
           },
           transport_.get_strand()),
-        token,
+        bound_token,
         frame);
     }
 
     template <typename CompletionToken>
     auto async_send_close(websocket::close_code code, std::optional<std::string_view> reason, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto, close_code code, std::optional<std::string_view> reason) -> void {
             if (is_close_sent()) {
@@ -776,7 +798,7 @@ namespace aero::websocket {
             co_return std::error_code{};
           },
           transport_.get_strand()),
-        token,
+        bound_token,
         code,
         std::move(reason));
     }
@@ -787,7 +809,9 @@ namespace aero::websocket {
     // code, drains a little, then force-shutdowns the transport and resets all internal state
     template <typename CompletionToken>
     auto async_fail_connection(std::error_code fatal_ec, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void()>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void()>(
         asio::co_composed<void()>(
           [this](auto, std::error_code fatal_ec) -> void {
             using namespace std::chrono_literals;
@@ -816,7 +840,7 @@ namespace aero::websocket {
             co_return {};
           },
           transport_.get_strand()),
-        token,
+        bound_token,
         fatal_ec);
     }
 
@@ -826,7 +850,9 @@ namespace aero::websocket {
     // internal state. This does not initiate a protocol failure, only finalizes/cleans up
     template <typename CompletionToken>
     auto async_finalize_session(std::error_code final_ec, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto state, std::error_code final_ec) -> void {
             // Disable cancellation via the coroutine associated cancellation slot for cleanup path.
@@ -852,13 +878,15 @@ namespace aero::websocket {
             co_return result_ec;
           },
           transport_.get_strand()),
-        token,
+        bound_token,
         final_ec);
     }
 
     template <typename CompletionToken>
     auto async_respond_to_control_message(const websocket::message& message, CompletionToken&& token) {
-      return asio::async_initiate<CompletionToken, void(std::error_code)>(
+      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
+
+      return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto, const websocket::message& message) -> void {
             if (message.is_ping()) {
@@ -875,7 +903,7 @@ namespace aero::websocket {
             co_return std::error_code{};
           },
           transport_.get_strand()),
-        token,
+        bound_token,
         message);
     }
 
