@@ -25,7 +25,7 @@ namespace {
     using error_awaitable = asio::awaitable<std::tuple<std::error_code>>;
     using message_awaitable = asio::awaitable<std::tuple<std::error_code, aero::websocket::message>>;
 
-    auto as_tuple_awaitable = asio::as_tuple(asio::use_awaitable);
+    constexpr auto as_tuple_awaitable = asio::as_tuple(asio::use_awaitable);
 
     static_assert(
       std::same_as<decltype(std::declval<Client&>().async_connect(std::string_view{}, as_tuple_awaitable)), headers_awaitable>);
