@@ -4,10 +4,6 @@ include(FetchContent)
 
 set(AERO_ASIO_DEFINITIONS
   ASIO_STANDALONE
-  ASIO_NO_DEPRECATED
-  ASIO_NO_TS_EXECUTORS
-  ASIO_DISABLE_BUFFER_DEBUGGING
-  ASIO_NO_TYPEID
 )
 
 function(_aero_select_first_existing_asio_target out_var)
