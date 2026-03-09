@@ -11,15 +11,24 @@ on:
 
 jobs:
   build:
-    name: Build & Test (${{ matrix.tls.name }})
+    name: Build & Test (${{ matrix.arch.name }}, ${{ matrix.build_type }}, ${{ matrix.tls.name }})
     runs-on: windows-latest
     timeout-minutes: 10
 
     strategy:
       fail-fast: false
       matrix:
-        build_type: [Debug]
+        build_type: [Debug, Release]
         std: [23]
+        arch:
+          - name: x64
+            cmake_arch: x64
+            vcpkg_triplet: x64-windows
+            build_dir_suffix: x64
+          - name: x86
+            cmake_arch: Win32
+            vcpkg_triplet: x86-windows
+            build_dir_suffix: x86
         tls:
           - name: No TLS
             cmake_arg: ""
@@ -29,9 +38,6 @@ jobs:
             cmake_arg: "-DAERO_TLS_BACKEND=wolfssl -DAERO_BUILD_NETWORK_TLS_TESTS=ON"
             build_dir: build-wolfssl
             use_vcpkg: true
-
-    env:
-      VCPKG_DEFAULT_TRIPLET: x64-windows
 
     steps:
       - uses: actions/checkout@v4
@@ -44,19 +50,22 @@ jobs:
 
       - name: Install wolfSSL (vcpkg)
         if: matrix.tls.use_vcpkg
+        shell: pwsh
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install "wolfssl[asio]" --triplet "$env:VCPKG_DEFAULT_TRIPLET"
+          & "$env:VCPKG_ROOT\vcpkg.exe" install "wolfssl[asio]" --triplet "${{ matrix.arch.vcpkg_triplet }}"
 
       - name: Configure CMake
         shell: pwsh
         run: |
+          $buildDir = "${{ github.workspace }}/${{ matrix.tls.build_dir }}-${{ matrix.arch.build_dir_suffix }}-${{ matrix.build_type }}"
           $vcpkgCmakeArgs = @()
           if ("${{ matrix.tls.use_vcpkg }}" -eq "true") {
             $vcpkgCmakeArgs += "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-            $vcpkgCmakeArgs += "-DVCPKG_TARGET_TRIPLET=$env:VCPKG_DEFAULT_TRIPLET"
+            $vcpkgCmakeArgs += "-DVCPKG_TARGET_TRIPLET=${{ matrix.arch.vcpkg_triplet }}"
           }
 
-          cmake -B "${{ github.workspace }}/${{ matrix.tls.build_dir }}" `
+          cmake -B $buildDir `
+            -A "${{ matrix.arch.cmake_arch }}" `
             -DCMAKE_CXX_STANDARD=${{ matrix.std }} `
             -DCMAKE_CXX_STANDARD_REQUIRED=ON `
             -DCMAKE_CXX_EXTENSIONS=OFF `
@@ -65,8 +74,14 @@ jobs:
             $vcpkgCmakeArgs
 
       - name: Build
-        run: cmake --build "${{ github.workspace }}/${{ matrix.tls.build_dir }}" --config ${{ matrix.build_type }} --parallel
+        shell: pwsh
+        run: |
+          $buildDir = "${{ github.workspace }}/${{ matrix.tls.build_dir }}-${{ matrix.arch.build_dir_suffix }}-${{ matrix.build_type }}"
+          cmake --build $buildDir --config ${{ matrix.build_type }} --parallel
 
       - name: Test
-        working-directory: ${{ github.workspace }}/${{ matrix.tls.build_dir }}
-        run: ctest --output-on-failure -C ${{ matrix.build_type }}
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: |
+          $buildDir = "${{ github.workspace }}/${{ matrix.tls.build_dir }}-${{ matrix.arch.build_dir_suffix }}-${{ matrix.build_type }}"
+          ctest --test-dir $buildDir --output-on-failure -C ${{ matrix.build_type }}
