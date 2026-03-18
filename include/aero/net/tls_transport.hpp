@@ -25,7 +25,7 @@
 #include "aero/net/detail/basic_transport.hpp"
 #include "aero/net/error.hpp"
 #include "aero/tls/detail/alert_capture.hpp"
-#include "aero/tls/sni.hpp"
+#include "aero/tls/peer_identity.hpp"
 #include "aero/tls/system_context.hpp"
 
 namespace aero::net {

@@ -1,5 +1,5 @@
-#ifndef AERO_TLS_SNI_HPP
-#define AERO_TLS_SNI_HPP
+#ifndef AERO_TLS_PEER_IDENTITY_HPP
+#define AERO_TLS_PEER_IDENTITY_HPP
 
 #include <system_error>
 
