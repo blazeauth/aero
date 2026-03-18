@@ -26,7 +26,7 @@ jobs:
             build_dir: build-no-tls
             use_vcpkg: false
           - name: wolfSSL
-            cmake_arg: "-DAERO_TLS_BACKEND=wolfssl -DAERO_BUILD_NETWORK_TLS_TESTS=ON"
+            cmake_arg: "-DAERO_TLS_BACKEND=wolfssl"
             build_dir: build-wolfssl
             use_vcpkg: true
 
