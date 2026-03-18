@@ -113,12 +113,12 @@ namespace aero::net {
             }
 
             if (!using_address) {
-              if (auto hostname_ec = tls::set_host_name(stream().native_handle(), host); hostname_ec) {
-                co_return hostname_ec;
+              if (auto ec = tls::set_sni(stream().native_handle(), host); ec) {
+                co_return ec;
               }
 
-              if (auto sni_ec = tls::set_sni(stream().native_handle(), host); sni_ec) {
-                co_return sni_ec;
+              if (auto ec = tls::set_expected_peer_host(stream().native_handle(), host); ec) {
+                co_return ec;
               }
             }
 
