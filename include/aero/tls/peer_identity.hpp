@@ -1,6 +1,7 @@
 #ifndef AERO_TLS_PEER_IDENTITY_HPP
 #define AERO_TLS_PEER_IDENTITY_HPP
 
+#include <string>
 #include <system_error>
 
 #include <openssl/ssl.h>
