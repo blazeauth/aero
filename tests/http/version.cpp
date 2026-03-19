@@ -11,7 +11,7 @@ namespace {
 
 } // namespace
 
-TEST(HttpVersion, VersionFormatsCorrectly) {
+TEST(HttpVersion, StdFormatFormatsVersionAsString) {
   EXPECT_EQ(std::format("Version {}", static_cast<version>(100)), "Version unknown_version");
   EXPECT_EQ(std::format("Version {}", version::http1_0), "Version HTTP/1.0");
   EXPECT_EQ(std::format("Version {}", version::http1_1), "Version HTTP/1.1");

@@ -6,11 +6,7 @@ namespace {
   using aero::http::status_code;
 }
 
-TEST(HttpStatusCode, CompilesAsStdFormatArgument) {
-  std::ignore = std::format("Status code {}", status_code::im_a_teapot);
-}
-
-TEST(HttpStatusCode, StatusCodeFormatsCorrectly) {
+TEST(HttpStatusCode, StdFormatFormatsStatusCodeAsNumber) {
   std::string status_str = std::format("Status code {}", status_code::im_a_teapot);
   EXPECT_EQ(status_str, "Status code 418");
 }
