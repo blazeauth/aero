@@ -39,7 +39,7 @@ namespace aero::http {
 } // namespace aero::http
 
 template <>
-struct std::formatter<aero::http::version> {
+struct std::formatter<aero::http::version> : std::formatter<std::underlying_type_t<aero::http::version>> {
   auto format(const aero::http::version& version, std::format_context& ctx) const {
     return std::formatter<std::underlying_type_t<aero::http::version>>{}.format(std::to_underlying(version), ctx);
   }
