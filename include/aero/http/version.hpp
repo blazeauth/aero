@@ -12,7 +12,7 @@
 namespace aero::http {
 
   enum class version : std::uint8_t {
-    http1_0 = 1,
+    http1_0,
     http1_1,
   };
 
@@ -39,9 +39,11 @@ namespace aero::http {
 } // namespace aero::http
 
 template <>
-struct std::formatter<aero::http::version> {
+struct std::formatter<aero::http::version> : std::formatter<std::string_view> {
   auto format(const aero::http::version& version, std::format_context& ctx) const {
-    return std::formatter<std::underlying_type_t<aero::http::version>>{}.format(std::to_underlying(version), ctx);
+    constexpr std::string_view unknown_version = "unknown_version";
+    auto version_str = aero::http::to_string(version);
+    return std::formatter<std::string_view>{}.format(version_str.empty() ? unknown_version : version_str, ctx);
   }
 };
 

@@ -6,9 +6,16 @@
 namespace {
 
   namespace http = aero::http;
+  using http::version;
   using http::error::protocol_error;
 
 } // namespace
+
+TEST(HttpVersion, StdFormatFormatsVersionAsString) {
+  EXPECT_EQ(std::format("Version {}", static_cast<version>(100)), "Version unknown_version");
+  EXPECT_EQ(std::format("Version {}", version::http1_0), "Version HTTP/1.0");
+  EXPECT_EQ(std::format("Version {}", version::http1_1), "Version HTTP/1.1");
+}
 
 TEST(HttpVersion, ToStringReturnsCanonicalTokens) {
   EXPECT_EQ(http::to_string(http::version::http1_0), "HTTP/1.0");
@@ -46,9 +53,4 @@ TEST(HttpVersion, ParseRejectsCaseDifferencesAndWhitespace) {
     ASSERT_FALSE(parsed);
     EXPECT_EQ(parsed.error(), protocol_error::version_invalid);
   }
-}
-
-TEST(HttpVersion, ToStringReturnsEmptyForUnknownEnumValue) {
-  auto unknown_version = static_cast<http::version>(0);
-  EXPECT_TRUE(http::to_string(unknown_version).empty());
 }
