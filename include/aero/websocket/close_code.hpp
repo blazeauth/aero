@@ -98,15 +98,4 @@ struct std::formatter<aero::websocket::close_code> : std::formatter<std::underly
   }
 };
 
-// template <class CharT>
-// struct std::formatter<aero::websocket::close_code, CharT>
-//   : std::formatter<std::underlying_type_t<aero::websocket::close_code>, CharT> {
-
-//   template <class FormatContext>
-//   auto format(aero::websocket::close_code value, FormatContext& ctx) const {
-//     return std::formatter<std::underlying_type_t<aero::websocket::close_code>, CharT>::format(std::to_underlying(value),
-//     ctx);
-//   }
-// };
-
 #endif

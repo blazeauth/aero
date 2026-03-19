@@ -108,7 +108,7 @@ namespace aero::websocket {
 } // namespace aero::websocket
 
 template <>
-struct std::formatter<aero::websocket::message_kind> {
+struct std::formatter<aero::websocket::message_kind> : std::formatter<std::string_view> {
   auto format(const aero::websocket::message_kind& value, std::format_context& ctx) const {
     return std::formatter<std::string_view>{}.format(to_string(value), ctx);
   }
