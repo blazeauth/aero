@@ -179,7 +179,7 @@ namespace aero::http {
 } // namespace aero::http
 
 template <>
-struct std::formatter<aero::http::status_code> {
+struct std::formatter<aero::http::status_code> : std::formatter<std::underlying_type_t<aero::http::status_code>> {
   auto format(const aero::http::status_code& status_code, std::format_context& ctx) const {
     return std::formatter<std::underlying_type_t<aero::http::status_code>>{}.format(std::to_underlying(status_code), ctx);
   }
