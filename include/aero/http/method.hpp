@@ -76,7 +76,7 @@ namespace aero::http {
 } // namespace aero::http
 
 template <>
-struct std::formatter<aero::http::method> {
+struct std::formatter<aero::http::method> : std::formatter<std::string_view> {
   auto format(const aero::http::method& method, std::format_context& ctx) const {
     constexpr std::string_view unknown_method = "unknown_method";
     auto method_str = aero::http::to_string(method);
