@@ -14,7 +14,7 @@
 namespace aero::http {
 
   enum class method : std::uint8_t {
-    get = 1,
+    get,
     post,
     put,
     patch,
