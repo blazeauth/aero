@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace aero::detail {
+namespace aero {
 
   // Credits: https://github.com/microsoft/GSL/blob/main/include/gsl/util
 
@@ -34,4 +34,4 @@ namespace aero::detail {
     return final_action<std::decay_t<F>>{std::forward<F>(f)};
   }
 
-} // namespace aero::detail
+} // namespace aero

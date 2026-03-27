@@ -29,8 +29,8 @@
 
 #include "aero/deadline.hpp"
 #include "aero/detail/aligned_allocator.hpp"
-#include "aero/detail/final_action.hpp"
 #include "aero/error.hpp"
+#include "aero/final_action.hpp"
 #include "aero/http/detail/common.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/io_runtime.hpp"
@@ -473,7 +473,7 @@ namespace aero::websocket {
             }
 
             set_read_loop_active_flag(true);
-            auto _ = aero::detail::finally([this] { set_read_loop_active_flag(false); });
+            auto _ = aero::finally([this] { set_read_loop_active_flag(false); });
 
             for (;;) {
               // If a close handshake is in progress or connection is closed, stop reading
