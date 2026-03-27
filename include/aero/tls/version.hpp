@@ -15,12 +15,14 @@ namespace aero::tls {
     tlsv1_3,
   };
 
-  [[maybe_unused]] constexpr static std::array deprecated_versions{version::sslv2,
+  [[maybe_unused]] constexpr static inline std::array deprecated_versions{
+    version::sslv2,
     version::sslv3,
     version::tlsv1,
-    version::tlsv1_1};
+    version::tlsv1_1,
+  };
 
-  inline bool is_deprecated(tls::version version) noexcept {
+  [[nodiscard]] inline bool is_deprecated(tls::version version) noexcept {
     return std::ranges::contains(deprecated_versions, version);
   }
 
