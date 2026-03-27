@@ -22,6 +22,12 @@ namespace aero::http {
     struct field_type {
       std::string name;
       std::string value;
+
+      field_type() = default;
+
+      template <typename T1, typename T2>
+        requires std::constructible_from<std::string, T1&&> && std::constructible_from<std::string, T2&&>
+      field_type(T1&& field_name, T2&& field_value): name(std::forward<T1>(field_name)), value(std::forward<T2>(field_value)) {}
     };
 
     using value_type = field_type;
