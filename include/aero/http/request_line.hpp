@@ -49,8 +49,8 @@ namespace aero::http {
       using http::error::protocol_error;
       constexpr auto npos = std::string_view::npos;
 
-      if (line.ends_with(http::detail::header_separator)) {
-        line.remove_suffix(http::detail::header_separator.size());
+      if (line.ends_with(detail::crlf)) {
+        line.remove_suffix(detail::crlf.size());
       }
 
       if (line.empty()) {
@@ -113,7 +113,7 @@ namespace aero::http {
       }
 
       auto request_line_str = aero::detail::join_strings(std::array{method_str, std::string_view{target}, version_str}, ' ');
-      request_line_str.append(http::detail::header_separator);
+      request_line_str.append(detail::crlf);
       return request_line_str;
     }
 

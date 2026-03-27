@@ -12,7 +12,6 @@
 #include <string_view>
 #include <system_error>
 #include <tuple>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -33,6 +32,7 @@
 #include "aero/detail/aligned_allocator.hpp"
 #include "aero/detail/final_action.hpp"
 #include "aero/error.hpp"
+#include "aero/http/detail/common.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/io_runtime.hpp"
 #include "aero/net/concepts/transport.hpp"
@@ -165,9 +165,8 @@ namespace aero::websocket {
             std::vector<std::byte> response_buffer;
 
             // Read server response until "\r\n\r\n"
-            auto [read_ec, bytes_read] = co_await transport_.async_read_until(response_buffer,
-              http::detail::headers_end_separator,
-              return_as_deferred_tuple());
+            auto [read_ec, bytes_read] =
+              co_await transport_.async_read_until(response_buffer, http::detail::double_crlf, return_as_deferred_tuple());
             if (read_ec) {
               std::ignore = co_await async_finalize_session({}, return_as_deferred_tuple());
               co_return {read_ec, http::headers{}};
