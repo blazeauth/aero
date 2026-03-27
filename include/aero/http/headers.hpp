@@ -29,15 +29,16 @@ namespace aero::http {
 
       template <std::size_t N1, std::size_t N2>
       field_type(const char (&field_name)[N1], const char (&field_value)[N2])
-        : name(field_name, N1 - 1), value(field_value, N2 - 1) {}
+        : name(std::begin(field_name), std::begin(field_name) + (N1 - 1)),
+          value(std::begin(field_value), std::begin(field_value) + (N2 - 1)) {}
 
       template <std::size_t N>
       field_type(const char (&field_name)[N], std::string field_value)
-        : name(field_name, N - 1), value(std::move(field_value)) {}
+        : name(std::begin(field_name), std::begin(field_name) + (N - 1)), value(std::move(field_value)) {}
 
       template <std::size_t N>
       field_type(std::string field_name, const char (&field_value)[N])
-        : name(std::move(field_name)), value(field_value, N - 1) {}
+        : name(std::move(field_name)), value(std::begin(field_value), std::begin(field_value) + (N - 1)) {}
     };
 
     using value_type = field_type;
