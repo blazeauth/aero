@@ -13,7 +13,7 @@ namespace aero::http {
 
     using http::error::protocol_error;
 
-    struct header_field {
+    struct field_view {
       std::string_view name;
       std::string_view value;
 
@@ -83,7 +83,7 @@ namespace aero::http {
       return text.substr(first, last - first + 1);
     }
 
-    inline void add_header(headers& headers, header_field line) {
+    inline void add_header(headers& headers, field_view line) {
       headers.add(std::string{line.name}, std::string{line.value});
     }
 
@@ -128,7 +128,7 @@ namespace aero::http {
         [&](std::string_view candidate) noexcept { return aero::detail::ascii_iequal(name, candidate); });
     }
 
-    inline void add_comma_separated_values(headers& headers, header_field field) {
+    inline void add_comma_separated_values(headers& headers, field_view field) {
       std::size_t segment_start = 0;
       bool inside_quoted_string = false;
       bool quoted_escape = false;
@@ -204,7 +204,7 @@ namespace aero::http {
     inline void normalize_comma_separated_headers(headers& headers) {
       http::headers normalized;
       for (const auto& [name, value] : headers) {
-        header_field field{.name = name, .value = value};
+        field_view field{.name = name, .value = value};
         if (is_comma_separated_header(name)) {
           add_comma_separated_values(normalized, field);
         } else {
@@ -214,8 +214,8 @@ namespace aero::http {
       headers = std::move(normalized);
     }
 
-    inline std::expected<header_field, std::error_code> process_header_field(headers& headers,
-      std::string_view last_header_name, std::string_view line) {
+    inline std::expected<field_view, std::error_code> process_header_field(headers& headers, std::string_view last_header_name,
+      std::string_view line) {
       using http::error::protocol_error;
       constexpr auto npos = std::string_view::npos;
 
@@ -227,7 +227,7 @@ namespace aero::http {
         if (auto append_ec = append_obsolete_fold(headers, last_header_name, line); append_ec) {
           return std::unexpected(append_ec);
         }
-        return header_field{};
+        return field_view{};
       }
 
       const auto colon_position = line.find(':');
@@ -247,7 +247,7 @@ namespace aero::http {
         return std::unexpected(protocol_error::header_line_invalid);
       }
 
-      return header_field{.name = name, .value = value};
+      return field_view{.name = name, .value = value};
     }
 
     [[nodiscard]] inline std::expected<headers, std::error_code> parse_headers(std::string_view buffer) {

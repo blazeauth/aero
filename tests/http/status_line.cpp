@@ -1,9 +1,8 @@
-#include "aero/http/status_line.hpp"
 #include <gtest/gtest.h>
 #include <utility>
 
-#include "aero/http/detail/status_line_parser.hpp"
 #include "aero/http/status_code.hpp"
+#include "aero/http/status_line.hpp"
 
 namespace http = aero::http;
 using aero::http::status_code;
@@ -29,7 +28,7 @@ TEST(HttpStatusLine, ParsesWithReasonPhrase) {
   };
 
   auto status_line_buf = generate_status_line_buffer(status_line);
-  auto parsed_status_line = http::detail::parse_status_line(status_line_buf);
+  auto parsed_status_line = http::status_line::parse(status_line_buf);
 
   ASSERT_TRUE(parsed_status_line.has_value());
   EXPECT_EQ(parsed_status_line, status_line);
@@ -42,7 +41,7 @@ TEST(HttpStatusLine, ParsesWithoutReasonPhrase) {
   };
 
   auto status_line_buf = generate_status_line_buffer(status_line);
-  auto parsed_status_line = http::detail::parse_status_line(status_line_buf);
+  auto parsed_status_line = http::status_line::parse(status_line_buf);
 
   ASSERT_TRUE(parsed_status_line.has_value());
   EXPECT_TRUE(parsed_status_line->reason_phrase.empty());
@@ -56,7 +55,7 @@ TEST(HttpStatusLine, RejectsInvalidProtocol) {
   };
 
   auto status_line_buf = generate_status_line_buffer(status_line);
-  auto parsed_status_line = http::detail::parse_status_line(status_line_buf);
+  auto parsed_status_line = http::status_line::parse(status_line_buf);
 
   ASSERT_FALSE(parsed_status_line.has_value());
 }
@@ -69,7 +68,7 @@ TEST(HttpStatusLine, ParsesStatusLineWhenNoHeadersFollow) {
     .reason_phrase = "OK",
   };
   std::string_view status_line_buf{"HTTP/1.0 200 OK\r\n\r\n"};
-  auto parsed_status_line = http::detail::parse_status_line(status_line_buf);
+  auto parsed_status_line = http::status_line::parse(status_line_buf);
 
   ASSERT_TRUE(parsed_status_line.has_value());
   EXPECT_TRUE(!parsed_status_line->reason_phrase.empty());

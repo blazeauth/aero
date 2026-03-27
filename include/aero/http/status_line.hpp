@@ -1,14 +1,14 @@
 #ifndef AERO_HTTP_STATUS_LINE_HPP
 #define AERO_HTTP_STATUS_LINE_HPP
 
+#pragma once
+
 #include <string>
 #include <utility>
 
-#include "aero/http/detail/status_line_parser.hpp"
+#include "aero/detail/string.hpp"
 #include "aero/http/status_code.hpp"
 #include "aero/http/version.hpp"
-
-#include "aero/detail/string.hpp"
 
 namespace aero::http {
 
@@ -18,30 +18,8 @@ namespace aero::http {
     http::status_code status_code{};
     std::string reason_phrase;
 
-    static std::expected<status_line, std::error_code> parse(std::string_view buffer) {
-      auto parsed_status_line = http::detail::parse_status_line(buffer);
-      if (!parsed_status_line) {
-        return std::unexpected(parsed_status_line.error());
-      }
-      return http::status_line{
-        .protocol = std::string{parsed_status_line->protocol},
-        .status_code = parsed_status_line->status_code,
-        .reason_phrase = std::string{parsed_status_line->reason_phrase},
-      };
-    }
-
-    static std::expected<status_line, std::error_code> parse(std::span<const std::byte> buffer) {
-      auto buffer_str = std::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()};
-      auto parsed_status_line = http::detail::parse_status_line(buffer_str);
-      if (!parsed_status_line) {
-        return std::unexpected(parsed_status_line.error());
-      }
-      return http::status_line{
-        .protocol = std::string{parsed_status_line->protocol},
-        .status_code = parsed_status_line->status_code,
-        .reason_phrase = std::string{parsed_status_line->reason_phrase},
-      };
-    }
+    static std::expected<status_line, std::error_code> parse(std::string_view buffer);
+    static std::expected<status_line, std::error_code> parse(std::span<const std::byte> buffer);
 
     [[nodiscard]] bool empty() const noexcept {
       return protocol.empty() && status_code == http::status_code{} && reason_phrase.empty();
@@ -56,11 +34,7 @@ namespace aero::http {
     }
 
     [[nodiscard]] http::version version() const noexcept {
-      return parse_version().value_or(http::version{});
-    }
-
-    [[nodiscard]] std::expected<http::version, std::error_code> parse_version() const noexcept {
-      return http::parse_version(protocol);
+      return http::parse_version(protocol).value_or(http::version{});
     }
 
     [[nodiscard]] bool has_reason_phrase() const noexcept {
@@ -68,11 +42,10 @@ namespace aero::http {
     }
 
     [[nodiscard]] bool operator==(const status_line& other) const noexcept = default;
-    [[nodiscard]] bool operator==(const detail::status_line_view& other) const noexcept {
-      return status_code == other.status_code && protocol == other.protocol && reason_phrase == other.reason_phrase;
-    }
   };
 
 } // namespace aero::http
+
+#include "aero/http/impl/status_line_parser.ipp"
 
 #endif
