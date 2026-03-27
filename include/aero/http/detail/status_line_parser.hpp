@@ -21,8 +21,8 @@ namespace aero::http::detail {
     constexpr auto npos = std::string_view::npos;
 
     // Remove CRLF status-line suffix if present
-    if (buffer.ends_with(header_separator)) {
-      buffer.remove_suffix(header_separator.size());
+    if (buffer.ends_with(crlf)) {
+      buffer.remove_suffix(crlf.size());
     }
 
     auto protocol_str_end = buffer.find(' ');
@@ -43,8 +43,8 @@ namespace aero::http::detail {
     std::string_view reason_phrase;
     if (status_code_str_end != npos) {
       auto buffer_reason_phrase = remaining.substr(status_code_str_end + 1);
-      if (buffer_reason_phrase.ends_with(header_separator)) {
-        buffer_reason_phrase.remove_suffix(header_separator.size());
+      if (buffer_reason_phrase.ends_with(crlf)) {
+        buffer_reason_phrase.remove_suffix(crlf.size());
       }
       reason_phrase = buffer_reason_phrase;
     }

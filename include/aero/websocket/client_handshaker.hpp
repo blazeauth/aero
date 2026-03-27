@@ -85,11 +85,11 @@ namespace aero::websocket {
       };
 
       if (!headers.empty()) {
-        handshake_headers.merge(std::move(headers));
+        handshake_headers.append(std::move(headers));
       }
 
       if (this->headers_.has_value()) {
-        handshake_headers.merge(*this->headers_);
+        handshake_headers.append(*this->headers_);
       }
 
       if (!origin_.empty()) {
@@ -102,7 +102,7 @@ namespace aero::websocket {
       }
 
       return handshake_request{
-        .request = request_line.to_string().append(handshake_headers.to_string()),
+        .request = request_line.to_string().append(handshake_headers.serialize()),
         .sec_websocket_key = std::move(websocket_key),
       };
     }
@@ -115,7 +115,7 @@ namespace aero::websocket {
         return std::unexpected(handshake_error::accept_challenge_failed);
       }
 
-      auto status_line_end = payload.find(http::detail::header_separator);
+      auto status_line_end = payload.find(http::detail::crlf);
       if (status_line_end == std::string_view::npos) {
         return std::unexpected(http::error::protocol_error::status_line_invalid);
       }
@@ -129,24 +129,28 @@ namespace aero::websocket {
         return std::unexpected(handshake_error::status_code_invalid);
       }
 
-      auto headers_section_start = status_line_end + http::detail::header_separator.size();
+      auto headers_section_start = status_line_end + http::detail::crlf.size();
       auto headers = http::headers::parse(payload.substr(headers_section_start));
       if (!headers) {
         return std::unexpected(headers.error());
       }
 
       // 5.2: An |Upgrade| header field with value "websocket"
-      if (!headers->is("upgrade", "websocket")) {
+      auto upgrade_header = headers->first_value("upgrade");
+      if (!upgrade_header.has_value() || !aero::detail::ascii_iequal(*upgrade_header, "websocket")) {
         return std::unexpected(handshake_error::upgrade_header_invalid);
       }
 
-      // 5.3: A |Connection| header field with value "Upgrade".
-      if (!headers->is("connection", "upgrade")) {
+      // 5.3: A |Connection| header field with value "Upgrade"
+      auto has_connection_upgrade_header = std::ranges::any_of(headers->fields("connection"),
+        [](const http::headers::field_type& fields) { return aero::detail::ascii_iequal(fields.value, "Upgrade"); });
+
+      if (!has_connection_upgrade_header) {
         return std::unexpected(handshake_error::connection_header_invalid);
       }
 
-      auto sec_websocket_accept = headers->first_value_of("sec-websocket-accept");
-      if (sec_websocket_accept.empty()) {
+      auto sec_websocket_accept = headers->first_value("sec-websocket-accept");
+      if (!sec_websocket_accept.has_value() || sec_websocket_accept->empty()) {
         return std::unexpected(handshake_error::accept_header_invalid);
       }
 
@@ -189,7 +193,7 @@ namespace aero::websocket {
         return false;
       }
 
-      return std::ranges::any_of(headers.names_view(), [this](std::string_view name) { return is_reserved_header(name); });
+      return std::ranges::any_of(headers.names(), [this](std::string_view name) { return is_reserved_header(name); });
     }
 
     [[nodiscard]] bool is_reserved_header(std::string_view name) const noexcept {

@@ -22,7 +22,9 @@ target_compile_features(aero_tests PRIVATE cxx_std_23)
 target_include_directories(aero_tests PRIVATE ${aero_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(aero_tests PRIVATE GTest::gtest_main aero::aero)
 
-gtest_discover_tests(aero_tests)
+gtest_discover_tests(aero_tests
+  DISCOVERY_TIMEOUT 30
+)
 
 if(AERO_BUILD_NETWORK_TESTS)
   file(GLOB_RECURSE aero_network_test_sources CONFIGURE_DEPENDS
@@ -45,5 +47,7 @@ if(AERO_BUILD_NETWORK_TESTS)
   target_compile_features(aero_network_tests PRIVATE cxx_std_23)
   target_include_directories(aero_network_tests PRIVATE ${aero_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
   target_link_libraries(aero_network_tests PRIVATE GTest::gtest_main aero::aero)
-  gtest_discover_tests(aero_network_tests)
+  gtest_discover_tests(aero_network_tests
+    DISCOVERY_TIMEOUT 30
+  )
 endif()

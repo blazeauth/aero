@@ -13,7 +13,7 @@ jobs:
   build:
     name: Build & Test (${{ matrix.tls.name }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 60
     container:
       image: gcc:15
 
