@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_MESSAGE_HPP
-#define AERO_WEBSOCKET_MESSAGE_HPP
+#pragma once
 
 #include <cstdint>
 #include <format>
@@ -113,5 +112,3 @@ struct std::formatter<aero::websocket::message_kind> : std::formatter<std::strin
     return std::formatter<std::string_view>{}.format(to_string(value), ctx);
   }
 };
-
-#endif

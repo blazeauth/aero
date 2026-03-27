@@ -1,5 +1,4 @@
-#ifndef AERO_NET_ERRORS_HPP
-#define AERO_NET_ERRORS_HPP
+#pragma once
 
 #include <cstdint>
 #include <system_error>
@@ -51,5 +50,3 @@ namespace aero::net::error {
 
 template <>
 struct std::is_error_code_enum<aero::net::error::connect_error> : std::true_type {};
-
-#endif

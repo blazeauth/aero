@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_DETAIL_FRAME_ENCODER_HPP
-#define AERO_WEBSOCKET_DETAIL_FRAME_ENCODER_HPP
+#pragma once
 
 #include <cstring>
 #include <expected>
@@ -99,5 +98,3 @@ namespace aero::websocket::detail {
   };
 
 } // namespace aero::websocket::detail
-
-#endif

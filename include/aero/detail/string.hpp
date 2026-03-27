@@ -1,5 +1,4 @@
-#ifndef AERO_DETAIL_STRING_HPP
-#define AERO_DETAIL_STRING_HPP
+#pragma once
 
 #include <array>
 #include <charconv>
@@ -126,5 +125,3 @@ namespace aero::detail {
   }
 
 } // namespace aero::detail
-
-#endif

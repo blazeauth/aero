@@ -1,5 +1,4 @@
-#ifndef AERO_DETAIL_CONCEPTS_HPP
-#define AERO_DETAIL_CONCEPTS_HPP
+#pragma once
 
 #include <concepts>
 #include <ranges>
@@ -13,5 +12,3 @@ namespace aero::detail::concepts {
     std::ranges::forward_range<Range> && requires(std::ranges::range_reference_t<Range> element) { std::string_view{element}; };
 
 } // namespace aero::detail::concepts
-
-#endif

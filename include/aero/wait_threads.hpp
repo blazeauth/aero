@@ -1,5 +1,4 @@
-#ifndef AERO_WAIT_THREADS_HPP
-#define AERO_WAIT_THREADS_HPP
+#pragma once
 
 namespace aero {
 
@@ -10,5 +9,3 @@ namespace aero {
   [[maybe_unused]] constexpr inline detail::wait_threads_tag wait_threads;
 
 } // namespace aero
-
-#endif

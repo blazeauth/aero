@@ -1,5 +1,4 @@
-#ifndef AERO_TLS_DETAIL_WIN32_AIA_FETCHING_CALLBACK_HPP
-#define AERO_TLS_DETAIL_WIN32_AIA_FETCHING_CALLBACK_HPP
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -293,5 +292,3 @@ namespace aero::tls::detail {
   }
 
 } // namespace aero::tls::detail
-
-#endif

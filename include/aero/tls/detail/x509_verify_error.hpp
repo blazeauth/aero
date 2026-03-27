@@ -1,5 +1,4 @@
-#ifndef AERO_TLS_DETAIL_X509_VERIFY_ERROR_HPP
-#define AERO_TLS_DETAIL_X509_VERIFY_ERROR_HPP
+#pragma once
 
 #include <openssl/ssl.h>
 
@@ -81,5 +80,3 @@ namespace aero::tls::detail {
   }
 
 } // namespace aero::tls::detail
-
-#endif

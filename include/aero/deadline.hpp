@@ -1,5 +1,4 @@
-#ifndef AERO_DEADLINE_HPP
-#define AERO_DEADLINE_HPP
+#pragma once
 
 #include <chrono>
 
@@ -41,5 +40,3 @@ namespace aero {
   };
 
 } // namespace aero
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef AERO_BASE64_IMPL_BASE64_HPP
-#define AERO_BASE64_IMPL_BASE64_HPP
+#pragma once
 
 #include <array>
 #include <span>
@@ -93,5 +92,3 @@ namespace aero::detail {
   // NOLINTEND(*-magic-numbers, *-signed-bitwise)
 
 } // namespace aero::detail
-
-#endif

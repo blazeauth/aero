@@ -1,5 +1,4 @@
-#ifndef AERO_HTTP_ERROR_HPP
-#define AERO_HTTP_ERROR_HPP
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -82,5 +81,3 @@ namespace aero::http::error {
 
 template <>
 struct std::is_error_code_enum<aero::http::error::protocol_error> : std::true_type {};
-
-#endif

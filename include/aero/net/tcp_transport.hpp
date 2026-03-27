@@ -1,5 +1,4 @@
-#ifndef AERO_NET_TCP_TRANSPORT_HPP
-#define AERO_NET_TCP_TRANSPORT_HPP
+#pragma once
 
 #include <cstddef>
 #include <span>
@@ -169,5 +168,3 @@ namespace aero::net {
   static_assert(concepts::transport<tcp_transport<>>);
 
 } // namespace aero::net
-
-#endif

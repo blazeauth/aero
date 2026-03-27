@@ -1,5 +1,4 @@
-#ifndef AERO_NET_TLS_TRANSPORT_HPP
-#define AERO_NET_TLS_TRANSPORT_HPP
+#pragma once
 
 #include <cstddef>
 #include <span>
@@ -250,5 +249,3 @@ namespace aero::net {
   static_assert(concepts::transport<tls_transport<>>);
 
 } // namespace aero::net
-
-#endif

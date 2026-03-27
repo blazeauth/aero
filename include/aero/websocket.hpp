@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_HPP
-#define AERO_WEBSOCKET_HPP
+#pragma once
 
 #include "aero/websocket/client.hpp"
 #include "aero/websocket/client_handshaker.hpp"
@@ -12,6 +11,4 @@
 
 #ifdef AERO_USE_TLS
 #include "aero/websocket/tls/client.hpp"
-#endif
-
 #endif

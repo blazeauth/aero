@@ -1,5 +1,4 @@
-#ifndef AERO_HTTP_STATUS_CODE_HPP
-#define AERO_HTTP_STATUS_CODE_HPP
+#pragma once
 
 #include <array>
 #include <expected>
@@ -184,5 +183,3 @@ struct std::formatter<aero::http::status_code> : std::formatter<std::underlying_
     return std::formatter<std::underlying_type_t<aero::http::status_code>>{}.format(std::to_underlying(status_code), ctx);
   }
 };
-
-#endif

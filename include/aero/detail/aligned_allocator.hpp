@@ -1,5 +1,4 @@
-#ifndef AERO_DETAIL_ALIGNED_ALLOCATOR_HPP
-#define AERO_DETAIL_ALIGNED_ALLOCATOR_HPP
+#pragma once
 
 #include <asio/recycling_allocator.hpp>
 #include <cstddef>
@@ -44,5 +43,3 @@ namespace aero::detail {
   };
 
 } // namespace aero::detail
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef AERO_DETAIL_IMPL_SHA256_HPP
-#define AERO_DETAIL_IMPL_SHA256_HPP
+#pragma once
 
 #include <algorithm>
 #include <array>
@@ -207,5 +206,3 @@ namespace aero::tls {
   };
 
 } // namespace aero::tls
-
-#endif

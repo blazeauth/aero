@@ -1,5 +1,4 @@
-#ifndef AERO_NET_DETAIL_BASIC_TRANSPORT_HPP
-#define AERO_NET_DETAIL_BASIC_TRANSPORT_HPP
+#pragma once
 
 #include <cstddef>
 #include <deque>
@@ -170,6 +169,7 @@ namespace aero::net::detail {
     }
 
     struct queued_write_request {
+      // NOLINTNEXTLINE(*-pass-by-value)
       explicit queued_write_request(asio::any_io_executor executor, asio::const_buffer payload)
         : buffer(payload), completion_timer(executor) {
         completion_timer.expires_at((std::chrono::steady_clock::time_point::max)());
@@ -235,5 +235,3 @@ namespace aero::net::detail {
   static_assert(concepts::basic_transport<basic_transport<asio::basic_stream_socket<asio::ip::tcp>>>);
 
 } // namespace aero::net::detail
-
-#endif

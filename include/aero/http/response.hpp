@@ -1,5 +1,4 @@
-#ifndef AERO_HTTP_RESPONSE_HPP
-#define AERO_HTTP_RESPONSE_HPP
+#pragma once
 
 #include "aero/http/headers.hpp"
 #include "aero/http/status_code.hpp"
@@ -30,5 +29,3 @@ namespace aero::http {
   };
 
 } // namespace aero::http
-
-#endif

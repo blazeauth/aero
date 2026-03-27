@@ -1,6 +1,3 @@
-#ifndef AERO_HTTP_HEADERS_HPP
-#define AERO_HTTP_HEADERS_HPP
-
 #pragma once
 
 #include <algorithm>
@@ -302,5 +299,3 @@ namespace aero::http {
 } // namespace aero::http
 
 #include "aero/http/impl/headers_parser.ipp"
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_CLIENT_HPP
-#define AERO_WEBSOCKET_CLIENT_HPP
+#pragma once
 
 #include "aero/net/tcp_transport.hpp"
 #include "aero/websocket/basic_client.hpp"
@@ -12,5 +11,3 @@ namespace aero::websocket {
   static_assert(websocket::concepts::websocket_client<client>);
 
 } // namespace aero::websocket
-
-#endif

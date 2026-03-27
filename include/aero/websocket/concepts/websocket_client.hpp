@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_CONCEPTS_WEBSOCKET_CLIENT_HPP
-#define AERO_WEBSOCKET_CONCEPTS_WEBSOCKET_CLIENT_HPP
+#pragma once
 
 #include <concepts>
 #include <expected>
@@ -138,5 +137,3 @@ namespace aero::websocket::concepts {
     };
 
 } // namespace aero::websocket::concepts
-
-#endif

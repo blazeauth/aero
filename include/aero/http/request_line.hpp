@@ -1,5 +1,4 @@
-#ifndef AERO_HTTP_REQUEST_LINE_HPP
-#define AERO_HTTP_REQUEST_LINE_HPP
+#pragma once
 
 #include <array>
 #include <string>
@@ -121,5 +120,3 @@ namespace aero::http {
   };
 
 } // namespace aero::http
-
-#endif

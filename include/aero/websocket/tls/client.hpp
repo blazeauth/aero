@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_TLS_CLIENT_HPP
-#define AERO_WEBSOCKET_TLS_CLIENT_HPP
+#pragma once
 
 #include <expected>
 #include <span>
@@ -297,5 +296,3 @@ namespace aero::websocket::tls {
   static_assert(websocket::concepts::websocket_client<tls::client>);
 
 } // namespace aero::websocket::tls
-
-#endif

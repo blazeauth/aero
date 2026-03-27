@@ -1,5 +1,4 @@
-#ifndef AERO_TLS_VERSION_HPP
-#define AERO_TLS_VERSION_HPP
+#pragma once
 
 #include <algorithm>
 #include <array>
@@ -26,5 +25,3 @@ namespace aero::tls {
   }
 
 } // namespace aero::tls
-
-#endif

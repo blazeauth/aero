@@ -1,5 +1,4 @@
-#ifndef AERO_DETAIL_BYTES_HPP
-#define AERO_DETAIL_BYTES_HPP
+#pragma once
 
 #include <array>
 #include <concepts>
@@ -41,5 +40,3 @@ namespace aero::detail {
   }
 
 } // namespace aero::detail
-
-#endif

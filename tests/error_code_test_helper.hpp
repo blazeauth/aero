@@ -1,5 +1,4 @@
-#ifndef AERO_TESTS_ERROR_CODE_TEST_HELPER_HPP
-#define AERO_TESTS_ERROR_CODE_TEST_HELPER_HPP
+#pragma once
 
 #include <magic_enum/magic_enum.hpp>
 
@@ -39,5 +38,3 @@ namespace aero::tests {
   }
 
 } // namespace aero::tests
-
-#endif

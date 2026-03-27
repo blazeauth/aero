@@ -1,5 +1,4 @@
-#ifndef AERO_ERROR_HPP
-#define AERO_ERROR_HPP
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -138,5 +137,3 @@ template <>
 struct std::is_error_code_enum<aero::error::basic_error> : std::true_type {};
 template <>
 struct std::is_error_condition_enum<aero::error::errc> : std::true_type {};
-
-#endif

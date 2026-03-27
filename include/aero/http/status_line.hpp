@@ -1,6 +1,3 @@
-#ifndef AERO_HTTP_STATUS_LINE_HPP
-#define AERO_HTTP_STATUS_LINE_HPP
-
 #pragma once
 
 #include <string>
@@ -47,5 +44,3 @@ namespace aero::http {
 } // namespace aero::http
 
 #include "aero/http/impl/status_line_parser.ipp"
-
-#endif

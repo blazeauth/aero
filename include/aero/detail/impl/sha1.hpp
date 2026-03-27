@@ -1,5 +1,4 @@
-#ifndef AERO_DETAIL_IMPL_SHA1_HPP
-#define AERO_DETAIL_IMPL_SHA1_HPP
+#pragma once
 
 #include <array>
 #include <cstdint>
@@ -182,5 +181,3 @@ namespace aero::detail {
   // NOLINTEND(*-magic-numbers, *-signed-bitwise)
 
 } // namespace aero::detail
-
-#endif
