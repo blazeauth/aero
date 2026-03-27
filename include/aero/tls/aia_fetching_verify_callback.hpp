@@ -1,5 +1,4 @@
-#ifndef AERO_TLS_AIA_FETCHING_VERIFY_CALLBACK_HPP
-#define AERO_TLS_AIA_FETCHING_VERIFY_CALLBACK_HPP
+#pragma once
 
 #include <asio/ssl/verify_context.hpp>
 
@@ -40,5 +39,3 @@ namespace aero::tls {
   }
 
 } // namespace aero::tls
-
-#endif

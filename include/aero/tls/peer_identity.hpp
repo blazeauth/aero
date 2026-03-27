@@ -1,5 +1,4 @@
-#ifndef AERO_TLS_PEER_IDENTITY_HPP
-#define AERO_TLS_PEER_IDENTITY_HPP
+#pragma once
 
 #include <string>
 #include <system_error>
@@ -25,5 +24,3 @@ namespace aero::tls {
   }
 
 } // namespace aero::tls
-
-#endif

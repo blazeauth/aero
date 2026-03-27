@@ -1,5 +1,4 @@
-#ifndef AERO_HTTP_METHOD_HPP
-#define AERO_HTTP_METHOD_HPP
+#pragma once
 
 #include <algorithm>
 #include <array>
@@ -83,5 +82,3 @@ struct std::formatter<aero::http::method> : std::formatter<std::string_view> {
     return std::formatter<std::string_view>{}.format(method_str.empty() ? unknown_method : method_str, ctx);
   }
 };
-
-#endif

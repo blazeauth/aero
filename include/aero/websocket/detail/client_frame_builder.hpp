@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_DETAIL_CLIENT_FRAME_BUILDER_HPP
-#define AERO_WEBSOCKET_DETAIL_CLIENT_FRAME_BUILDER_HPP
+#pragma once
 
 #include <expected>
 #include <span>
@@ -182,5 +181,3 @@ namespace aero::websocket::detail {
   };
 
 } // namespace aero::websocket::detail
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef AERO_DETAIL_SHA1_HPP
-#define AERO_DETAIL_SHA1_HPP
+#pragma once
 
 #include <array>
 #include <span>
@@ -32,5 +31,3 @@ namespace aero::detail {
   }
 
 } // namespace aero::detail
-
-#endif

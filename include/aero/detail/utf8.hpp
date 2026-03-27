@@ -1,5 +1,4 @@
-#ifndef AERO_DETAIL_UTF8_HPP
-#define AERO_DETAIL_UTF8_HPP
+#pragma once
 
 #include <span>
 #include <string_view>
@@ -18,5 +17,3 @@ namespace aero::detail {
   }
 
 } // namespace aero::detail
-
-#endif

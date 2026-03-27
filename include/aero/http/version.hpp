@@ -1,5 +1,4 @@
-#ifndef AERO_HTTP_VERSION_HPP
-#define AERO_HTTP_VERSION_HPP
+#pragma once
 
 #include <cstdint>
 #include <expected>
@@ -46,5 +45,3 @@ struct std::formatter<aero::http::version> : std::formatter<std::string_view> {
     return std::formatter<std::string_view>{}.format(version_str.empty() ? unknown_version : version_str, ctx);
   }
 };
-
-#endif

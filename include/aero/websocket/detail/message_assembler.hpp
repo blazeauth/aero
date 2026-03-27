@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_DETAIL_FRAME_ASSEMBLER_HPP
-#define AERO_WEBSOCKET_DETAIL_FRAME_ASSEMBLER_HPP
+#pragma once
 
 #include <cstddef>
 #include <deque>
@@ -311,5 +310,3 @@ namespace aero::websocket::detail {
   };
 
 } // namespace aero::websocket::detail
-
-#endif

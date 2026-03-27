@@ -1,5 +1,4 @@
-#ifndef AERO_TLS_DETAIL_TLS_ALERT_CAPTURE_HPP
-#define AERO_TLS_DETAIL_TLS_ALERT_CAPTURE_HPP
+#pragma once
 
 #include <atomic>
 #include <cstddef>
@@ -116,5 +115,3 @@ namespace aero::tls::detail {
   }
 
 } // namespace aero::tls::detail
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef AERO_TLS_DETAIL_SHA1_HPP
-#define AERO_TLS_DETAIL_SHA1_HPP
+#pragma once
 
 #include <array>
 #include <span>
@@ -34,5 +33,3 @@ namespace aero::tls::detail {
   }
 
 } // namespace aero::tls::detail
-
-#endif

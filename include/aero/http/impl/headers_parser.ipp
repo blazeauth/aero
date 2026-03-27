@@ -1,6 +1,3 @@
-#ifndef AERO_HTTP_IMPL_HEADER_PARSER_IPP
-#define AERO_HTTP_IMPL_HEADER_PARSER_IPP
-
 #pragma once
 
 #include "aero/http/detail/common.hpp"
@@ -301,5 +298,3 @@ namespace aero::http {
   }
 
 } // namespace aero::http
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_STATE_HPP
-#define AERO_WEBSOCKET_STATE_HPP
+#pragma once
 
 #include <cstdint>
 
@@ -17,5 +16,3 @@ namespace aero::websocket {
   };
 
 } // namespace aero::websocket
-
-#endif

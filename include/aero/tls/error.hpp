@@ -1,5 +1,4 @@
-#ifndef AERO_TLS_ERRORS_HPP
-#define AERO_TLS_ERRORS_HPP
+#pragma once
 
 #include <cstdint>
 #include <system_error>
@@ -148,5 +147,3 @@ template <>
 struct std::is_error_code_enum<aero::tls::error::certificate_error> : std::true_type {};
 template <>
 struct std::is_error_code_enum<aero::tls::error::context_error> : std::true_type {};
-
-#endif

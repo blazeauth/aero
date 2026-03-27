@@ -1,5 +1,4 @@
-#ifndef AERO_BASE64_BASE64_HPP
-#define AERO_BASE64_BASE64_HPP
+#pragma once
 
 #include <span>
 #include <string>
@@ -37,5 +36,3 @@ namespace aero {
   }
 
 } // namespace aero
-
-#endif

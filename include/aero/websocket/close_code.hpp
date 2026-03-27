@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_CLOSE_CODE_HPP
-#define AERO_WEBSOCKET_CLOSE_CODE_HPP
+#pragma once
 
 #include <algorithm>
 #include <array>
@@ -97,5 +96,3 @@ struct std::formatter<aero::websocket::close_code> : std::formatter<std::underly
     return std::formatter<std::underlying_type_t<aero::websocket::close_code>>{}.format(std::to_underlying(value), ctx);
   }
 };
-
-#endif

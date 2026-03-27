@@ -1,5 +1,4 @@
-#ifndef AERO_IO_RUNTIME_HPP
-#define AERO_IO_RUNTIME_HPP
+#pragma once
 
 #include <atomic>
 #include <exception>
@@ -208,5 +207,3 @@ namespace aero {
   };
 
 } // namespace aero
-
-#endif

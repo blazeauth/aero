@@ -1,5 +1,4 @@
-#ifndef AERO_TLS_INITIALIZE_HPP
-#define AERO_TLS_INITIALIZE_HPP
+#pragma once
 
 #include <atomic>
 #include <cstdint>
@@ -85,5 +84,3 @@ namespace aero::tls {
   }
 
 } // namespace aero::tls
-
-#endif

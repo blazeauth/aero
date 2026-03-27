@@ -1,5 +1,4 @@
-#ifndef AERO_DETAIL_FINAL_ACTION_HPP
-#define AERO_DETAIL_FINAL_ACTION_HPP
+#pragma once
 
 #include <utility>
 
@@ -36,5 +35,3 @@ namespace aero::detail {
   }
 
 } // namespace aero::detail
-
-#endif

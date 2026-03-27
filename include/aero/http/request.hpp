@@ -1,5 +1,4 @@
-#ifndef AERO_HTTP_REQUEST_HPP
-#define AERO_HTTP_REQUEST_HPP
+#pragma once
 
 #include <vector>
 
@@ -21,5 +20,3 @@ namespace aero::http {
   };
 
 } // namespace aero::http
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_BASIC_CLIENT_HPP
-#define AERO_WEBSOCKET_BASIC_CLIENT_HPP
+#pragma once
 
 #include <atomic>
 #include <chrono>
@@ -1023,5 +1022,3 @@ namespace aero::websocket {
   };
 
 } // namespace aero::websocket
-
-#endif

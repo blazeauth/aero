@@ -1,5 +1,4 @@
-#ifndef AERO_TLS_DETAIL_BASE64_HPP
-#define AERO_TLS_DETAIL_BASE64_HPP
+#pragma once
 
 #include <span>
 #include <string>
@@ -53,5 +52,3 @@ namespace aero::tls::detail {
   }
 
 } // namespace aero::tls::detail
-
-#endif

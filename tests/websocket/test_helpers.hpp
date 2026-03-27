@@ -1,5 +1,4 @@
-#ifndef AERO_TESTS_WEBSOCKET_TESTS_HELPERS_HPP
-#define AERO_TESTS_WEBSOCKET_TESTS_HELPERS_HPP
+#pragma once
 
 #include <algorithm>
 #include <array>
@@ -200,5 +199,3 @@ namespace aero::tests::websocket {
   }
 
 } // namespace aero::tests::websocket
-
-#endif

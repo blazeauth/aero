@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_CLIENT_OPTIONS_HPP
-#define AERO_WEBSOCKET_CLIENT_OPTIONS_HPP
+#pragma once
 
 #include "aero/websocket/client_handshaker.hpp"
 
@@ -14,5 +13,3 @@ namespace aero::websocket {
   };
 
 } // namespace aero::websocket
-
-#endif

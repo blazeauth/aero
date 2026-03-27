@@ -1,5 +1,4 @@
-#ifndef AERO_TLS_VERIFY_MODE_HPP
-#define AERO_TLS_VERIFY_MODE_HPP
+#pragma once
 
 #include <asio/ssl/verify_mode.hpp>
 
@@ -13,5 +12,3 @@ namespace aero::tls {
   };
 
 } // namespace aero::tls
-
-#endif

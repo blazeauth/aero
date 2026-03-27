@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_DETAIL_ACCEPT_CHALLENGE_HPP
-#define AERO_WEBSOCKET_DETAIL_ACCEPT_CHALLENGE_HPP
+#pragma once
 
 #include <algorithm>
 #include <random>
@@ -43,5 +42,3 @@ namespace aero::websocket::detail {
   }
 
 } // namespace aero::websocket::detail
-
-#endif

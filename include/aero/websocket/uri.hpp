@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_URI_HPP
-#define AERO_WEBSOCKET_URI_HPP
+#pragma once
 
 #include <algorithm>
 #include <cctype>
@@ -431,5 +430,3 @@ namespace aero::websocket {
   };
 
 } // namespace aero::websocket
-
-#endif

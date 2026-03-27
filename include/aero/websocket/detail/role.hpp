@@ -1,6 +1,4 @@
-#ifndef AERO_WEBSOCKET_DETAIL_ROLE_HPP
-#define AERO_WEBSOCKET_DETAIL_ROLE_HPP
-
+#pragma once
 #include <cstdint>
 
 namespace aero::websocket::detail {
@@ -11,5 +9,3 @@ namespace aero::websocket::detail {
   };
 
 } // namespace aero::websocket::detail
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_DETAIL_CLOSE_CODE_HPP
-#define AERO_WEBSOCKET_DETAIL_CLOSE_CODE_HPP
+#pragma once
 
 #include <algorithm>
 #include <array>
@@ -49,5 +48,3 @@ namespace aero::websocket::detail {
   }
 
 } // namespace aero::websocket::detail
-
-#endif

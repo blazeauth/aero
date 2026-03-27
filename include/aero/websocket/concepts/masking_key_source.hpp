@@ -1,5 +1,4 @@
-#ifndef AERO_WEBSOCKET_CONCEPTS_MASKING_KEY_SOURCE_HPP
-#define AERO_WEBSOCKET_CONCEPTS_MASKING_KEY_SOURCE_HPP
+#pragma once
 
 #include <array>
 #include <expected>
@@ -15,5 +14,3 @@ namespace aero::websocket::concepts {
   };
 
 } // namespace aero::websocket::concepts
-
-#endif

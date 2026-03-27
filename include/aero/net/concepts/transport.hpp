@@ -1,5 +1,4 @@
-#ifndef AERO_NET_CONCEPTS_TRANSPORT_HPP
-#define AERO_NET_CONCEPTS_TRANSPORT_HPP
+#pragma once
 
 #include <concepts>
 #include <cstddef>
@@ -58,5 +57,3 @@ namespace aero::net::concepts {
     };
 
 } // namespace aero::net::concepts
-
-#endif

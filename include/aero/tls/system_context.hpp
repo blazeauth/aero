@@ -1,5 +1,4 @@
-#ifndef AERO_TLS_SYSTEM_CONTEXT_HPP
-#define AERO_TLS_SYSTEM_CONTEXT_HPP
+#pragma once
 
 #include <algorithm>
 #include <system_error>
@@ -116,5 +115,3 @@ namespace aero::tls {
   };
 
 } // namespace aero::tls
-
-#endif
