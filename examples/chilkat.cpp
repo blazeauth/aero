@@ -1,11 +1,11 @@
 #include <print>
 #include <string_view>
 
-#include "aero/websocket.hpp"
-
-namespace websocket = aero::websocket;
+#include "aero/websocket/client.hpp"
 
 namespace {
+
+  namespace websocket = aero::websocket;
 
   void print_error(std::string_view message, const std::error_code& ec) {
     std::println("{}: {} ({} - {})", message, ec.message(), ec.value(), ec.category().name());

@@ -1,23 +1,23 @@
-#include "aero/deadline.hpp"
-#include "aero/error.hpp"
-#include "aero/final_action.hpp"
-#include "aero/tls/system_context.hpp"
-#include "aero/tls/version.hpp"
-#include "aero/websocket.hpp"
-
 #include <print>
 
-namespace websocket = aero::websocket;
-// namespace http = aero::http;
-namespace tls = aero::tls;
+#include "aero/deadline.hpp"
+#include "aero/error.hpp"
+#include "aero/tls/system_context.hpp"
+#include "aero/tls/version.hpp"
+#include "aero/websocket/close_code.hpp"
+#include "aero/websocket/tls/client.hpp"
 
 namespace {
+
+  namespace websocket = aero::websocket;
+  namespace tls = aero::tls;
+  namespace http = aero::http;
 
   void print_error(std::string_view message, const std::error_code& ec) {
     std::println("{}: {} ({} - {})", message, ec.message(), ec.value(), ec.category().name());
   }
 
-  void print_headers(const aero::http::headers& headers) {
+  void print_headers(const http::headers& headers) {
     std::println("[HEADERS] Printing:");
     for (const auto& [name, value] : headers) {
       std::println("{}: {}", name, value);
@@ -30,7 +30,7 @@ namespace {
 int main() {
   using namespace std::chrono_literals;
 
-  aero::tls::system_context tls_ctx{tls::version::tlsv1_2};
+  tls::system_context tls_ctx{tls::version::tlsv1_2};
   tls_ctx.disable_deprecated_versions();
 
   websocket::tls::client client{tls_ctx.context()};
@@ -44,7 +44,6 @@ int main() {
   std::println("Succesfully connected");
   print_headers(*handshake_headers);
 
-  auto cleanup = aero::finally([&] { std::ignore = client.force_close(); });
   aero::deadline deadline{5min};
 
   for (;;) {
@@ -68,6 +67,12 @@ int main() {
     }
 
     std::println("Received message from binance stream: {}", message->text());
+  }
+
+  auto close_ec = client.close(websocket::close_code::normal, "thank you, we are leaving.");
+  if (close_ec) {
+    print_error("Close handshake failed", close_ec);
+    std::ignore = client.force_close();
   }
 
   return 0;

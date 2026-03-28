@@ -1,3 +1,8 @@
+#include <chrono>
+#include <future>
+#include <print>
+#include <system_error>
+
 #include "aero/http/headers.hpp"
 #include "aero/io_runtime.hpp"
 #include "aero/tls/initialize.hpp"
@@ -10,10 +15,6 @@
 #include <asio/awaitable.hpp>
 #include <asio/use_awaitable.hpp>
 #include <asio/use_future.hpp>
-#include <chrono>
-#include <future>
-#include <print>
-#include <system_error>
 
 namespace {
 
@@ -25,7 +26,7 @@ namespace {
   }
 
   void print_headers(const aero::http::headers& headers) {
-    std::println("[HEADERS]:");
+    std::println("[HEADERS] Printing:");
     for (const auto& [name, value] : headers) {
       std::println("{}: {}", name, value);
     }
