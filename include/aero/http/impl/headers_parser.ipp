@@ -8,42 +8,15 @@ namespace aero::http {
 
   namespace {
 
-    using http::error::protocol_error;
+    using http::error::header_error;
 
     struct field_view {
       std::string_view name;
       std::string_view value;
-
-      [[nodiscard]] bool empty() const noexcept {
-        return name.empty() && value.empty();
-      }
     };
 
-    constexpr std::string_view optional_whitespace_chars{" \t"};
-    constexpr std::string_view tchar_symbols{"!#$%&'*+-.^_`|~"};
-    constexpr std::array<std::string_view, 21> comma_separated_list_headers{
-      "Accept",
-      "Accept-Charset",
-      "Accept-Encoding",
-      "Accept-Language",
-      "Accept-Ranges",
-      "Allow",
-      "Cache-Control",
-      "Connection",
-      "Content-Encoding",
-      "Content-Language",
-      "Expect",
-      "If-Match",
-      "If-None-Match",
-      "Pragma",
-      "Range",
-      "TE",
-      "Trailer",
-      "Transfer-Encoding",
-      "Upgrade",
-      "Vary",
-      "Via",
-    };
+    constexpr inline std::string_view optional_whitespace_chars{" \t"};
+    constexpr inline std::string_view tchar_symbols{"!#$%&'*+-.^_`|~"};
 
     [[nodiscard]] constexpr auto to_byte(char ch) noexcept {
       return static_cast<unsigned char>(ch);
@@ -51,9 +24,9 @@ namespace aero::http {
 
     [[nodiscard]] constexpr bool is_tchar(unsigned char byte) noexcept {
       const auto lower = static_cast<unsigned char>(byte | 0x20U);
-      const auto is_numeric = byte >= '0' && byte <= '9';
-      const auto is_character = (lower >= 'a' && lower <= 'z');
-      const auto is_valid_symbol = tchar_symbols.contains(static_cast<char>(byte));
+      bool is_numeric = byte >= '0' && byte <= '9';
+      bool is_character = (lower >= 'a' && lower <= 'z');
+      bool is_valid_symbol = tchar_symbols.contains(static_cast<char>(byte));
       return is_numeric || is_character || is_valid_symbol;
     }
 
@@ -65,229 +38,90 @@ namespace aero::http {
       constexpr auto ascii_delete = static_cast<unsigned char>(0x7F);
       constexpr auto obs_text_first_octet = static_cast<unsigned char>(0x80);
 
-      auto is_valid = [](unsigned char byte) noexcept {
+      auto is_valid_byte = [](unsigned char byte) noexcept {
         return byte == '\t' || byte >= obs_text_first_octet || (byte >= ' ' && byte != ascii_delete);
       };
-      return std::ranges::all_of(value, is_valid, to_byte);
+      return std::ranges::all_of(value, is_valid_byte, to_byte);
     }
 
     [[nodiscard]] inline std::string_view trim_optional_whitespace(std::string_view text) {
-      const auto first = text.find_first_not_of(optional_whitespace_chars);
-      if (first == std::string_view::npos) {
+      std::size_t first_non_whitespace_pos = text.find_first_not_of(optional_whitespace_chars);
+      if (first_non_whitespace_pos == std::string_view::npos) {
         return {};
       }
-      const auto last = text.find_last_not_of(optional_whitespace_chars);
-      return text.substr(first, last - first + 1);
+      std::size_t last_non_whitespace_pos = text.find_last_not_of(optional_whitespace_chars);
+      return text.substr(first_non_whitespace_pos, last_non_whitespace_pos - first_non_whitespace_pos + 1);
     }
 
-    inline void add_header(headers& headers, field_view line) {
-      headers.add(std::string{line.name}, std::string{line.value});
-    }
-
-    [[nodiscard]] inline std::error_code append_obsolete_fold(headers& headers, std::string_view last_header_name,
-      std::string_view continuation) {
-      auto fields = headers.fields(last_header_name);
-      if (fields.empty()) {
-        return {};
-      }
-
-      if (continuation.find_first_of(detail::crlf) != std::string_view::npos) {
-        return protocol_error::header_line_invalid;
-      }
-
-      const auto trimmed = trim_optional_whitespace(continuation);
-      if (trimmed.empty()) {
-        return {};
-      }
-
-      if (!is_valid_field_value(trimmed)) {
-        return protocol_error::header_line_invalid;
-      }
-
-      auto it = fields.begin();
-      auto last_it = it; // In case range contains only one element
-      for (++it; it != fields.end(); ++it) {
-        last_it = it;
-      }
-
-      std::string& last_value = last_it->value;
-
-      if (!last_value.empty()) {
-        last_value.push_back(' ');
-      }
-      last_value.append(trimmed);
-
-      return {};
-    }
-
-    [[nodiscard]] inline bool is_comma_separated_header(std::string_view name) noexcept {
-      return std::ranges::any_of(comma_separated_list_headers,
-        [&](std::string_view candidate) noexcept { return aero::detail::ascii_iequal(name, candidate); });
-    }
-
-    inline void add_comma_separated_values(headers& headers, field_view field) {
-      std::size_t segment_start = 0;
-      bool inside_quoted_string = false;
-      bool quoted_escape = false;
-      std::size_t comment_depth = 0;
-      bool comment_escape = false;
-
-      auto emit_segment = [&](std::size_t segment_end) {
-        auto whitespace_trimmed_value =
-          trim_optional_whitespace(field.value.substr(segment_start, segment_end - segment_start));
-        if (!whitespace_trimmed_value.empty()) {
-          headers.add(std::string{field.name}, std::string{whitespace_trimmed_value});
-        }
-      };
-
-      for (std::size_t i{}; i < field.value.size(); ++i) {
-        const char ch = field.value[i];
-
-        if (comment_depth > 0) {
-          if (comment_escape) {
-            comment_escape = false;
-            continue;
-          }
-          if (ch == '\\') {
-            comment_escape = true;
-            continue;
-          }
-          if (ch == '(') {
-            ++comment_depth;
-            continue;
-          }
-          if (ch == ')' && comment_depth > 0) {
-            --comment_depth;
-            continue;
-          }
-          continue;
-        }
-
-        if (inside_quoted_string) {
-          if (quoted_escape) {
-            quoted_escape = false;
-            continue;
-          }
-          if (ch == '\\') {
-            quoted_escape = true;
-            continue;
-          }
-          if (ch == '"') {
-            inside_quoted_string = false;
-            continue;
-          }
-          continue;
-        }
-
-        if (ch == '"') {
-          inside_quoted_string = true;
-          continue;
-        }
-
-        if (ch == '(') {
-          comment_depth = 1;
-          continue;
-        }
-
-        if (ch == ',') {
-          emit_segment(i);
-          segment_start = i + 1;
-        }
-      }
-
-      emit_segment(field.value.size());
-    }
-
-    inline void normalize_comma_separated_headers(headers& headers) {
-      http::headers normalized;
-      for (const auto& [name, value] : headers) {
-        field_view field{.name = name, .value = value};
-        if (is_comma_separated_header(name)) {
-          add_comma_separated_values(normalized, field);
-        } else {
-          normalized.add(std::string{field.name}, std::string{field.value});
-        }
-      }
-      headers = std::move(normalized);
-    }
-
-    inline std::expected<field_view, std::error_code> process_header_field(headers& headers, std::string_view last_header_name,
+    [[nodiscard]] inline std::expected<field_view, std::error_code> parse_header_field(std::string_view last_header_name,
       std::string_view line) {
-      using http::error::protocol_error;
-      constexpr auto npos = std::string_view::npos;
-
-      const auto is_header_continuation = optional_whitespace_chars.contains(line.front());
-      if (is_header_continuation) {
-        if (last_header_name.empty()) {
-          return std::unexpected(protocol_error::obs_fold_without_previous_header);
-        }
-        if (auto append_ec = append_obsolete_fold(headers, last_header_name, line); append_ec) {
-          return std::unexpected(append_ec);
-        }
-        return field_view{};
+      bool is_obs_fold_continuation = optional_whitespace_chars.contains(line.front());
+      if (is_obs_fold_continuation && !last_header_name.empty()) {
+        return std::unexpected(header_error::obs_fold_not_supported);
       }
 
-      const auto colon_position = line.find(':');
-      if (colon_position == npos) {
-        return std::unexpected(protocol_error::header_line_invalid);
+      std::size_t colon_position = line.find(':');
+      if (colon_position == std::string_view::npos) {
+        return std::unexpected(header_error::field_invalid);
       }
 
-      const auto raw_name = line.substr(0, colon_position);
-      const auto name = trim_optional_whitespace(raw_name);
+      std::string_view raw_name = line.substr(0, colon_position);
+      std::string_view name = trim_optional_whitespace(raw_name);
 
       if (name.empty() || name.size() != raw_name.size() || !is_header_field_name_token(name)) {
-        return std::unexpected(protocol_error::header_name_invalid);
+        return std::unexpected(header_error::name_invalid);
       }
 
-      const auto value = trim_optional_whitespace(line.substr(colon_position + 1));
+      std::string_view value = trim_optional_whitespace(line.substr(colon_position + 1));
       if (!is_valid_field_value(value)) {
-        return std::unexpected(protocol_error::header_line_invalid);
+        return std::unexpected(header_error::field_invalid);
       }
 
       return field_view{.name = name, .value = value};
     }
 
     [[nodiscard]] inline std::expected<headers, std::error_code> parse_headers(std::string_view buffer) {
-      constexpr auto npos = std::string_view::npos;
+      std::size_t headers_end_position = buffer.find(detail::double_crlf);
+      if (headers_end_position == std::string_view::npos) {
+        if (buffer.ends_with(detail::double_lf)) {
+          return std::unexpected(header_error::lf_field_endings_not_supported);
+        }
 
-      const auto headers_end_position = buffer.find(detail::double_crlf);
-      if (headers_end_position == npos) {
-        return std::unexpected(protocol_error::headers_section_incomplete);
+        return std::unexpected(header_error::section_incomplete);
       }
 
-      headers result;
+      http::headers headers;
       std::string_view last_header_name;
       std::string_view headers_section = buffer.substr(0, headers_end_position);
 
-      for (auto&& line_range : headers_section | std::views::split(detail::crlf)) {
-        std::string_view line{line_range};
-        if (line.empty()) {
+      for (auto&& field_subrange : headers_section | std::views::split(detail::crlf)) {
+        std::string_view field_line{field_subrange};
+        if (field_line.empty()) {
           break;
         }
 
-        auto contains_separator_characters = line.find_first_of(detail::crlf) != npos;
-        if (contains_separator_characters) {
-          return std::unexpected(protocol_error::header_line_invalid);
+        bool field_line_contains_crlf = field_line.find_first_of(detail::crlf) != std::string_view::npos;
+        if (field_line_contains_crlf) {
+          return std::unexpected(header_error::field_invalid);
         }
 
-        auto field = process_header_field(result, last_header_name, line);
-        if (!field) {
-          return std::unexpected(field.error());
+        auto field_view = parse_header_field(last_header_name, field_line);
+        if (!field_view) {
+          return std::unexpected(field_view.error());
         }
 
-        if (field->empty()) {
-          continue;
-        }
-
-        result.add(std::string{field->name}, std::string{field->value});
-        last_header_name = field->name;
+        headers.add(std::string{field_view->name}, std::string{field_view->value});
+        last_header_name = field_view->name;
       }
 
-      normalize_comma_separated_headers(result);
-      return result;
+      return headers;
     }
 
   } // namespace
+
+  inline std::string_view headers::trim_optional_whitespace(std::string_view text) {
+    return aero::http::trim_optional_whitespace(text);
+  }
 
   inline std::expected<headers, std::error_code> headers::parse(std::string_view buffer) {
     return parse_headers(buffer);

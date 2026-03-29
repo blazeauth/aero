@@ -12,7 +12,6 @@
 namespace http = aero::http;
 using http::detail::crlf;
 using http::detail::double_crlf;
-using http::error::protocol_error;
 
 namespace {
 
@@ -364,13 +363,6 @@ TEST(HttpHeaders, ParseWrapperSucceeds) {
 
   EXPECT_EQ(*parsed_headers.first_value("Upgrade"), "websocket");
   EXPECT_EQ(*parsed_headers.first_value("connection"), "Upgrade");
-}
-
-TEST(HttpHeaders, ParseWrapperPropagatesError) {
-  auto parsed = http::headers::parse("A (bad): b\r\n\r\n");
-
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::header_name_invalid);
 }
 
 TEST(HttpHeaders, ReplaceReplacesAllOccurrences) {

@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "aero/http/error.hpp"
 #include "aero/http/status_line.hpp"
 #include "aero/websocket/client_handshaker.hpp"
 #include "aero/websocket/detail/accept_challenge.hpp"
@@ -160,7 +161,7 @@ TEST(WebsocketServerHandshake, PropagatesHeadersParseError) {
   constexpr std::string_view handshake{"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"};
 
   const auto error_code = validate_server_handshake(handshake, sec_websocket_key);
-  EXPECT_EQ(error_code, http::error::protocol_error::headers_section_incomplete);
+  EXPECT_EQ(error_code, http::error::header_error::section_incomplete);
 }
 
 TEST(WebsocketServerHandshake, ErrorIfStatusCodeIsNotSwitchingProtocols) {
