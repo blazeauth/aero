@@ -208,6 +208,24 @@ namespace aero::http {
       return find(name) != end(); // NOLINT(*-container-contains)
     }
 
+    [[nodiscard]] bool contains_token(std::string_view name, std::string_view token) const& {
+      if (token.empty()) {
+        return false;
+      }
+
+      for (std::string_view value : values(name)) {
+        for (auto&& split_value : value | std::views::split(',')) {
+          std::string_view candidate{split_value};
+
+          if (aero::detail::ascii_iequal(trim_optional_whitespace(candidate), token)) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    }
+
     [[nodiscard]] std::string serialize() const {
       using http::detail::crlf;
       using http::detail::header_name_value_separator;
@@ -290,9 +308,12 @@ namespace aero::http {
     [[nodiscard]] auto values() const&& = delete;
     [[nodiscard]] auto values(std::string_view name) const&& = delete;
     [[nodiscard]] std::optional<std::string_view> first_value(std::string_view name) const&& = delete;
+    [[nodiscard]] bool contains_token(std::string_view name, std::string_view value) const&& = delete;
     iterator add(std::string name, std::string value) && = delete;
 
    private:
+    [[nodiscard]] static std::string_view trim_optional_whitespace(std::string_view text);
+
     std::vector<value_type> items;
   };
 

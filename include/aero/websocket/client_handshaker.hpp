@@ -135,16 +135,12 @@ namespace aero::websocket {
       }
 
       // 5.2: An |Upgrade| header field with value "websocket"
-      auto upgrade_header = headers->first_value("upgrade");
-      if (!upgrade_header.has_value() || !aero::detail::ascii_iequal(*upgrade_header, "websocket")) {
+      if (!headers->contains_token("upgrade", "websocket")) {
         return std::unexpected(handshake_error::upgrade_header_invalid);
       }
 
       // 5.3: A |Connection| header field with value "Upgrade"
-      auto has_connection_upgrade_header = std::ranges::any_of(headers->fields("connection"),
-        [](const http::headers::field_type& fields) { return aero::detail::ascii_iequal(fields.value, "Upgrade"); });
-
-      if (!has_connection_upgrade_header) {
+      if (!headers->contains_token("connection", "upgrade")) {
         return std::unexpected(handshake_error::connection_header_invalid);
       }
 

@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <format>
 #include <gtest/gtest.h>
 #include <string>
@@ -11,7 +12,7 @@
 namespace {
 
   namespace http = aero::http;
-  using http::error::protocol_error;
+  using http::error::header_error;
 
   std::string generate_headers_buffer(std::vector<std::pair<std::string, std::string>> headers) {
     std::string buffer;
@@ -87,17 +88,6 @@ TEST(HttpHeadersParser, TrimsOptionalWhitespaceAroundValue) {
   EXPECT_EQ(headers.first_value("C"), "d");
 }
 
-TEST(HttpHeadersParser, ParsesObsFoldContinuationLines) {
-  auto parsed = http::headers::parse("X-Test: first\r\n\tsecond\r\n third\r\nY: ok\r\n\r\n");
-  ASSERT_TRUE(parsed);
-
-  auto& headers = *parsed;
-
-  EXPECT_EQ(headers.size(), 2);
-  EXPECT_EQ(headers.first_value("X-Test"), "first second third");
-  EXPECT_EQ(headers.first_value("Y"), "ok");
-}
-
 TEST(HttpHeadersParser, PreservesDuplicateFieldNames) {
   const auto headers_buffer = generate_headers_buffer({
     {"Set-Cookie", "a=1"},
@@ -144,53 +134,53 @@ TEST(HttpHeadersParser, StopsAtHeadersEndSeparator) {
   EXPECT_FALSE(headers.contains("Another"));
 }
 
+TEST(HttpHeadersParser, FailsIfObsFoldContinuationAppearsInHeaderLine) {
+  auto parsed = http::headers::parse("X-Test: first\r\n\tsecond\r\n third\r\nY: ok\r\n\r\n");
+
+  ASSERT_FALSE(parsed);
+  EXPECT_EQ(parsed.error(), header_error::obs_fold_not_supported);
+}
+
 TEST(HttpHeadersParser, FailsIfHeadersEndSeparatorMissing) {
   auto parsed = http::headers::parse("A: b\r\nC: d\r\n");
 
   ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::headers_section_incomplete);
-}
-
-TEST(HttpHeadersParser, FailsIfObsFoldWithoutPreviousHeader) {
-  auto parsed = http::headers::parse(" continuation-without-header\r\n\r\n");
-
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::obs_fold_without_previous_header);
+  EXPECT_EQ(parsed.error(), header_error::section_incomplete);
 }
 
 TEST(HttpHeadersParser, FailsIfHeaderLineHasNoColon) {
   auto parsed = http::headers::parse("A: b\r\nThisIsNotAHeaderField\r\n\r\n");
 
   ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::header_line_invalid);
+  EXPECT_EQ(parsed.error(), header_error::field_invalid);
 }
 
 TEST(HttpHeadersParser, FailsIfHeaderNameContainsWhitespace) {
   auto parsed = http::headers::parse("Bad Name: value\r\n\r\n");
 
   ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::header_name_invalid);
+  EXPECT_EQ(parsed.error(), header_error::name_invalid);
 }
 
 TEST(HttpHeadersParser, FailsIfHeaderNameHasWhitespaceBeforeColon) {
   auto parsed = http::headers::parse("BadName : value\r\n\r\n");
 
   ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::header_name_invalid);
+  EXPECT_EQ(parsed.error(), header_error::name_invalid);
 }
 
-TEST(HttpHeadersParser, FailsIfLfOnlyLineEndingsAreUsed) {
+TEST(HttpHeadersParser, FailsIfHeaderSectionEndsWithDoubleLf) {
   auto parsed = http::headers::parse("A: b\nC: d\n\n");
 
   ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::headers_section_incomplete);
+  EXPECT_EQ(parsed.error(), header_error::lf_field_endings_not_supported);
 }
 
 TEST(HttpHeadersParser, FailsIfBareCrAppearsInsideHeaderLine) {
   auto parsed = http::headers::parse("A: b\rc\r\n\r\n");
 
   ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::header_line_invalid);
+  EXPECT_EQ(parsed.error(), header_error::field_invalid);
 }
 
 TEST(HttpHeadersParser, FailsIfHeaderValueContainsControlCharacters) {
@@ -202,50 +192,52 @@ TEST(HttpHeadersParser, FailsIfHeaderValueContainsControlCharacters) {
   auto parsed = http::headers::parse(buffer);
 
   ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::header_line_invalid);
+  EXPECT_EQ(parsed.error(), header_error::field_invalid);
 }
 
-TEST(HttpHeadersParser, FailsIfObsFoldContinuationContainsControlCharacters) {
-  constexpr char ascii_delete = 0x7F;
-  std::string buffer;
-  buffer.append("X-Test: first\r\n");
-  buffer.append("\tsecond");
-  buffer.push_back(ascii_delete);
-  buffer.append("third\r\n");
-  buffer.append("\r\n");
+TEST(HttpHeadersParser, ParsesEmptyHeaderValues) {
+  auto parsed = http::headers::parse("X-Empty:\r\nY-Empty:   \t\r\n\r\n");
+  ASSERT_TRUE(parsed);
+
+  auto& headers = *parsed;
+
+  EXPECT_EQ(headers.size(), 2);
+  EXPECT_TRUE(headers.contains("X-Empty"));
+  EXPECT_TRUE(headers.contains("Y-Empty"));
+  EXPECT_EQ(headers.first_value("X-Empty"), "");
+  EXPECT_EQ(headers.first_value("Y-Empty"), "");
+}
+
+TEST(HttpHeadersParser, AllowsObsTextInsideHeaderValues) {
+  std::string expected_value = "before";
+  expected_value.push_back(static_cast<char>(0x80));
+  expected_value.push_back(static_cast<char>(0xFF));
+  expected_value += "after";
+
+  std::string buffer = "X-Text: ";
+  buffer += expected_value;
+  buffer += "\r\n\r\n";
 
   auto parsed = http::headers::parse(buffer);
-
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::header_line_invalid);
-}
-
-TEST(HttpHeadersParser, SplitsKnownCommaSeparatedHeaderIntoMultipleRecords) {
-  const auto headers_buffer = generate_headers_buffer({
-    {"Accept", "text/html, application/json, image/png"},
-    {"Date", "Sun, 15 Feb 2026 23:19:40 GMT"},
-  });
-
-  auto parsed = http::headers::parse(headers_buffer);
   ASSERT_TRUE(parsed);
 
   auto& headers = *parsed;
 
-  EXPECT_EQ(headers.size(), 4);
-
-  auto accept_values = get_all_header_values(headers, "ACCEPT");
-  ASSERT_EQ(accept_values.size(), 3);
-  EXPECT_EQ(accept_values[0], "text/html");
-  EXPECT_EQ(accept_values[1], "application/json");
-  EXPECT_EQ(accept_values[2], "image/png");
-
-  EXPECT_EQ(headers.first_value("Accept"), "text/html");
-  EXPECT_EQ(headers.first_value("Date"), "Sun, 15 Feb 2026 23:19:40 GMT");
+  EXPECT_EQ(headers.size(), 1);
+  EXPECT_EQ(headers.first_value("X-Text"), expected_value);
 }
 
-TEST(HttpHeadersParser, SplitsKnownCommaSeparatedHeaderCaseInsensitively) {
+TEST(HttpHeadersParser, ParsesLargeDuplicateSetCookieFieldValues) {
+  const auto first_payload = std::string(16384, 'a');
+  const auto second_payload = std::string(8192, 'b');
+
+  const auto first_cookie =
+    std::format("session={}; Expires=Wed, 09 Jun 2021 10:18:14 GMT; Path=/; HttpOnly; SameSite=None; Secure", first_payload);
+  const auto second_cookie = std::format("refresh={}; Path=/auth; HttpOnly; SameSite=Lax; Secure", second_payload);
+
   const auto headers_buffer = generate_headers_buffer({
-    {"cOnNeCtIoN", "keep-alive, Upgrade"},
+    {"Set-Cookie", first_cookie},
+    {"Set-Cookie", second_cookie},
   });
 
   auto parsed = http::headers::parse(headers_buffer);
@@ -255,116 +247,8 @@ TEST(HttpHeadersParser, SplitsKnownCommaSeparatedHeaderCaseInsensitively) {
 
   EXPECT_EQ(headers.size(), 2);
 
-  auto connection_values = get_all_header_values(headers, "CONNECTION");
-  ASSERT_EQ(connection_values.size(), 2);
-  EXPECT_EQ(connection_values[0], "keep-alive");
-  EXPECT_EQ(connection_values[1], "Upgrade");
-}
-
-TEST(HttpHeadersParser, TrimsWhitespaceAroundCommaSeparatedSegments) {
-  const auto headers_buffer = generate_headers_buffer({
-    {"Accept", "  text/html  ,\t application/json \t,   image/png   "},
-  });
-
-  auto parsed = http::headers::parse(headers_buffer);
-  ASSERT_TRUE(parsed);
-
-  auto& headers = *parsed;
-
-  EXPECT_EQ(headers.size(), 3);
-
-  auto accept_values = get_all_header_values(headers, "Accept");
-  ASSERT_EQ(accept_values.size(), 3);
-  EXPECT_EQ(accept_values[0], "text/html");
-  EXPECT_EQ(accept_values[1], "application/json");
-  EXPECT_EQ(accept_values[2], "image/png");
-}
-
-TEST(HttpHeadersParser, DoesNotSplitCommasInsideQuotedStrings) {
-  const auto headers_buffer = generate_headers_buffer({
-    {"Accept", "text/html; q=\"0,8\", application/json"},
-  });
-
-  auto parsed = http::headers::parse(headers_buffer);
-  ASSERT_TRUE(parsed);
-
-  auto& headers = *parsed;
-
-  EXPECT_EQ(headers.size(), 2);
-
-  auto accept_values = get_all_header_values(headers, "Accept");
-  ASSERT_EQ(accept_values.size(), 2);
-  EXPECT_EQ(accept_values[0], "text/html; q=\"0,8\"");
-  EXPECT_EQ(accept_values[1], "application/json");
-}
-
-TEST(HttpHeadersParser, DoesNotSplitCommasInsideComments) {
-  const auto headers_buffer = generate_headers_buffer({
-    {"Accept", "text/html (level,one), application/json"},
-  });
-
-  auto parsed = http::headers::parse(headers_buffer);
-  ASSERT_TRUE(parsed);
-
-  auto& headers = *parsed;
-
-  EXPECT_EQ(headers.size(), 2);
-
-  auto accept_values = get_all_header_values(headers, "Accept");
-  ASSERT_EQ(accept_values.size(), 2);
-  EXPECT_EQ(accept_values[0], "text/html (level,one)");
-  EXPECT_EQ(accept_values[1], "application/json");
-}
-
-TEST(HttpHeadersParser, IgnoresEmptyCommaSeparatedSegments) {
-  const auto headers_buffer = generate_headers_buffer({
-    {"Accept", "text/html, , \t, application/json,   ,image/png"},
-  });
-
-  auto parsed = http::headers::parse(headers_buffer);
-  ASSERT_TRUE(parsed);
-
-  auto& headers = *parsed;
-
-  EXPECT_EQ(headers.size(), 3);
-
-  auto accept_values = get_all_header_values(headers, "Accept");
-  ASSERT_EQ(accept_values.size(), 3);
-  EXPECT_EQ(accept_values[0], "text/html");
-  EXPECT_EQ(accept_values[1], "application/json");
-  EXPECT_EQ(accept_values[2], "image/png");
-}
-
-TEST(HttpHeadersParser, DoesNotSplitHeadersOutsideCommaSeparatedAllowList) {
-  const auto headers_buffer = generate_headers_buffer({
-    {"Set-Cookie", "a=1, b=2"},
-    {"Date", "Sun, 15 Feb 2026 23:19:40 GMT"},
-  });
-
-  auto parsed = http::headers::parse(headers_buffer);
-  ASSERT_TRUE(parsed);
-
-  auto& headers = *parsed;
-
-  EXPECT_EQ(headers.size(), 2);
-
-  auto set_cookie_values = get_all_header_values(headers, "Set-Cookie");
-  ASSERT_EQ(set_cookie_values.size(), 1);
-  EXPECT_EQ(set_cookie_values[0], "a=1, b=2");
-
-  EXPECT_EQ(headers.first_value("Date"), "Sun, 15 Feb 2026 23:19:40 GMT");
-}
-
-TEST(HttpHeadersParser, SplitsCommaSeparatedHeaderAfterObsFoldNormalization) {
-  auto parsed = http::headers::parse("Connection: keep-alive,\r\n Upgrade\r\n\r\n");
-  ASSERT_TRUE(parsed);
-
-  auto& headers = *parsed;
-
-  EXPECT_EQ(headers.size(), 2);
-
-  auto connection_values = get_all_header_values(headers, "Connection");
-  ASSERT_EQ(connection_values.size(), 2);
-  EXPECT_EQ(connection_values[0], "keep-alive");
-  EXPECT_EQ(connection_values[1], "Upgrade");
+  auto set_cookie_values = get_all_header_values(headers, "SET-COOKIE");
+  ASSERT_EQ(set_cookie_values.size(), 2);
+  EXPECT_EQ(set_cookie_values[0], first_cookie);
+  EXPECT_EQ(set_cookie_values[1], second_cookie);
 }
