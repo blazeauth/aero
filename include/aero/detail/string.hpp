@@ -34,7 +34,7 @@ namespace aero::detail {
   }
 
   template <std::default_initializable T>
-  [[nodiscard]] inline std::expected<T, std::error_code> to_decimal(std::string_view str) {
+  [[nodiscard]] inline std::expected<T, std::error_code> to_decimal(std::string_view str) noexcept {
     T value{};
     if (auto result = std::from_chars(str.data(), str.data() + str.size(), value); result.ec != std::errc{}) {
       return std::unexpected(std::make_error_code(result.ec));
@@ -44,7 +44,7 @@ namespace aero::detail {
 
   template <std::default_initializable T>
     requires(std::is_enum_v<T>)
-  [[nodiscard]] inline std::expected<T, std::error_code> to_decimal(std::string_view str) {
+  [[nodiscard]] inline std::expected<T, std::error_code> to_decimal(std::string_view str) noexcept {
     std::underlying_type_t<T> value{};
     if (auto result = std::from_chars(str.data(), str.data() + str.size(), value); result.ec != std::errc{}) {
       return std::unexpected(std::make_error_code(result.ec));
