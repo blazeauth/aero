@@ -313,9 +313,9 @@ TEST(HttpHeaders, SerializeNonEmptyHeadersEndsWithDoubleCrlf) {
   }
 }
 
-TEST(HttpHeaders, SerializeEmptyHeadersEndsWithSingleCrlf) {
+TEST(HttpHeaders, SerializeEmptyReturnsEmptyString) {
   http::headers fields{};
-  EXPECT_EQ(fields.serialize(), crlf);
+  EXPECT_TRUE(fields.serialize().empty());
 }
 
 TEST(HttpHeaders, SerializeFormatsMultipleFields) {
