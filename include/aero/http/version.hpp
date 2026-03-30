@@ -11,7 +11,7 @@
 namespace aero::http {
 
   enum class version : std::uint8_t {
-    http1_0,
+    http1_0 = 1,
     http1_1,
   };
 
