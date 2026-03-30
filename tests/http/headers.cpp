@@ -9,11 +9,12 @@
 #include "aero/http/error.hpp"
 #include "aero/http/headers.hpp"
 
-namespace http = aero::http;
-using http::detail::crlf;
-using http::detail::double_crlf;
-
 namespace {
+
+  namespace http = aero::http;
+  using http::detail::crlf;
+  using http::detail::double_crlf;
+  using http::error::header_error;
 
   std::vector<std::string> values_of(const http::headers& fields, std::string_view name) {
     std::vector<std::string> values{};
@@ -710,4 +711,62 @@ TEST(HttpHeaders, AppendSelfAppendDoesNothing) {
   EXPECT_EQ(fields.size(), fields_size_before_append);
   EXPECT_TRUE(contains_case_insensitive_value(fields, "Host", "example.com"));
   EXPECT_TRUE(contains_case_insensitive_value(fields, "Hello-World", "aero"));
+}
+
+TEST(HttpHeaders, ContentLengthReturnsParsedInteger) {
+  http::headers fields{
+    {"Content-Length", "500"},
+  };
+
+  EXPECT_EQ(fields.content_length(), 500);
+}
+
+TEST(HttpHeaders, ContentLengthParsesHeaderCaseInsensitive) {
+  http::headers fields{
+    {"CoNtEnT-LeNgtH", "500"},
+  };
+
+  EXPECT_EQ(fields.content_length(), 500);
+}
+
+TEST(HttpHeaders, ContentLengthParsesUint64) {
+  http::headers fields{
+    {"Content-Length", "18446744073709551615"},
+  };
+
+  EXPECT_EQ(fields.content_length<std::uint64_t>(), 18446744073709551615ULL);
+}
+
+TEST(HttpHeaders, ContentLengthReturnsAnUnexpectedErrorOnMissingHeader) {
+  http::headers fields{};
+
+  auto content_length = fields.content_length();
+
+  ASSERT_FALSE(content_length);
+  EXPECT_EQ(content_length.error(), header_error::content_length_missing);
+}
+
+TEST(HttpHeaders, ContentTypeReturnsParsedMimeType) {
+  http::headers fields{
+    {"Content-Type", "application/json"},
+  };
+
+  EXPECT_EQ(fields.content_type(), "application/json");
+}
+
+TEST(HttpHeaders, ContentTypeParsesHeaderCaseInsensitive) {
+  http::headers fields{
+    {"CoNtEnT-TyPe", "application/json"},
+  };
+
+  EXPECT_EQ(fields.content_type(), "application/json");
+}
+
+TEST(HttpHeaders, ContentTypeReturnsAnUnexpectedErrorOnMissingHeader) {
+  http::headers fields{};
+
+  auto content_type = fields.content_type();
+
+  ASSERT_FALSE(content_type);
+  EXPECT_EQ(content_type.error(), header_error::content_type_missing);
 }
