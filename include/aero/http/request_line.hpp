@@ -100,7 +100,7 @@ namespace aero::http {
       };
     }
 
-    [[nodiscard]] std::string to_string() const {
+    [[nodiscard]] std::string serialize() const {
       auto method_str = http::to_string(method);
       if (method_str.empty()) {
         return {};
