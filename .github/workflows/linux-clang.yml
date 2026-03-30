@@ -37,7 +37,7 @@ jobs:
       VCPKG_DEFAULT_TRIPLET: x64-linux
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Clang
         uses: aminya/setup-cpp@v1
