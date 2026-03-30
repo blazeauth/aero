@@ -22,11 +22,12 @@ namespace aero::http {
       return protocol.empty() && status_code == http::status_code{} && reason_phrase.empty();
     }
 
-    [[nodiscard]] std::string to_string() const {
-      auto status_code_str = std::to_string(std::to_underlying(status_code));
-      if (status_code_str.empty()) {
+    [[nodiscard]] std::string serialize() const {
+      if (empty()) {
         return {};
       }
+
+      auto status_code_str = std::to_string(std::to_underlying(status_code));
       return aero::detail::join_strings(std::array{protocol, status_code_str, reason_phrase}, ' ');
     }
 

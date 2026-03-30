@@ -101,7 +101,7 @@ namespace aero::websocket {
       }
 
       return handshake_request{
-        .request = request_line.to_string().append(handshake_headers.serialize()),
+        .request = request_line.serialize().append(handshake_headers.serialize()),
         .sec_websocket_key = std::move(websocket_key),
       };
     }

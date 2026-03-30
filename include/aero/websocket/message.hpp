@@ -13,7 +13,7 @@
 namespace aero::websocket {
 
   enum class message_kind : std::uint8_t {
-    text,
+    text = 1,
     binary,
     close,
     ping,

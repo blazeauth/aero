@@ -17,7 +17,7 @@ namespace {
 
 } // namespace
 
-TEST(HttpRequestLine, ToStringTrivialSerializeSucceeds) {
+TEST(HttpRequestLine, TrivialSerializeSucceeds) {
   for (http::method method : http::methods) {
     request_line line{
       .method = method,
@@ -26,28 +26,33 @@ TEST(HttpRequestLine, ToStringTrivialSerializeSucceeds) {
     };
 
     auto expected = std::format("{} /products HTTP/1.1\r\n", http::to_string(method));
-    EXPECT_EQ(line.to_string(), expected);
+    EXPECT_EQ(line.serialize(), expected);
   }
 }
 
-TEST(HttpRequestLine, ToStringReturnsEmptyForUnknownMethod) {
+TEST(HttpRequestLine, SerializeReturnsEmptyForUnknownMethod) {
   request_line line{
     .method = static_cast<http::method>(0xFF),
     .target = "/products",
     .version = http::version::http1_1,
   };
 
-  EXPECT_TRUE(line.to_string().empty());
+  EXPECT_TRUE(line.serialize().empty());
 }
 
-TEST(HttpRequestLine, ToStringReturnsEmptyForUnknownVersion) {
+TEST(HttpRequestLine, SerializeReturnsEmptyForUnknownVersion) {
   request_line line{
     .method = http::method::get,
     .target = "/products",
     .version = static_cast<http::version>(0xFF),
   };
 
-  EXPECT_TRUE(line.to_string().empty());
+  EXPECT_TRUE(line.serialize().empty());
+}
+
+TEST(HttpRequestLine, SerializeEmptyReturnsEmptyString) {
+  request_line line{};
+  EXPECT_TRUE(line.serialize().empty());
 }
 
 TEST(HttpRequestLine, ParseTrivialStringSucceeds) {

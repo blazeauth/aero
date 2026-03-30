@@ -75,12 +75,17 @@ TEST(HttpStatusLine, ParsesStatusLineWhenNoHeadersFollow) {
   EXPECT_EQ(parsed_status_line, status_line);
 }
 
-TEST(HttpStatusLine, ToStringReturnsValidString) {
+TEST(HttpStatusLine, SerializeReturnsValidString) {
   status_line status_line{
     .protocol = "HTTP/1.0",
     .status_code = status_code::ok,
     .reason_phrase = "OK",
   };
 
-  EXPECT_EQ(status_line.to_string(), "HTTP/1.0 200 OK");
+  EXPECT_EQ(status_line.serialize(), "HTTP/1.0 200 OK");
+}
+
+TEST(HttpStatusLine, SerializeEmptyReturnsEmptyString) {
+  status_line status_line{};
+  EXPECT_TRUE(status_line.serialize().empty());
 }

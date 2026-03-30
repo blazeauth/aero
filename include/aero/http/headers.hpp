@@ -231,7 +231,7 @@ namespace aero::http {
       using http::detail::header_name_value_separator;
 
       if (empty()) {
-        return std::string{crlf};
+        return {};
       }
 
       constexpr size_t value_separator_length = header_name_value_separator.length();
@@ -251,6 +251,10 @@ namespace aero::http {
           continue;
         }
         result.append(name).append(": ").append(value).append(crlf);
+      }
+
+      if (result.empty()) {
+        return {};
       }
 
       result.append(crlf);
