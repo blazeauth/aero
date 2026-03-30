@@ -23,10 +23,11 @@ namespace aero::http {
     }
 
     [[nodiscard]] std::string serialize() const {
-      auto status_code_str = std::to_string(std::to_underlying(status_code));
-      if (status_code_str.empty()) {
+      if (empty()) {
         return {};
       }
+
+      auto status_code_str = std::to_string(std::to_underlying(status_code));
       return aero::detail::join_strings(std::array{protocol, status_code_str, reason_phrase}, ' ');
     }
 
