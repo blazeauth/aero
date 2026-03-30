@@ -45,7 +45,7 @@ jobs:
           apt-get install -y --no-install-recommends ca-certificates cmake git python3 curl zip unzip tar pkg-config
           update-ca-certificates
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup vcpkg
         if: matrix.tls.use_vcpkg
