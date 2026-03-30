@@ -11,6 +11,7 @@
 
 #include "aero/detail/string.hpp"
 #include "aero/http/detail/common.hpp"
+#include "aero/http/error.hpp"
 
 namespace aero::http {
 
@@ -295,25 +296,49 @@ namespace aero::http {
       items.erase(to_remove.begin(), to_remove.end());
     }
 
+    template <std::integral T = std::uint32_t>
+    [[nodiscard]] std::expected<T, std::error_code> content_length() const& noexcept {
+      auto content_len_str = first_value("content-length");
+      if (!content_len_str.has_value()) {
+        return std::unexpected(http::error::header_error::content_length_missing);
+      }
+
+      return aero::detail::to_decimal<T>(*content_len_str);
+    }
+
+    [[nodiscard]] std::expected<std::string_view, std::error_code> content_type() const& noexcept {
+      auto content_type_str = first_value("content-type");
+      if (!content_type_str.has_value()) {
+        return std::unexpected(http::error::header_error::content_type_missing);
+      }
+
+      return *content_type_str;
+    }
+
+    // NOLINTBEGIN(*-use-nodiscard)
     // Disallow use on temporary objects
     iterator begin() && = delete;
     iterator end() && = delete;
-    [[nodiscard]] const_iterator begin() const&& = delete;
-    [[nodiscard]] const_iterator end() const&& = delete;
-    [[nodiscard]] const_iterator cbegin() const&& = delete;
-    [[nodiscard]] const_iterator cend() const&& = delete;
+    const_iterator begin() const&& = delete;
+    const_iterator end() const&& = delete;
+    const_iterator cbegin() const&& = delete;
+    const_iterator cend() const&& = delete;
     value_type& back() && = delete;
-    [[nodiscard]] const value_type& back() const&& = delete;
+    const value_type& back() const&& = delete;
     iterator find(std::string_view name) && = delete;
-    [[nodiscard]] const_iterator find(std::string_view name) const&& = delete;
+    const_iterator find(std::string_view name) const&& = delete;
     auto fields(std::string_view name) && = delete;
-    [[nodiscard]] auto fields(std::string_view name) const&& = delete;
-    [[nodiscard]] auto names() const&& = delete;
-    [[nodiscard]] auto values() const&& = delete;
-    [[nodiscard]] auto values(std::string_view name) const&& = delete;
-    [[nodiscard]] std::optional<std::string_view> first_value(std::string_view name) const&& = delete;
-    [[nodiscard]] bool contains_token(std::string_view name, std::string_view value) const&& = delete;
+    auto fields(std::string_view name) const&& = delete;
+    auto names() const&& = delete;
+    auto values() const&& = delete;
+    auto values(std::string_view name) const&& = delete;
+    std::optional<std::string_view> first_value(std::string_view name) const&& = delete;
+    bool contains_token(std::string_view name, std::string_view value) const&& = delete;
     iterator add(std::string name, std::string value) && = delete;
+    template <std::integral T>
+    std::expected<T, std::error_code> content_length() const&& = delete;
+    std::expected<std::string_view, std::error_code> content_type() const&& = delete;
+    // NOLINTEND(*-use-nodiscard)
 
    private:
     [[nodiscard]] static std::string_view trim_optional_whitespace(std::string_view text);
