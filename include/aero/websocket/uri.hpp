@@ -40,13 +40,6 @@ namespace aero::websocket {
    public:
     uri() = default;
 
-    // \todo: We should probably get rid of this, this API design seems really bad
-    explicit uri(std::string_view uri_text) {
-      if (auto result = uri::parse(uri_text); result) {
-        *this = *result;
-      }
-    }
-
     explicit uri(uri_parts parts): parts_(std::move(parts)) {}
 
     [[nodiscard]] std::uint16_t default_port() const noexcept {
@@ -272,7 +265,7 @@ namespace aero::websocket {
 
         std::string_view inside_brackets = authority_view.substr(1, closing_bracket_position - 1);
 
-        if (!is_valid_ipv6_address(inside_brackets)) {
+        if (contains_invalid_ipv6_token(inside_brackets)) {
           return std::unexpected(uri_error::invalid_ipv6_literal);
         }
 
@@ -406,23 +399,22 @@ namespace aero::websocket {
         .query = std::move(parsed_query),
       }};
 
-      if (auto validation_ec = result.validate()) {
-        return std::unexpected(validation_ec);
+      if (auto ec = result.validate()) {
+        return std::unexpected(ec);
       }
 
       return result;
     }
 
    private:
-    [[nodiscard]] static bool is_valid_ipv6_address(std::string_view address) {
-      constexpr std::string_view allowed_ipv6_chars = ":-._~!$&'()*+,;=%";
+    [[nodiscard]] static bool contains_invalid_ipv6_token(std::string_view address) {
+      return std::ranges::any_of(address, [](char character) {
+        constexpr std::string_view allowed_ipv6_chars = ":-._~!$&'()*+,;=%";
 
-      return std::ranges::all_of(address, [allowed_ipv6_chars](char character) {
-        if (std::isalnum(static_cast<unsigned char>(character))) {
-          return true;
-        }
+        bool is_alphanum = std::isalnum(static_cast<unsigned char>(character));
+        bool is_allowed_non_alphanum = allowed_ipv6_chars.contains(character);
 
-        return allowed_ipv6_chars.contains(character);
+        return !is_alphanum && !is_allowed_non_alphanum;
       });
     }
 
