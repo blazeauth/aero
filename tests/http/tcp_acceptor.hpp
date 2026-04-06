@@ -60,8 +60,13 @@ namespace test::http {
 
     [[nodiscard]] std::optional<tcp::socket> try_accept_nonblocking() {
       tcp::socket socket{io_context_};
+
+      acceptor_.non_blocking(true);
+
       std::error_code accept_error;
       std::ignore = acceptor_.accept(socket, accept_error);
+
+      acceptor_.non_blocking(false);
 
       if (accept_error == asio::error::would_block || accept_error == asio::error::try_again) {
         return std::nullopt;

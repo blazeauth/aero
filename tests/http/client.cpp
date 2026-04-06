@@ -782,7 +782,8 @@ TEST(HttpClient, ReusesConnectionAfterNoContentResponse) {
 
     first_socket.non_blocking(true);
 
-    auto reuse_deadline = std::chrono::steady_clock::now() + 500ms;
+    auto deadline = std::chrono::steady_clock::now() + 5s;
+
     for (;;) {
       if (auto request = try_read_http_request_nonblocking(first_socket, first_read_buffer)) {
         raw_requests.push_back(std::move(*request));
@@ -790,8 +791,17 @@ TEST(HttpClient, ReusesConnectionAfterNoContentResponse) {
         return;
       }
 
-      if (std::chrono::steady_clock::now() >= reuse_deadline) {
-        break;
+      if (auto second_socket = server.try_accept_nonblocking()) {
+        accepted_connections.fetch_add(1, std::memory_order_relaxed);
+
+        std::string second_read_buffer;
+        raw_requests.push_back(read_http_request(*second_socket, second_read_buffer));
+        write_http_response(*second_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+        return;
+      }
+
+      if (std::chrono::steady_clock::now() >= deadline) {
+        throw std::runtime_error{"timed out waiting for reused request or fallback connection"};
       }
 
       std::this_thread::sleep_for(1ms);
@@ -852,7 +862,8 @@ TEST(HttpClient, ReusesConnectionAfterResetContentResponse) {
 
     first_socket.non_blocking(true);
 
-    auto reuse_deadline = std::chrono::steady_clock::now() + 500ms;
+    auto deadline = std::chrono::steady_clock::now() + 5s;
+
     for (;;) {
       if (auto request = try_read_http_request_nonblocking(first_socket, first_read_buffer)) {
         raw_requests.push_back(std::move(*request));
@@ -860,8 +871,17 @@ TEST(HttpClient, ReusesConnectionAfterResetContentResponse) {
         return;
       }
 
-      if (std::chrono::steady_clock::now() >= reuse_deadline) {
-        break;
+      if (auto second_socket = server.try_accept_nonblocking()) {
+        accepted_connections.fetch_add(1, std::memory_order_relaxed);
+
+        std::string second_read_buffer;
+        raw_requests.push_back(read_http_request(*second_socket, second_read_buffer));
+        write_http_response(*second_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+        return;
+      }
+
+      if (std::chrono::steady_clock::now() >= deadline) {
+        throw std::runtime_error{"timed out waiting for reused request or fallback connection"};
       }
 
       std::this_thread::sleep_for(1ms);
