@@ -81,7 +81,7 @@ namespace aero::http {
 
    private:
     struct prepared_request {
-      endpoint endpoint;
+      basic_client::endpoint endpoint;
       http::request request;
     };
 
@@ -168,19 +168,19 @@ namespace aero::http {
       : state_(make_state(std::move(executor), std::move(options), nullptr)) {}
 
     template <typename CompletionToken>
-    auto async_send(endpoint endpoint_value, http::request request, CompletionToken&& token) {
+    auto async_send(basic_client::endpoint endpoint, http::request request, CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
       auto state = state_;
       auto executor = select_composed_executor(state);
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
         asio::co_composed<void(std::error_code, http::response)>(
-          [state = std::move(state)](auto, endpoint endpoint_value, http::request request) mutable -> void {
+          [state = std::move(state)](auto, basic_client::endpoint endpoint, http::request request) mutable -> void {
             if (!state) {
               co_return {client_error::client_unavailable, http::response{}};
             }
 
-            auto prepared = prepare_request(std::move(endpoint_value), std::move(request), state->options_);
+            auto prepared = prepare_request(std::move(endpoint), std::move(request), state->options_);
             if (!prepared.has_value()) {
               co_return {prepared.error(), http::response{}};
             }
@@ -189,7 +189,7 @@ namespace aero::http {
           },
           executor),
         bound_token,
-        std::move(endpoint_value),
+        std::move(endpoint),
         std::move(request));
     }
 
@@ -239,13 +239,13 @@ namespace aero::http {
         std::move(request));
     }
 
-    [[nodiscard]] std::expected<http::response, std::error_code> send(endpoint endpoint_value, http::request request) {
+    [[nodiscard]] std::expected<http::response, std::error_code> send(basic_client::endpoint endpoint, http::request request) {
       if (!state_) {
         return std::unexpected(client_error::client_unavailable);
       }
 
       try {
-        auto future = async_send(std::move(endpoint_value), std::move(request), asio::use_future);
+        auto future = async_send(std::move(endpoint), std::move(request), asio::use_future);
         return future.get();
       } catch (const std::system_error& system_error) {
         return std::unexpected(system_error.code());
@@ -349,16 +349,15 @@ namespace aero::http {
     }
 
     template <typename CompletionToken>
-    static auto async_exchange(std::shared_ptr<state> state, transport_type& transport, endpoint endpoint_value,
+    static auto async_exchange(std::shared_ptr<state> state, transport_type& transport, basic_client::endpoint endpoint,
       http::request request, CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
 
       return asio::async_initiate<decltype(bound_token), void(exchange_result)>(
         asio::co_composed<void(exchange_result)>(
-          [&transport, state = std::move(state)](auto, endpoint endpoint_value, http::request request) mutable -> void {
+          [&transport, state = std::move(state)](auto, basic_client::endpoint endpoint, http::request request) mutable -> void {
             if (!transport.lowest_layer().is_open()) {
-              auto [connect_ec] =
-                co_await transport.async_connect(endpoint_value.host, endpoint_value.port, return_as_deferred_tuple());
+              auto [connect_ec] = co_await transport.async_connect(endpoint.host, endpoint.port, return_as_deferred_tuple());
               if (connect_ec) {
                 co_return exchange_result{
                   .error = connect_ec,
@@ -435,7 +434,7 @@ namespace aero::http {
           },
           select_transport_executor(transport)),
         bound_token,
-        std::move(endpoint_value),
+        std::move(endpoint),
         std::move(request));
     }
 
@@ -892,14 +891,14 @@ namespace aero::http {
         bytes_to_read);
     }
 
-    [[nodiscard]] static std::expected<prepared_request, std::error_code> prepare_request(basic_client::endpoint endpoint_value,
+    [[nodiscard]] static std::expected<prepared_request, std::error_code> prepare_request(basic_client::endpoint endpoint,
       http::request request, const client_options& options) {
-      endpoint_value = sanitize_endpoint(std::move(endpoint_value));
-      if (endpoint_value.host.empty()) {
+      endpoint = sanitize_endpoint(std::move(endpoint));
+      if (endpoint.host.empty()) {
         return std::unexpected(connection_error::endpoint_host_empty);
       }
 
-      if (endpoint_value.port == 0U) {
+      if (endpoint.port == 0U) {
         return std::unexpected(connection_error::endpoint_port_invalid);
       }
 
@@ -908,7 +907,7 @@ namespace aero::http {
       }
 
       if (request.method == http::method::connect && request.url.empty()) {
-        request.url = format_authority_target(endpoint_value);
+        request.url = format_authority_target(endpoint);
       }
 
       auto normalized_target = normalize_request_target(request.method, std::move(request.url));
@@ -920,7 +919,7 @@ namespace aero::http {
       request.content_length = static_cast<std::int64_t>(request.body.size());
 
       if (!request.headers.contains("host")) {
-        auto host_header = derive_host_header_value(endpoint_value, request.method, request.url);
+        auto host_header = derive_host_header_value(endpoint, request.method, request.url);
         if (!host_header.has_value()) {
           return std::unexpected(host_header.error());
         }
@@ -941,21 +940,21 @@ namespace aero::http {
       }
 
       return prepared_request{
-        .endpoint = std::move(endpoint_value),
+        .endpoint = std::move(endpoint),
         .request = std::move(request),
       };
     }
 
-    [[nodiscard]] static basic_client::endpoint sanitize_endpoint(basic_client::endpoint endpoint_value) {
-      bool is_host_in_brackets = endpoint_value.host.starts_with('[') && endpoint_value.host.ends_with(']');
-      std::size_t host_str_length = endpoint_value.host.length();
+    [[nodiscard]] static basic_client::endpoint sanitize_endpoint(basic_client::endpoint endpoint) {
+      bool is_host_in_brackets = endpoint.host.starts_with('[') && endpoint.host.ends_with(']');
+      std::size_t host_str_length = endpoint.host.length();
 
       if (is_host_in_brackets && host_str_length > 2U) {
-        endpoint_value.host = endpoint_value.host.substr(1, endpoint_value.host.size() - 2U);
+        endpoint.host = endpoint.host.substr(1, endpoint.host.size() - 2U);
       }
 
-      endpoint_value.host = aero::detail::to_lowercase(endpoint_value.host);
-      return endpoint_value;
+      endpoint.host = aero::detail::to_lowercase(endpoint.host);
+      return endpoint;
     }
 
     [[nodiscard]] static std::expected<std::string, std::error_code> serialize_request(const http::request& request) {
@@ -1096,7 +1095,7 @@ namespace aero::http {
     }
 
     [[nodiscard]] static std::expected<std::string, std::error_code> derive_host_header_value(
-      const basic_client::endpoint& endpoint_value, http::method method, const std::string& request_target) {
+      const basic_client::endpoint& endpoint, http::method method, const std::string& request_target) {
       if (method == http::method::connect) {
         return request_target;
       }
@@ -1112,11 +1111,11 @@ namespace aero::http {
           parsed_uri->is_https() ? http::default_secure_port : http::default_port);
       }
 
-      return format_host_header(endpoint_value);
+      return format_host_header(endpoint);
     }
 
-    [[nodiscard]] static std::string format_authority_target(const basic_client::endpoint& endpoint_value) {
-      std::string host = endpoint_value.host;
+    [[nodiscard]] static std::string format_authority_target(const basic_client::endpoint& endpoint) {
+      std::string host = endpoint.host;
       bool is_host_in_brackets = host.starts_with('[') && host.ends_with(']');
 
       if (host.contains(':') && !is_host_in_brackets) {
@@ -1125,7 +1124,7 @@ namespace aero::http {
       }
 
       host.push_back(':');
-      host.append(std::to_string(endpoint_value.port));
+      host.append(std::to_string(endpoint.port));
       return host;
     }
 
@@ -1147,8 +1146,8 @@ namespace aero::http {
       return host;
     }
 
-    [[nodiscard]] static std::string format_host_header(const basic_client::endpoint& endpoint_value) {
-      return format_host_header(endpoint_value.host, endpoint_value.port, default_endpoint_port);
+    [[nodiscard]] static std::string format_host_header(const basic_client::endpoint& endpoint) {
+      return format_host_header(endpoint.host, endpoint.port, default_endpoint_port);
     }
 
     [[nodiscard]] static bool is_bodyless_response(http::method request_method, http::status_code status_code) noexcept {
