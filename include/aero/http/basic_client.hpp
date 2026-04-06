@@ -1344,7 +1344,7 @@ namespace aero::http {
         return info;
       }
 
-      auto chunked_count = std::ranges::count(codings, std::string_view{"chunked"});
+      std::size_t chunked_count = std::ranges::count(codings, std::string_view{"chunked"});
       info.final_chunked = codings.back() == "chunked";
       info.invalid = chunked_count > 1U || (chunked_count == 1U && !info.final_chunked);
 
