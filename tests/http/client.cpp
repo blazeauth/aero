@@ -3,6 +3,7 @@
 #include <charconv>
 #include <chrono>
 #include <cstddef>
+#include <future>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -268,6 +269,20 @@ namespace {
     }
 
     return false;
+  }
+
+  std::expected<http::response, std::error_code> send_with_timeout(http::client& client, http::client::endpoint endpoint,
+    http::request request, std::chrono::steady_clock::duration timeout) {
+    try {
+      auto future = client.async_send(std::move(endpoint), std::move(request), asio::cancel_after(timeout, asio::use_future));
+      return future.get();
+    } catch (const std::system_error& system_error) {
+      return std::unexpected{system_error.code()};
+    } catch (const std::future_error& future_error) {
+      return std::unexpected{future_error.code()};
+    } catch (...) {
+      return std::unexpected{http::error::client_error::unexpected_failure};
+    }
   }
 
 } // namespace
@@ -782,59 +797,65 @@ TEST(HttpClient, ReusesConnectionAfterNoContentResponse) {
 
     first_socket.non_blocking(true);
 
+    std::optional<tcp::socket> second_socket;
+    std::string second_socket_read_buffer;
     auto deadline = std::chrono::steady_clock::now() + 5s;
 
     for (;;) {
-      if (auto request = try_read_http_request_nonblocking(first_socket, first_read_buffer)) {
-        raw_requests.push_back(std::move(*request));
-        write_http_response(first_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
-        return;
-      }
-
-      if (auto second_socket = server.try_accept_nonblocking()) {
-        accepted_connections.fetch_add(1, std::memory_order_relaxed);
-
-        std::string second_read_buffer;
-        raw_requests.push_back(read_http_request(*second_socket, second_read_buffer));
-        write_http_response(*second_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
-        return;
-      }
-
       if (std::chrono::steady_clock::now() >= deadline) {
         throw std::runtime_error{"timed out waiting for reused request or fallback connection"};
       }
 
+      if (auto request = try_read_http_request_nonblocking(first_socket, first_read_buffer)) {
+        raw_requests.push_back(std::move(*request));
+        first_socket.non_blocking(false);
+        write_http_response(first_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+        return;
+      }
+
+      if (!second_socket.has_value()) {
+        if (auto accepted_socket = server.try_accept_nonblocking()) {
+          accepted_connections.fetch_add(1, std::memory_order_relaxed);
+          accepted_socket->non_blocking(true);
+          second_socket = std::move(*accepted_socket);
+        }
+      }
+
+      if (second_socket.has_value()) {
+        if (auto request = try_read_http_request_nonblocking(*second_socket, second_socket_read_buffer)) {
+          raw_requests.push_back(std::move(*request));
+          second_socket->non_blocking(false);
+          write_http_response(*second_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+          return;
+        }
+      }
+
       std::this_thread::sleep_for(1ms);
     }
-
-    auto second_socket = server.accept();
-    accepted_connections.fetch_add(1, std::memory_order_relaxed);
-
-    std::string second_read_buffer;
-    raw_requests.push_back(read_http_request(second_socket, second_read_buffer));
-    write_http_response(second_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
   }};
 
   http::client client;
 
-  auto first = client.send(
+  auto first = send_with_timeout(client,
     http::client::endpoint{
       .host = "127.0.0.1",
       .port = server.port(),
       .secure = false,
     },
-    make_request("/empty"));
+    make_request("/empty"),
+    2s);
 
-  auto second = client.send(
+  auto second = send_with_timeout(client,
     http::client::endpoint{
       .host = "127.0.0.1",
       .port = server.port(),
       .secure = false,
     },
-    make_request("/after-empty"));
+    make_request("/after-empty"),
+    2s);
 
-  ASSERT_TRUE(first.has_value());
-  ASSERT_TRUE(second.has_value());
+  ASSERT_TRUE(first.has_value()) << first.error().message();
+  ASSERT_TRUE(second.has_value()) << second.error().message();
   EXPECT_EQ(first->status_code(), http::status_code::no_content);
   EXPECT_TRUE(first->body.empty());
   EXPECT_EQ(second->text(), "ok");
@@ -862,59 +883,65 @@ TEST(HttpClient, ReusesConnectionAfterResetContentResponse) {
 
     first_socket.non_blocking(true);
 
+    std::optional<tcp::socket> second_socket;
+    std::string second_socket_read_buffer;
     auto deadline = std::chrono::steady_clock::now() + 5s;
 
     for (;;) {
-      if (auto request = try_read_http_request_nonblocking(first_socket, first_read_buffer)) {
-        raw_requests.push_back(std::move(*request));
-        write_http_response(first_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
-        return;
-      }
-
-      if (auto second_socket = server.try_accept_nonblocking()) {
-        accepted_connections.fetch_add(1, std::memory_order_relaxed);
-
-        std::string second_read_buffer;
-        raw_requests.push_back(read_http_request(*second_socket, second_read_buffer));
-        write_http_response(*second_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
-        return;
-      }
-
       if (std::chrono::steady_clock::now() >= deadline) {
         throw std::runtime_error{"timed out waiting for reused request or fallback connection"};
       }
 
+      if (auto request = try_read_http_request_nonblocking(first_socket, first_read_buffer)) {
+        raw_requests.push_back(std::move(*request));
+        first_socket.non_blocking(false);
+        write_http_response(first_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+        return;
+      }
+
+      if (!second_socket.has_value()) {
+        if (auto accepted_socket = server.try_accept_nonblocking()) {
+          accepted_connections.fetch_add(1, std::memory_order_relaxed);
+          accepted_socket->non_blocking(true);
+          second_socket = std::move(*accepted_socket);
+        }
+      }
+
+      if (second_socket.has_value()) {
+        if (auto request = try_read_http_request_nonblocking(*second_socket, second_socket_read_buffer)) {
+          raw_requests.push_back(std::move(*request));
+          second_socket->non_blocking(false);
+          write_http_response(*second_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+          return;
+        }
+      }
+
       std::this_thread::sleep_for(1ms);
     }
-
-    auto second_socket = server.accept();
-    accepted_connections.fetch_add(1, std::memory_order_relaxed);
-
-    std::string second_read_buffer;
-    raw_requests.push_back(read_http_request(second_socket, second_read_buffer));
-    write_http_response(second_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
   }};
 
   http::client client;
 
-  auto first = client.send(
+  auto first = send_with_timeout(client,
     http::client::endpoint{
       .host = "127.0.0.1",
       .port = server.port(),
       .secure = false,
     },
-    make_request("/reset"));
+    make_request("/reset"),
+    2s);
 
-  auto second = client.send(
+  auto second = send_with_timeout(client,
     http::client::endpoint{
       .host = "127.0.0.1",
       .port = server.port(),
       .secure = false,
     },
-    make_request("/after-reset"));
+    make_request("/after-reset"),
+    2s);
 
-  ASSERT_TRUE(first.has_value());
-  ASSERT_TRUE(second.has_value());
+  ASSERT_TRUE(first.has_value()) << first.error().message();
+  ASSERT_TRUE(second.has_value()) << second.error().message();
   EXPECT_EQ(std::to_underlying(first->status_code()), 205);
   EXPECT_TRUE(first->body.empty());
   EXPECT_EQ(second->text(), "ok");
@@ -942,12 +969,12 @@ TEST(HttpClient, ReadsFinalResponseAfterInterimResponseAndReusesConnection) {
   std::vector<std::string> raw_requests;
 
   http_test::tcp_acceptor server{[&](http_test::tcp_acceptor& server) {
-    auto socket = server.accept();
+    auto first_socket = server.accept();
     accepted_connections.fetch_add(1, std::memory_order_relaxed);
 
-    std::string read_buffer;
-    raw_requests.push_back(read_http_request(socket, read_buffer));
-    write_http_response(socket,
+    std::string first_read_buffer;
+    raw_requests.push_back(read_http_request(first_socket, first_read_buffer));
+    write_http_response(first_socket,
       "HTTP/1.1 103 Early Hints\r\n"
       "Link: </style.css>; rel=preload; as=style\r\n"
       "\r\n"
@@ -956,30 +983,67 @@ TEST(HttpClient, ReadsFinalResponseAfterInterimResponseAndReusesConnection) {
       "\r\n"
       "first");
 
-    raw_requests.push_back(read_http_request(socket, read_buffer));
-    write_http_response(socket, "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecond");
+    first_socket.non_blocking(true);
+
+    std::optional<tcp::socket> second_socket;
+    std::string second_socket_read_buffer;
+    auto deadline = std::chrono::steady_clock::now() + 5s;
+
+    for (;;) {
+      if (std::chrono::steady_clock::now() >= deadline) {
+        throw std::runtime_error{"timed out waiting for reused request or fallback connection"};
+      }
+
+      if (auto request = try_read_http_request_nonblocking(first_socket, first_read_buffer)) {
+        raw_requests.push_back(std::move(*request));
+        first_socket.non_blocking(false);
+        write_http_response(first_socket, "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecond");
+        return;
+      }
+
+      if (!second_socket.has_value()) {
+        if (auto accepted_socket = server.try_accept_nonblocking()) {
+          accepted_connections.fetch_add(1, std::memory_order_relaxed);
+          accepted_socket->non_blocking(true);
+          second_socket = std::move(*accepted_socket);
+        }
+      }
+
+      if (second_socket.has_value()) {
+        if (auto request = try_read_http_request_nonblocking(*second_socket, second_socket_read_buffer)) {
+          raw_requests.push_back(std::move(*request));
+          second_socket->non_blocking(false);
+          write_http_response(*second_socket, "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecond");
+          return;
+        }
+      }
+
+      std::this_thread::sleep_for(1ms);
+    }
   }};
 
   http::client client;
 
-  auto first = client.send(
+  auto first = send_with_timeout(client,
     http::client::endpoint{
       .host = "127.0.0.1",
       .port = server.port(),
       .secure = false,
     },
-    make_request("/first"));
+    make_request("/first"),
+    2s);
 
-  auto second = client.send(
+  auto second = send_with_timeout(client,
     http::client::endpoint{
       .host = "127.0.0.1",
       .port = server.port(),
       .secure = false,
     },
-    make_request("/second"));
+    make_request("/second"),
+    2s);
 
-  ASSERT_TRUE(first.has_value());
-  ASSERT_TRUE(second.has_value());
+  ASSERT_TRUE(first.has_value()) << first.error().message();
+  ASSERT_TRUE(second.has_value()) << second.error().message();
   EXPECT_EQ(first->status_code(), http::status_code::ok);
   EXPECT_EQ(first->text(), "first");
   EXPECT_EQ(second->status_code(), http::status_code::ok);
@@ -988,8 +1052,8 @@ TEST(HttpClient, ReadsFinalResponseAfterInterimResponseAndReusesConnection) {
   server.join();
 
   ASSERT_FALSE(server.exception());
-  EXPECT_EQ(accepted_connections.load(std::memory_order_relaxed), 1);
   ASSERT_EQ(raw_requests.size(), 2U);
+  EXPECT_EQ(accepted_connections.load(std::memory_order_relaxed), 1);
   EXPECT_TRUE(raw_requests[0].starts_with("GET /first HTTP/1.1\r\n"));
   EXPECT_TRUE(raw_requests[1].starts_with("GET /second HTTP/1.1\r\n"));
 }
