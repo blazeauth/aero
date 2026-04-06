@@ -58,15 +58,30 @@ namespace aero::http {
 
     constexpr static std::size_t default_runtime_threads = 1;
 
+    struct async_complete_error_initiation {
+      using executor_type = asio::any_io_executor;
+
+      std::error_code error;
+      executor_type executor;
+
+      [[nodiscard]] executor_type get_executor() const noexcept {
+        return executor;
+      }
+
+      template <typename Handler>
+      void operator()(Handler&& handler) const {
+        auto associated_executor = asio::get_associated_executor(handler, executor);
+        asio::dispatch(associated_executor,
+          [handler = std::forward<Handler>(handler), error = error]() mutable { std::move(handler)(error, http::response{}); });
+      }
+    };
+
     template <typename CompletionToken>
     auto async_complete_error(std::error_code error, CompletionToken&& token) {
-      auto fallback_executor = get_executor();
       return asio::async_initiate<CompletionToken, void(std::error_code, http::response)>(
-        [error, fallback_executor](auto&& handler) mutable {
-          auto executor = asio::get_associated_executor(handler, fallback_executor);
-          asio::dispatch(executor, [handler = std::forward<decltype(handler)>(handler), error]() mutable {
-            std::move(handler)(error, http::response{});
-          });
+        async_complete_error_initiation{
+          .error = error,
+          .executor = get_executor(),
         },
         token);
     }
