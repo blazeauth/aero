@@ -144,6 +144,12 @@ namespace aero::http {
     [[nodiscard]] const_iterator cend() const& noexcept {
       return items.cend();
     }
+    [[nodiscard]] value_type& front() & noexcept {
+      return items.front();
+    }
+    [[nodiscard]] const value_type& front() const& noexcept {
+      return items.front();
+    }
     [[nodiscard]] value_type& back() & noexcept {
       return items.back();
     }
@@ -323,6 +329,8 @@ namespace aero::http {
     const_iterator end() const&& = delete;
     const_iterator cbegin() const&& = delete;
     const_iterator cend() const&& = delete;
+    value_type& front() && = delete;
+    const value_type& front() const&& = delete;
     value_type& back() && = delete;
     const value_type& back() const&& = delete;
     iterator find(std::string_view name) && = delete;

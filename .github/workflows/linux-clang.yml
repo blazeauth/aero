@@ -85,4 +85,4 @@ jobs:
 
       - name: Test
         working-directory: "${{ matrix.tls.build_dir }}"
-        run: ctest --output-on-failure --parallel
+        run: ctest --output-on-failure --parallel --timeout 30

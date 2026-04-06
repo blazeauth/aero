@@ -30,6 +30,8 @@
 
 namespace aero::net::detail {
 
+  constexpr static auto default_buffer_size = 32 * 1024;
+
   template <typename Stream>
   class basic_transport final {
    public:
@@ -38,8 +40,6 @@ namespace aero::net::detail {
     using const_buffer = std::span<const std::byte>;
     using duration = asio::steady_timer::duration;
     using executor_type = asio::any_io_executor;
-
-    constexpr static auto default_buffer_size = 32 * 1024;
 
     explicit basic_transport(executor_type executor, std::size_t buffer_size = default_buffer_size)
       : buffer_(buffer_size), strand_(asio::make_strand(executor)), stream_(strand_) {}

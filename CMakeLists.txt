@@ -34,11 +34,11 @@ aero_use_utfcpp(aero)
 target_include_directories(aero INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_compile_features(aero INTERFACE cxx_std_23)
 
-if(PROJECT_IS_TOP_LEVEL AND AERO_BUILD_EXAMPLES)
+if(AERO_BUILD_EXAMPLES)
 	add_subdirectory(examples)
 endif()
 
-if(PROJECT_IS_TOP_LEVEL AND AERO_BUILD_TESTS)
+if(AERO_BUILD_TESTS)
   include(CTest)
   add_subdirectory(tests)
 endif()

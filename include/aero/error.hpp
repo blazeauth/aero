@@ -15,6 +15,7 @@ namespace aero::error {
   enum class basic_error : std::uint8_t {
     not_enough_memory = 1,
     deadlock_would_occur,
+    tls_support_unavailable,
   };
 
   enum class errc : std::uint8_t {
@@ -39,6 +40,8 @@ namespace aero::error {
           return "not enough memory";
         case basic_error::deadlock_would_occur:
           return "deadlock would occur";
+        case basic_error::tls_support_unavailable:
+          return "TLS support is unavailable in this build";
         default:
           return "unknown basic error";
         }

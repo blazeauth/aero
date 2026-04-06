@@ -2,3 +2,4 @@ InheritParentConfig: true
 Checks: >
   -*-magic-numbers,
   -bugprone-exception-escape,
+  -misc-use-internal-linkage,

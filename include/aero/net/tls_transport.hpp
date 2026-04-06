@@ -24,8 +24,8 @@
 #include "aero/net/detail/basic_transport.hpp"
 #include "aero/net/error.hpp"
 #include "aero/tls/detail/alert_capture.hpp"
+#include "aero/tls/detail/x509_verify_error.hpp"
 #include "aero/tls/peer_identity.hpp"
-#include "aero/tls/system_context.hpp"
 
 namespace aero::net {
 
@@ -38,37 +38,23 @@ namespace aero::net {
     using port_type = asio::ip::port_type;
     using executor_type = typename detail::basic_transport<stream_type>::executor_type;
 
-    constexpr static auto default_buffer_size = 32 * 1024;
-
-    explicit tls_transport(executor_type executor, std::size_t buffer_size = default_buffer_size)
+    explicit tls_transport(executor_type executor, std::size_t buffer_size = detail::default_buffer_size)
       : basic_transport_(executor, buffer_size), resolver_(basic_transport_.get_strand()) {}
 
-    explicit tls_transport(asio::strand<executor_type> strand, std::size_t buffer_size = default_buffer_size)
+    explicit tls_transport(asio::strand<executor_type> strand, std::size_t buffer_size = detail::default_buffer_size)
       : basic_transport_(std::move(strand), buffer_size), resolver_(basic_transport_.get_strand()) {}
 
     explicit tls_transport(executor_type executor, asio::ssl::context& tls_context,
-      std::size_t buffer_size = default_buffer_size)
+      std::size_t buffer_size = detail::default_buffer_size)
       : basic_transport_(executor, buffer_size, std::in_place_type<stream_type>, tls_context),
         resolver_(basic_transport_.get_strand()),
         tls_context_(std::addressof(tls_context)) {}
 
     explicit tls_transport(asio::strand<executor_type> strand, asio::ssl::context& tls_context,
-      std::size_t buffer_size = default_buffer_size)
+      std::size_t buffer_size = detail::default_buffer_size)
       : basic_transport_(std::move(strand), buffer_size, std::in_place_type<stream_type>, tls_context),
         resolver_(basic_transport_.get_strand()),
         tls_context_(std::addressof(tls_context)) {}
-
-    explicit tls_transport(executor_type executor, aero::tls::system_context& tls_context,
-      std::size_t buffer_size = default_buffer_size)
-      : basic_transport_(executor, buffer_size, std::in_place_type<stream_type>, tls_context.context()),
-        resolver_(basic_transport_.get_strand()),
-        tls_context_(std::addressof(tls_context.context())) {}
-
-    explicit tls_transport(asio::strand<executor_type> strand, aero::tls::system_context& tls_context,
-      std::size_t buffer_size = default_buffer_size)
-      : basic_transport_(std::move(strand), buffer_size, std::in_place_type<stream_type>, tls_context.context()),
-        resolver_(basic_transport_.get_strand()),
-        tls_context_(std::addressof(tls_context.context())) {}
 
     template <typename CompletionToken>
     auto async_connect(std::string host, port_type port, CompletionToken&& token) {

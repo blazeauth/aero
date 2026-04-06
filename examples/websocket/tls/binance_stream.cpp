@@ -7,25 +7,21 @@
 #include "aero/websocket/close_code.hpp"
 #include "aero/websocket/tls/client.hpp"
 
-namespace {
+namespace websocket = aero::websocket;
+namespace tls = aero::tls;
+namespace http = aero::http;
 
-  namespace websocket = aero::websocket;
-  namespace tls = aero::tls;
-  namespace http = aero::http;
+void print_error(std::string_view message, const std::error_code& ec) {
+  std::println("{}: {} ({} - {})", message, ec.message(), ec.value(), ec.category().name());
+}
 
-  void print_error(std::string_view message, const std::error_code& ec) {
-    std::println("{}: {} ({} - {})", message, ec.message(), ec.value(), ec.category().name());
+void print_headers(const http::headers& headers) {
+  std::println("[HEADERS] Printing:");
+  for (const auto& [name, value] : headers) {
+    std::println("{}: {}", name, value);
   }
-
-  void print_headers(const http::headers& headers) {
-    std::println("[HEADERS] Printing:");
-    for (const auto& [name, value] : headers) {
-      std::println("{}: {}", name, value);
-    }
-    std::println("[HEADERS] Done");
-  }
-
-} // namespace
+  std::println("[HEADERS] Done");
+}
 
 int main() {
   using namespace std::chrono_literals;
