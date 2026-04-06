@@ -1,0 +1,18 @@
+function(_create_directory_executables_from_sources example_prefix http_examples_sources)
+  foreach(src ${http_examples_sources})
+    get_filename_component(example ${src} NAME_WE)
+    add_executable("${example_prefix}_${example}" ${src})
+    target_link_libraries("${example_prefix}_${example}" PRIVATE aero::aero)
+    target_compile_definitions("${example_prefix}_${example}" PRIVATE NOMINMAX)
+    target_compile_features("${example_prefix}_${example}" PRIVATE cxx_std_23)
+  endforeach()
+endfunction()
+
+file(GLOB aero_http_examples_SOURCES *.cpp)
+_create_directory_executables_from_sources("http" "${aero_http_examples_SOURCES}")
+
+if(AERO_USE_TLS)
+  message(STATUS "[AERO] Adding HTTPS examples")
+  file(GLOB aero_http_tls_examples_SOURCES tls/*.cpp)
+  _create_directory_executables_from_sources("https" "${aero_http_tls_examples_SOURCES}")
+endif()

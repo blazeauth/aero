@@ -1,0 +1,18 @@
+function(_create_directory_executables_from_sources websocket_examples_sources)
+  foreach(src ${websocket_examples_sources})
+    get_filename_component(example ${src} NAME_WE)
+    add_executable("websocket_${example}" ${src})
+    target_link_libraries("websocket_${example}" PRIVATE aero::aero)
+    target_compile_definitions("websocket_${example}" PRIVATE NOMINMAX)
+    target_compile_features("websocket_${example}" PRIVATE cxx_std_23)
+  endforeach()
+endfunction()
+
+file(GLOB aero_websocket_examples_SOURCES *.cpp)
+_create_directory_executables_from_sources("${aero_websocket_examples_SOURCES}")
+
+if(AERO_USE_TLS)
+  message(STATUS "[AERO] Adding websocket TLS examples")
+  file(GLOB aero_websocket_tls_examples_SOURCES tls/*.cpp)
+  _create_directory_executables_from_sources("${aero_websocket_tls_examples_SOURCES}")
+endif()
