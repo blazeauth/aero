@@ -75,4 +75,4 @@ jobs:
 
       - name: Test
         working-directory: ${{ github.workspace }}/${{ matrix.tls.build_dir }}
-        run: ctest --output-on-failure -C ${{ matrix.build_type }}
+        run: ctest --output-on-failure --timeout 30 -C ${{ matrix.build_type }}

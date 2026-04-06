@@ -84,4 +84,4 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           $buildDir = "${{ github.workspace }}/${{ matrix.tls.build_dir }}-${{ matrix.arch.build_dir_suffix }}-${{ matrix.build_type }}"
-          ctest --test-dir $buildDir --output-on-failure -C ${{ matrix.build_type }}
+          ctest --test-dir $buildDir --output-on-failure --timeout 30 -C ${{ matrix.build_type }}
