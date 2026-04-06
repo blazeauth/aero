@@ -1246,7 +1246,7 @@ namespace aero::http {
       return parse_result.ec == std::errc{} && parse_result.ptr == value.data() + value.size() && is_in_uint16_range;
     }
 
-    [[nodiscard]] static bool is_valid_authority_form(std::string_view target) noexcept {
+    [[nodiscard]] static bool is_valid_authority_form(std::string_view target) {
       if (target.empty()) {
         return false;
       }

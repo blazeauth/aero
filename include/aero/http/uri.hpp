@@ -139,7 +139,7 @@ namespace aero::http {
       return uri_text;
     }
 
-    [[nodiscard]] std::error_code validate() const noexcept {
+    [[nodiscard]] std::error_code validate() const {
       auto has_forbidden_character = [](std::string_view text) {
         constexpr auto valid_ascii_start{0x20};
         constexpr auto ascii_del_code{0x7F};
