@@ -1,6 +1,5 @@
 #include <atomic>
 #include <chrono>
-#include <expected>
 #include <future>
 #include <optional>
 #include <stdexcept>
@@ -17,6 +16,7 @@
 #include <asio/ip/tcp.hpp>
 #include <asio/use_future.hpp>
 
+#include "aero/deadline.hpp"
 #include "aero/http/client.hpp"
 #include "aero/http/error.hpp"
 #include "tcp_acceptor.hpp"
@@ -50,6 +50,12 @@ namespace {
     };
   }
 
+  void close_socket(tcp::socket& socket) {
+    std::error_code ignored_error;
+    std::ignore = socket.shutdown(tcp::socket::shutdown_both, ignored_error);
+    std::ignore = socket.close(ignored_error);
+  }
+
   std::expected<http::response, std::error_code> send_with_timeout(http::client& client, http::client::endpoint endpoint,
     http::request request, std::chrono::steady_clock::duration timeout) {
     try {
@@ -64,39 +70,21 @@ namespace {
     }
   }
 
-  std::expected<http::response, std::error_code> send_with_timeout(http::client& client, std::string_view uri_text,
-    http::request request, std::chrono::steady_clock::duration timeout) {
-    try {
-      auto future = client.async_send(uri_text, std::move(request), asio::cancel_after(timeout, asio::use_future));
-      return future.get();
-    } catch (const std::system_error& system_error) {
-      return std::unexpected{system_error.code()};
-    } catch (const std::future_error& future_error) {
-      return std::unexpected{future_error.code()};
-    } catch (...) {
-      return std::unexpected{http::error::client_error::unexpected_failure};
-    }
-  }
-
-  bool handle_follow_up_request(http_test::tcp_acceptor& server, tcp::socket& first_socket, std::string& first_read_buffer,
-    std::atomic<int>& accepted_connections, std::vector<std::string>& raw_requests, std::string_view response_text,
-    std::chrono::steady_clock::duration timeout = 5s) {
+  template <typename ReusedConnectionHandler, typename NewConnectionHandler>
+  void wait_for_follow_up_request(http_test::tcp_acceptor& server, tcp::socket& first_socket, std::string& first_read_buffer,
+    std::atomic<int>& accepted_connections, ReusedConnectionHandler&& handle_reused_connection,
+    NewConnectionHandler&& handle_new_connection, std::chrono::steady_clock::duration timeout = 5s) {
     first_socket.non_blocking(true);
 
     std::optional<tcp::socket> second_socket;
     std::string second_read_buffer;
-    auto deadline = std::chrono::steady_clock::now() + timeout;
+    aero::deadline deadline{timeout};
 
     for (;;) {
-      if (std::chrono::steady_clock::now() >= deadline) {
-        throw std::runtime_error{"timed out waiting for follow-up request"};
-      }
-
       if (auto request = http_test::try_read_http_request_nonblocking(first_socket, first_read_buffer)) {
-        raw_requests.push_back(std::move(*request));
         first_socket.non_blocking(false);
-        http_test::write_http_response(first_socket, response_text);
-        return true;
+        std::forward<ReusedConnectionHandler>(handle_reused_connection)(first_socket, std::move(*request));
+        return;
       }
 
       if (!second_socket.has_value()) {
@@ -109,11 +97,14 @@ namespace {
 
       if (second_socket.has_value()) {
         if (auto request = http_test::try_read_http_request_nonblocking(*second_socket, second_read_buffer)) {
-          raw_requests.push_back(std::move(*request));
           second_socket->non_blocking(false);
-          http_test::write_http_response(*second_socket, response_text);
-          return false;
+          std::forward<NewConnectionHandler>(handle_new_connection)(*second_socket, std::move(*request));
+          return;
         }
+      }
+
+      if (deadline.expired()) {
+        throw std::runtime_error{"timed out waiting for reused request or fallback connection"};
       }
 
       std::this_thread::sleep_for(1ms);
@@ -157,32 +148,43 @@ TEST(HttpClient, DefaultClientCanSendRequestToEndpoint) {
 TEST(HttpClient, UrlOverloadParsesTargetAndReusesConnection) {
   std::atomic<int> accepted_connections{0};
   std::vector<std::string> raw_requests;
-  bool reused_connection{false};
 
   http_test::tcp_acceptor server{[&](http_test::tcp_acceptor& server) {
-    auto first_socket = server.accept();
+    auto socket = server.accept();
     accepted_connections.fetch_add(1, std::memory_order_relaxed);
 
-    std::string first_read_buffer;
-    raw_requests.push_back(http_test::read_http_request(first_socket, first_read_buffer));
-    http_test::write_http_response(first_socket, "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none");
+    std::string read_buffer;
+    raw_requests.push_back(http_test::read_http_request(socket, read_buffer));
+    http_test::write_http_response(socket, "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none");
 
-    reused_connection = handle_follow_up_request(server,
-      first_socket,
-      first_read_buffer,
+    wait_for_follow_up_request(
+      server,
+      socket,
+      read_buffer,
       accepted_connections,
-      raw_requests,
-      "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo");
+      [&](tcp::socket& reused_socket, std::string request) {
+        raw_requests.push_back(std::move(request));
+        http_test::write_http_response(reused_socket, "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo");
+      },
+      [&](tcp::socket& new_socket, std::string request) {
+        raw_requests.push_back(std::move(request));
+        http_test::write_http_response(new_socket, "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo");
+      });
   }};
 
   http::client client;
 
-  auto first =
-    send_with_timeout(client, "http://127.0.0.1:" + std::to_string(server.port()) + "/first?x=1", make_request({}), 2s);
-  auto second =
-    send_with_timeout(client, "http://127.0.0.1:" + std::to_string(server.port()) + "/second", make_request({}), 2s);
+  auto first = client.send("http://127.0.0.1:" + std::to_string(server.port()) + "/first?x=1", make_request({}));
+  auto second = send_with_timeout(client,
+    http::client::endpoint{
+      .host = "127.0.0.1",
+      .port = server.port(),
+      .secure = false,
+    },
+    make_request("/second"),
+    2s);
 
-  ASSERT_TRUE(first.has_value()) << first.error().message();
+  ASSERT_TRUE(first.has_value());
   ASSERT_TRUE(second.has_value()) << second.error().message();
   EXPECT_EQ(first->text(), "one");
   EXPECT_EQ(second->text(), "two");
@@ -191,7 +193,6 @@ TEST(HttpClient, UrlOverloadParsesTargetAndReusesConnection) {
 
   ASSERT_FALSE(server.exception());
   ASSERT_EQ(raw_requests.size(), 2U);
-  EXPECT_TRUE(reused_connection);
   EXPECT_EQ(accepted_connections.load(std::memory_order_relaxed), 1);
   EXPECT_TRUE(raw_requests[0].starts_with("GET /first?x=1 HTTP/1.1\r\n"));
   EXPECT_TRUE(raw_requests[1].starts_with("GET /second HTTP/1.1\r\n"));
@@ -353,23 +354,26 @@ TEST(HttpClient, ReadsChunkedResponseWithExtensions) {
 
 TEST(HttpClient, ReadsCloseDelimitedResponseAndDoesNotReuseConnection) {
   std::atomic<int> accepted_connections{0};
-  std::vector<std::string> raw_requests;
-  bool reused_connection{true};
 
   http_test::tcp_acceptor server{[&](http_test::tcp_acceptor& server) {
-    auto first_socket = server.accept();
-    accepted_connections.fetch_add(1, std::memory_order_relaxed);
+    {
+      auto socket = server.accept();
+      accepted_connections.fetch_add(1, std::memory_order_relaxed);
 
-    std::string first_read_buffer;
-    raw_requests.push_back(http_test::read_http_request(first_socket, first_read_buffer));
-    http_test::write_http_response(first_socket, "HTTP/1.1 200 OK\r\n\r\nalpha");
+      std::string read_buffer;
+      std::ignore = http_test::read_http_request(socket, read_buffer);
+      http_test::write_http_response(socket, "HTTP/1.1 200 OK\r\n\r\nalpha");
+      close_socket(socket);
+    }
 
-    reused_connection = handle_follow_up_request(server,
-      first_socket,
-      first_read_buffer,
-      accepted_connections,
-      raw_requests,
-      "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nbeta");
+    {
+      auto socket = server.accept();
+      accepted_connections.fetch_add(1, std::memory_order_relaxed);
+
+      std::string read_buffer;
+      std::ignore = http_test::read_http_request(socket, read_buffer);
+      http_test::write_http_response(socket, "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nbeta");
+    }
   }};
 
   http::client client;
@@ -400,33 +404,35 @@ TEST(HttpClient, ReadsCloseDelimitedResponseAndDoesNotReuseConnection) {
   server.join();
 
   ASSERT_FALSE(server.exception());
-  EXPECT_FALSE(reused_connection);
   EXPECT_EQ(accepted_connections.load(std::memory_order_relaxed), 2);
 }
 
 TEST(HttpClient, ReadsHttp11NonChunkedTransferEncodingAsCloseDelimitedAndDoesNotReuseConnection) {
   std::atomic<int> accepted_connections{0};
-  std::vector<std::string> raw_requests;
-  bool reused_connection{true};
 
   http_test::tcp_acceptor server{[&](http_test::tcp_acceptor& server) {
-    auto first_socket = server.accept();
-    accepted_connections.fetch_add(1, std::memory_order_relaxed);
+    {
+      auto socket = server.accept();
+      accepted_connections.fetch_add(1, std::memory_order_relaxed);
 
-    std::string first_read_buffer;
-    raw_requests.push_back(http_test::read_http_request(first_socket, first_read_buffer));
-    http_test::write_http_response(first_socket,
-      "HTTP/1.1 200 OK\r\n"
-      "Transfer-Encoding: gzip\r\n"
-      "\r\n"
-      "alpha");
+      std::string read_buffer;
+      std::ignore = http_test::read_http_request(socket, read_buffer);
+      http_test::write_http_response(socket,
+        "HTTP/1.1 200 OK\r\n"
+        "Transfer-Encoding: gzip\r\n"
+        "\r\n"
+        "alpha");
+      close_socket(socket);
+    }
 
-    reused_connection = handle_follow_up_request(server,
-      first_socket,
-      first_read_buffer,
-      accepted_connections,
-      raw_requests,
-      "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nbeta");
+    {
+      auto socket = server.accept();
+      accepted_connections.fetch_add(1, std::memory_order_relaxed);
+
+      std::string read_buffer;
+      std::ignore = http_test::read_http_request(socket, read_buffer);
+      http_test::write_http_response(socket, "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nbeta");
+    }
   }};
 
   http::client client;
@@ -457,7 +463,6 @@ TEST(HttpClient, ReadsHttp11NonChunkedTransferEncodingAsCloseDelimitedAndDoesNot
   server.join();
 
   ASSERT_FALSE(server.exception());
-  EXPECT_FALSE(reused_connection);
   EXPECT_EQ(accepted_connections.load(std::memory_order_relaxed), 2);
 }
 
@@ -523,46 +528,47 @@ TEST(HttpClient, RejectsHttp10ResponseWithTransferEncoding) {
 TEST(HttpClient, DoesNotReuseConnectionWhenReuseConnectionsDisabled) {
   std::atomic<int> accepted_connections{0};
   std::vector<std::string> raw_requests;
-  bool reused_connection{true};
 
   http_test::tcp_acceptor server{[&](http_test::tcp_acceptor& server) {
-    auto first_socket = server.accept();
-    accepted_connections.fetch_add(1, std::memory_order_relaxed);
+    {
+      auto socket = server.accept();
+      accepted_connections.fetch_add(1, std::memory_order_relaxed);
 
-    std::string first_read_buffer;
-    raw_requests.push_back(http_test::read_http_request(first_socket, first_read_buffer));
-    http_test::write_http_response(first_socket, "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none");
+      std::string read_buffer;
+      raw_requests.push_back(http_test::read_http_request(socket, read_buffer));
+      http_test::write_http_response(socket, "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none");
+    }
 
-    reused_connection = handle_follow_up_request(server,
-      first_socket,
-      first_read_buffer,
-      accepted_connections,
-      raw_requests,
-      "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo");
+    {
+      auto socket = server.accept();
+      accepted_connections.fetch_add(1, std::memory_order_relaxed);
+
+      std::string read_buffer;
+      raw_requests.push_back(http_test::read_http_request(socket, read_buffer));
+      http_test::write_http_response(socket, "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo");
+    }
   }};
 
   http::client client{http::client_options{.reuse_connections = false}};
 
-  auto first = send_with_timeout(client,
+  auto first = client.send(
     http::client::endpoint{
       .host = "127.0.0.1",
       .port = server.port(),
       .secure = false,
     },
-    make_request("/first"),
-    2s);
+    make_request("/first"));
 
-  auto second = send_with_timeout(client,
+  auto second = client.send(
     http::client::endpoint{
       .host = "127.0.0.1",
       .port = server.port(),
       .secure = false,
     },
-    make_request("/second"),
-    2s);
+    make_request("/second"));
 
-  ASSERT_TRUE(first.has_value()) << first.error().message();
-  ASSERT_TRUE(second.has_value()) << second.error().message();
+  ASSERT_TRUE(first.has_value());
+  ASSERT_TRUE(second.has_value());
   EXPECT_EQ(first->text(), "one");
   EXPECT_EQ(second->text(), "two");
 
@@ -570,7 +576,6 @@ TEST(HttpClient, DoesNotReuseConnectionWhenReuseConnectionsDisabled) {
 
   ASSERT_FALSE(server.exception());
   ASSERT_EQ(raw_requests.size(), 2U);
-  EXPECT_FALSE(reused_connection);
   EXPECT_EQ(accepted_connections.load(std::memory_order_relaxed), 2);
   EXPECT_NE(raw_requests[0].find("Connection: close\r\n"), std::string::npos);
   EXPECT_NE(raw_requests[1].find("Connection: close\r\n"), std::string::npos);
@@ -578,76 +583,81 @@ TEST(HttpClient, DoesNotReuseConnectionWhenReuseConnectionsDisabled) {
 
 TEST(HttpClient, DoesNotReuseConnectionWhenResponseSaysConnectionClose) {
   std::atomic<int> accepted_connections{0};
-  std::vector<std::string> raw_requests;
-  bool reused_connection{true};
 
   http_test::tcp_acceptor server{[&](http_test::tcp_acceptor& server) {
-    auto first_socket = server.accept();
-    accepted_connections.fetch_add(1, std::memory_order_relaxed);
+    {
+      auto socket = server.accept();
+      accepted_connections.fetch_add(1, std::memory_order_relaxed);
 
-    std::string first_read_buffer;
-    raw_requests.push_back(http_test::read_http_request(first_socket, first_read_buffer));
-    http_test::write_http_response(first_socket, "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 3\r\n\r\none");
+      std::string read_buffer;
+      std::ignore = http_test::read_http_request(socket, read_buffer);
+      http_test::write_http_response(socket, "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 3\r\n\r\none");
+    }
 
-    reused_connection = handle_follow_up_request(server,
-      first_socket,
-      first_read_buffer,
-      accepted_connections,
-      raw_requests,
-      "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo");
+    {
+      auto socket = server.accept();
+      accepted_connections.fetch_add(1, std::memory_order_relaxed);
+
+      std::string read_buffer;
+      std::ignore = http_test::read_http_request(socket, read_buffer);
+      http_test::write_http_response(socket, "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo");
+    }
   }};
 
   http::client client;
 
-  auto first = send_with_timeout(client,
+  auto first = client.send(
     http::client::endpoint{
       .host = "127.0.0.1",
       .port = server.port(),
       .secure = false,
     },
-    make_request("/first"),
-    2s);
+    make_request("/first"));
 
-  auto second = send_with_timeout(client,
+  auto second = client.send(
     http::client::endpoint{
       .host = "127.0.0.1",
       .port = server.port(),
       .secure = false,
     },
-    make_request("/second"),
-    2s);
+    make_request("/second"));
 
-  ASSERT_TRUE(first.has_value()) << first.error().message();
-  ASSERT_TRUE(second.has_value()) << second.error().message();
+  ASSERT_TRUE(first.has_value());
+  ASSERT_TRUE(second.has_value());
   EXPECT_EQ(first->text(), "one");
   EXPECT_EQ(second->text(), "two");
 
   server.join();
 
   ASSERT_FALSE(server.exception());
-  EXPECT_FALSE(reused_connection);
   EXPECT_EQ(accepted_connections.load(std::memory_order_relaxed), 2);
 }
 
 TEST(HttpClient, ReusesConnectionAfterNoContentResponse) {
   std::atomic<int> accepted_connections{0};
   std::vector<std::string> raw_requests;
-  bool reused_connection{false};
 
   http_test::tcp_acceptor server{[&](http_test::tcp_acceptor& server) {
-    auto first_socket = server.accept();
+    auto socket = server.accept();
     accepted_connections.fetch_add(1, std::memory_order_relaxed);
 
-    std::string first_read_buffer;
-    raw_requests.push_back(http_test::read_http_request(first_socket, first_read_buffer));
-    http_test::write_http_response(first_socket, "HTTP/1.1 204 No Content\r\n\r\n");
+    std::string read_buffer;
+    raw_requests.push_back(http_test::read_http_request(socket, read_buffer));
+    http_test::write_http_response(socket, "HTTP/1.1 204 No Content\r\n\r\n");
 
-    reused_connection = handle_follow_up_request(server,
-      first_socket,
-      first_read_buffer,
+    wait_for_follow_up_request(
+      server,
+      socket,
+      read_buffer,
       accepted_connections,
-      raw_requests,
-      "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+      [&](tcp::socket& reused_socket, std::string request) {
+        raw_requests.push_back(std::move(request));
+        http_test::write_http_response(reused_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+      },
+      [&](tcp::socket& new_socket, std::string request) {
+        raw_requests.push_back(std::move(request));
+        http_test::write_http_response(new_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+      });
   }};
 
   http::client client;
@@ -680,7 +690,6 @@ TEST(HttpClient, ReusesConnectionAfterNoContentResponse) {
 
   ASSERT_FALSE(server.exception());
   ASSERT_EQ(raw_requests.size(), 2U);
-  EXPECT_TRUE(reused_connection);
   EXPECT_EQ(accepted_connections.load(std::memory_order_relaxed), 1);
   EXPECT_TRUE(raw_requests[0].starts_with("GET /empty HTTP/1.1\r\n"));
   EXPECT_TRUE(raw_requests[1].starts_with("GET /after-empty HTTP/1.1\r\n"));
@@ -689,22 +698,28 @@ TEST(HttpClient, ReusesConnectionAfterNoContentResponse) {
 TEST(HttpClient, ReusesConnectionAfterResetContentResponse) {
   std::atomic<int> accepted_connections{0};
   std::vector<std::string> raw_requests;
-  bool reused_connection{false};
 
   http_test::tcp_acceptor server{[&](http_test::tcp_acceptor& server) {
-    auto first_socket = server.accept();
+    auto socket = server.accept();
     accepted_connections.fetch_add(1, std::memory_order_relaxed);
 
-    std::string first_read_buffer;
-    raw_requests.push_back(http_test::read_http_request(first_socket, first_read_buffer));
-    http_test::write_http_response(first_socket, "HTTP/1.1 205 Reset Content\r\n\r\n");
+    std::string read_buffer;
+    raw_requests.push_back(http_test::read_http_request(socket, read_buffer));
+    http_test::write_http_response(socket, "HTTP/1.1 205 Reset Content\r\n\r\n");
 
-    reused_connection = handle_follow_up_request(server,
-      first_socket,
-      first_read_buffer,
+    wait_for_follow_up_request(
+      server,
+      socket,
+      read_buffer,
       accepted_connections,
-      raw_requests,
-      "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+      [&](tcp::socket& reused_socket, std::string request) {
+        raw_requests.push_back(std::move(request));
+        http_test::write_http_response(reused_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+      },
+      [&](tcp::socket& new_socket, std::string request) {
+        raw_requests.push_back(std::move(request));
+        http_test::write_http_response(new_socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+      });
   }};
 
   http::client client;
@@ -737,7 +752,6 @@ TEST(HttpClient, ReusesConnectionAfterResetContentResponse) {
 
   ASSERT_FALSE(server.exception());
   ASSERT_EQ(raw_requests.size(), 2U);
-  EXPECT_TRUE(reused_connection);
   EXPECT_EQ(accepted_connections.load(std::memory_order_relaxed), 1);
   EXPECT_TRUE(raw_requests[0].starts_with("GET /reset HTTP/1.1\r\n"));
   EXPECT_TRUE(raw_requests[1].starts_with("GET /after-reset HTTP/1.1\r\n"));
@@ -755,15 +769,14 @@ TEST(HttpClient, ReturnsUriErrorForInvalidScheme) {
 TEST(HttpClient, ReadsFinalResponseAfterInterimResponseAndReusesConnection) {
   std::atomic<int> accepted_connections{0};
   std::vector<std::string> raw_requests;
-  bool reused_connection{false};
 
   http_test::tcp_acceptor server{[&](http_test::tcp_acceptor& server) {
-    auto first_socket = server.accept();
+    auto socket = server.accept();
     accepted_connections.fetch_add(1, std::memory_order_relaxed);
 
-    std::string first_read_buffer;
-    raw_requests.push_back(http_test::read_http_request(first_socket, first_read_buffer));
-    http_test::write_http_response(first_socket,
+    std::string read_buffer;
+    raw_requests.push_back(http_test::read_http_request(socket, read_buffer));
+    http_test::write_http_response(socket,
       "HTTP/1.1 103 Early Hints\r\n"
       "Link: </style.css>; rel=preload; as=style\r\n"
       "\r\n"
@@ -772,12 +785,19 @@ TEST(HttpClient, ReadsFinalResponseAfterInterimResponseAndReusesConnection) {
       "\r\n"
       "first");
 
-    reused_connection = handle_follow_up_request(server,
-      first_socket,
-      first_read_buffer,
+    wait_for_follow_up_request(
+      server,
+      socket,
+      read_buffer,
       accepted_connections,
-      raw_requests,
-      "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecond");
+      [&](tcp::socket& reused_socket, std::string request) {
+        raw_requests.push_back(std::move(request));
+        http_test::write_http_response(reused_socket, "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecond");
+      },
+      [&](tcp::socket& new_socket, std::string request) {
+        raw_requests.push_back(std::move(request));
+        http_test::write_http_response(new_socket, "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecond");
+      });
   }};
 
   http::client client;
@@ -811,7 +831,6 @@ TEST(HttpClient, ReadsFinalResponseAfterInterimResponseAndReusesConnection) {
 
   ASSERT_FALSE(server.exception());
   ASSERT_EQ(raw_requests.size(), 2U);
-  EXPECT_TRUE(reused_connection);
   EXPECT_EQ(accepted_connections.load(std::memory_order_relaxed), 1);
   EXPECT_TRUE(raw_requests[0].starts_with("GET /first HTTP/1.1\r\n"));
   EXPECT_TRUE(raw_requests[1].starts_with("GET /second HTTP/1.1\r\n"));
