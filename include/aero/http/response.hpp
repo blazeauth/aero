@@ -26,6 +26,10 @@ namespace aero::http {
     [[nodiscard]] bool empty() const noexcept {
       return body.empty() && status_line.empty() && headers.empty();
     }
+
+    [[nodiscard]] std::expected<std::string_view, std::error_code> content_type() const noexcept {
+      return headers.content_type();
+    }
   };
 
 } // namespace aero::http

@@ -81,9 +81,13 @@ namespace aero::http {
     }
 
     [[nodiscard]] inline std::expected<headers, std::error_code> parse_headers(std::string_view buffer) {
-      std::size_t headers_end_position = buffer.find(detail::double_crlf);
-      if (headers_end_position == std::string_view::npos) {
-        if (buffer.ends_with(detail::double_lf)) {
+      if (buffer == http::detail::crlf) {
+        return headers{};
+      }
+
+      std::size_t headers_end_pos = buffer.find(http::detail::double_crlf);
+      if (headers_end_pos == std::string_view::npos) {
+        if (buffer.ends_with(http::detail::double_lf)) {
           return std::unexpected(header_error::lf_field_endings_not_supported);
         }
 
@@ -92,15 +96,15 @@ namespace aero::http {
 
       http::headers headers;
       std::string_view last_header_name;
-      std::string_view headers_section = buffer.substr(0, headers_end_position);
+      std::string_view headers_section = buffer.substr(0, headers_end_pos);
 
-      for (auto&& field_subrange : headers_section | std::views::split(detail::crlf)) {
+      for (auto&& field_subrange : headers_section | std::views::split(http::detail::crlf)) {
         std::string_view field_line{field_subrange};
         if (field_line.empty()) {
           break;
         }
 
-        bool field_line_contains_crlf = field_line.find_first_of(detail::crlf) != std::string_view::npos;
+        bool field_line_contains_crlf = field_line.find_first_of(http::detail::crlf) != std::string_view::npos;
         if (field_line_contains_crlf) {
           return std::unexpected(header_error::field_invalid);
         }

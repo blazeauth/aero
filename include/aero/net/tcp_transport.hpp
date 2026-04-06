@@ -34,9 +34,7 @@ namespace aero::net {
     using port_type = asio::ip::port_type;
     using executor_type = typename detail::basic_transport<stream_type>::executor_type;
 
-    constexpr static auto default_buffer_size = 32 * 1024;
-
-    explicit tcp_transport(executor_type executor, std::size_t buffer_size = default_buffer_size)
+    explicit tcp_transport(executor_type executor, std::size_t buffer_size = detail::default_buffer_size)
       : basic_transport_(executor, buffer_size), resolver_(basic_transport_.get_strand()) {}
 
     template <typename CompletionToken>

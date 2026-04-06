@@ -14,6 +14,9 @@
 
 namespace aero::detail {
 
+  [[maybe_unused]] constexpr inline int decimal_base = 10;
+  [[maybe_unused]] constexpr inline int hexadecimal_base = 16;
+
   [[nodiscard]] constexpr bool is_ascii(char c) noexcept {
     constexpr auto ascii_table_end = 0x7F; // DEL char
     return static_cast<unsigned char>(c) <= ascii_table_end;
@@ -30,13 +33,13 @@ namespace aero::detail {
       const auto lo = static_cast<std::size_t>(b & static_cast<std::byte>(0x0FU));
       return std::array{lookup_table[hi], lookup_table[lo]};
     });
-    return std::ranges::to<std::string>(nibbles | std::views::join);
+    return nibbles | std::views::join | std::ranges::to<std::string>();
   }
 
   template <std::default_initializable T>
-  [[nodiscard]] inline std::expected<T, std::error_code> to_decimal(std::string_view str) noexcept {
+  [[nodiscard]] inline std::expected<T, std::error_code> to_decimal(std::string_view str, int base = decimal_base) noexcept {
     T value{};
-    if (auto result = std::from_chars(str.data(), str.data() + str.size(), value); result.ec != std::errc{}) {
+    if (auto result = std::from_chars(str.data(), str.data() + str.size(), value, base); result.ec != std::errc{}) {
       return std::unexpected(std::make_error_code(result.ec));
     }
     return value;
@@ -44,9 +47,9 @@ namespace aero::detail {
 
   template <std::default_initializable T>
     requires(std::is_enum_v<T>)
-  [[nodiscard]] inline std::expected<T, std::error_code> to_decimal(std::string_view str) noexcept {
+  [[nodiscard]] inline std::expected<T, std::error_code> to_decimal(std::string_view str, int base = decimal_base) noexcept {
     std::underlying_type_t<T> value{};
-    if (auto result = std::from_chars(str.data(), str.data() + str.size(), value); result.ec != std::errc{}) {
+    if (auto result = std::from_chars(str.data(), str.data() + str.size(), value, base); result.ec != std::errc{}) {
       return std::unexpected(std::make_error_code(result.ec));
     }
     return static_cast<T>(value);
