@@ -95,7 +95,7 @@ jobs:
           PY
 
       - name: Run client
-        run: ./$BUILD_DIR/examples/websocket/autobahn_client "${AUTOBAHN_SERVER}" "${AUTOBAHN_AGENT}"
+        run: ./$BUILD_DIR/examples/websocket/websocket_autobahn_client "${AUTOBAHN_SERVER}" "${AUTOBAHN_AGENT}"
 
       - name: Validate autobahn results
         run: |
