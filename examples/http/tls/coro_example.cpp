@@ -37,13 +37,13 @@ asio::awaitable<std::error_code> do_request(http::client& client) {
 int main() {
   aero::io_runtime io_runtime{aero::threads_count_t{1}};
 
-  tls::system_context tls_context{tls::version::tlsv1_2};
+  tls::system_context tls_context{tls::version::tlsv1_3};
   tls_context.disable_deprecated_versions();
 
   http::client client{io_runtime.get_executor(),
     http::client_options{
       .max_response_body_size = 32768,
-      .tls_context = &tls_context.context(),
+      .tls_context = std::ref(tls_context.context()),
     }};
 
   auto fut = asio::co_spawn(io_runtime.get_executor(), do_request(client), asio::use_future);

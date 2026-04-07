@@ -117,77 +117,46 @@ namespace aero::http {
       bool final_chunked{false};
     };
 
-    struct state final {
-      explicit state(executor_type executor, client_options options, std::shared_ptr<aero::io_runtime> runtime)
-        : runtime_(std::move(runtime)),
-          executor_(std::move(executor)),
-          options_(options),
-          connection_pool_(executor_, make_pool_options(options_)) {}
-
-#ifdef AERO_USE_TLS
-      explicit state(executor_type executor, client_options options, std::shared_ptr<aero::io_runtime> runtime,
-        asio::ssl::context& tls_context)
-        requires(secure_transport)
-        : runtime_(std::move(runtime)),
-          executor_(std::move(executor)),
-          options_(options),
-          connection_pool_(executor_, tls_context, make_pool_options(options_)) {}
-#endif
-
-      [[nodiscard]] executor_type get_executor() const noexcept {
-        return executor_;
-      }
-
-      [[nodiscard]] static detail::pool_options make_pool_options(const client_options& options) {
-        return detail::pool_options{
-          .max_idle_connections_per_endpoint = options.max_idle_connections_per_endpoint,
-          .transport_buffer_size = options.transport_buffer_size,
-        };
-      }
-
-      std::shared_ptr<aero::io_runtime> runtime_;
-      executor_type executor_;
-      client_options options_;
-      connection_pool_type connection_pool_;
-    };
-
    public:
-    basic_client() {
-      auto runtime = make_runtime();
-      state_ = make_state(runtime->get_executor(), client_options{}, std::move(runtime));
-    }
+    basic_client()
+      : runtime_(make_runtime()),
+        executor_(runtime_->get_executor()),
+        options_(),
+        connection_pool_(make_connection_pool(executor_, options_)) {}
 
-    explicit basic_client(client_options options) {
-      auto runtime = make_runtime();
-      state_ = make_state(runtime->get_executor(), std::move(options), std::move(runtime));
-    }
+    explicit basic_client(client_options options)
+      : runtime_(make_runtime()),
+        executor_(runtime_->get_executor()),
+        options_(options),
+        connection_pool_(make_connection_pool(executor_, options_)) {}
 
-    explicit basic_client(executor_type executor): basic_client(std::move(executor), client_options{}) {}
+    explicit basic_client(executor_type executor)
+      : executor_(std::move(executor)), options_(), connection_pool_(make_connection_pool(executor_, options_)) {}
 
     basic_client(executor_type executor, client_options options)
-      : state_(make_state(std::move(executor), std::move(options), nullptr)) {}
+      : executor_(std::move(executor)), options_(options), connection_pool_(make_connection_pool(executor_, options_)) {}
+
+    basic_client(const basic_client&) = delete;
+    basic_client(basic_client&&) = delete;
+    basic_client& operator=(const basic_client&) = delete;
+    basic_client& operator=(basic_client&&) = delete;
+    ~basic_client() = default;
 
     template <typename CompletionToken>
     auto async_send(basic_client::endpoint endpoint, http::request request, CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
-      auto state = state_;
-      auto executor = select_composed_executor(state);
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
         asio::co_composed<void(std::error_code, http::response)>(
-          [state = std::move(state)](auto, basic_client::endpoint endpoint, http::request request) mutable -> void {
-            if (!state) {
-              co_return {client_error::client_unavailable, http::response{}};
-            }
-
-            auto prepared = prepare_request(std::move(endpoint), std::move(request), state->options_);
+          [this](auto, basic_client::endpoint endpoint, http::request request) mutable -> void {
+            auto prepared = prepare_request(std::move(endpoint), std::move(request));
             if (!prepared.has_value()) {
               co_return {prepared.error(), http::response{}};
             }
 
-            co_return co_await async_send_prepared(state, std::move(*prepared), return_as_deferred_tuple());
+            co_return co_await async_send_prepared(std::move(*prepared), return_as_deferred_tuple());
           },
-          executor),
+          get_executor()),
         bound_token,
         std::move(endpoint),
         std::move(request));
@@ -196,16 +165,10 @@ namespace aero::http {
     template <typename CompletionToken>
     auto async_send(std::string_view uri_text, http::request request, CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
-      auto state = state_;
-      auto executor = select_composed_executor(state);
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
         asio::co_composed<void(std::error_code, http::response)>(
-          [state = std::move(state)](auto, std::string uri_text, http::request request) mutable -> void {
-            if (!state) {
-              co_return {client_error::client_unavailable, http::response{}};
-            }
-
+          [this](auto, std::string uri_text, http::request request) mutable -> void {
             auto parsed_uri = http::uri::parse(uri_text);
             if (!parsed_uri.has_value()) {
               co_return {parsed_uri.error(), http::response{}};
@@ -224,110 +187,77 @@ namespace aero::http {
                 .host = std::string(parsed_uri->host()),
                 .port = parsed_uri->port(),
               },
-              std::move(request),
-              state->options_);
+              std::move(request));
 
             if (!prepared.has_value()) {
               co_return {prepared.error(), http::response{}};
             }
 
-            co_return co_await async_send_prepared(state, std::move(*prepared), return_as_deferred_tuple());
+            co_return co_await async_send_prepared(std::move(*prepared), return_as_deferred_tuple());
           },
-          executor),
+          get_executor()),
         bound_token,
         std::string(uri_text),
         std::move(request));
     }
 
     [[nodiscard]] std::expected<http::response, std::error_code> send(basic_client::endpoint endpoint, http::request request) {
-      if (!state_) {
-        return std::unexpected(client_error::client_unavailable);
-      }
-
       try {
         auto future = async_send(std::move(endpoint), std::move(request), asio::use_future);
         return future.get();
-      } catch (const std::system_error& system_error) {
-        return std::unexpected(system_error.code());
-      } catch (const std::future_error& future_error) {
-        return std::unexpected(future_error.code());
+      } catch (const std::system_error& e) {
+        return std::unexpected(e.code());
+      } catch (const std::future_error& e) {
+        return std::unexpected(e.code());
       } catch (...) {
         return std::unexpected(client_error::unexpected_failure);
       }
     }
 
     [[nodiscard]] std::expected<http::response, std::error_code> send(std::string_view uri_text, http::request request) {
-      if (!state_) {
-        return std::unexpected(client_error::client_unavailable);
-      }
-
       try {
         auto future = async_send(uri_text, std::move(request), asio::use_future);
         return future.get();
-      } catch (const std::system_error& system_error) {
-        return std::unexpected(system_error.code());
-      } catch (const std::future_error& future_error) {
-        return std::unexpected(future_error.code());
+      } catch (const std::system_error& e) {
+        return std::unexpected(e.code());
+      } catch (const std::future_error& e) {
+        return std::unexpected(e.code());
       } catch (...) {
         return std::unexpected(client_error::unexpected_failure);
       }
     }
 
     [[nodiscard]] executor_type get_executor() const noexcept {
-      return state_ ? state_->get_executor() : executor_type{};
+      return executor_;
     }
 
     [[nodiscard]] connection_pool_type& connection_pool() & {
-      return state_->connection_pool_;
+      return connection_pool_;
     }
 
     [[nodiscard]] const connection_pool_type& connection_pool() const& {
-      return state_->connection_pool_;
+      return connection_pool_;
     }
 
     [[nodiscard]] connection_pool_type& connection_pool() && = delete;
     [[nodiscard]] const connection_pool_type& connection_pool() const&& = delete;
 
    private:
-    [[nodiscard]] static std::shared_ptr<state> make_state(executor_type executor, client_options options,
-      std::shared_ptr<aero::io_runtime> runtime) {
-#ifdef AERO_USE_TLS
-      if constexpr (secure_transport) {
-        if (options.tls_context != nullptr) {
-          auto& tls_context = *options.tls_context;
-          return std::make_shared<state>(std::move(executor), std::move(options), std::move(runtime), tls_context);
-        }
-      }
-#endif
-
-      return std::make_shared<state>(std::move(executor), std::move(options), std::move(runtime));
-    }
-
-    [[nodiscard]] static executor_type select_composed_executor(const std::shared_ptr<state>& state) {
-      if (state) {
-        return state->get_executor();
-      }
-
-      return executor_type{asio::system_executor{}};
-    }
-
     template <typename CompletionToken>
-    static auto async_send_prepared(std::shared_ptr<state> state, prepared_request prepared, CompletionToken&& token) {
+    auto async_send_prepared(prepared_request prepared, CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
-      auto executor = select_composed_executor(state);
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
         asio::co_composed<void(std::error_code, http::response)>(
-          [state = std::move(state)](auto, prepared_request prepared) mutable -> void {
+          [this](auto, prepared_request prepared) mutable -> void {
             for (std::size_t attempt_index = 0;; ++attempt_index) {
-              auto connection = state->connection_pool_.acquire(prepared.endpoint.host, prepared.endpoint.port);
+              auto connection = connection_pool_.acquire(prepared.endpoint.host, prepared.endpoint.port);
               if (!connection.has_value()) {
                 co_return {connection.error(), http::response{}};
               }
 
               exchange_result result;
-              std::tie(result) = co_await async_exchange(state,
-                connection->transport(),
+              std::tie(result) = co_await async_exchange(connection->transport(),
                 prepared.endpoint,
                 prepared.request,
                 return_as_deferred_tuple());
@@ -343,19 +273,19 @@ namespace aero::http {
               }
             }
           },
-          executor),
+          get_executor()),
         bound_token,
         std::move(prepared));
     }
 
     template <typename CompletionToken>
-    static auto async_exchange(std::shared_ptr<state> state, transport_type& transport, basic_client::endpoint endpoint,
-      http::request request, CompletionToken&& token) {
+    auto async_exchange(transport_type& transport, basic_client::endpoint endpoint, http::request request,
+      CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
 
       return asio::async_initiate<decltype(bound_token), void(exchange_result)>(
         asio::co_composed<void(exchange_result)>(
-          [&transport, state = std::move(state)](auto, basic_client::endpoint endpoint, http::request request) mutable -> void {
+          [this, &transport](auto, basic_client::endpoint endpoint, http::request request) mutable -> void {
             if (!transport.lowest_layer().is_open()) {
               auto [connect_ec] = co_await transport.async_connect(endpoint.host, endpoint.port, return_as_deferred_tuple());
               if (connect_ec) {
@@ -391,7 +321,7 @@ namespace aero::http {
             if (should_wait_for_continue(request)) {
               expectation_result expect_result;
               std::tie(expect_result) =
-                co_await async_receive_expectation_response(state, transport, request.method, return_as_deferred_tuple());
+                co_await async_receive_expectation_response(transport, request.method, return_as_deferred_tuple());
 
               if (expect_result.error) {
                 co_return exchange_result{
@@ -424,11 +354,8 @@ namespace aero::http {
             }
 
             exchange_result read_result;
-            std::tie(read_result) = co_await async_read_response(transport,
-              request.method,
-              std::move(response_buffer),
-              state->options_.max_response_body_size,
-              return_as_deferred_tuple());
+            std::tie(read_result) =
+              co_await async_read_response(transport, request.method, std::move(response_buffer), return_as_deferred_tuple());
 
             co_return read_result;
           },
@@ -439,13 +366,12 @@ namespace aero::http {
     }
 
     template <typename CompletionToken>
-    static auto async_receive_expectation_response(std::shared_ptr<state> state, transport_type& transport,
-      http::method request_method, CompletionToken&& token) {
+    auto async_receive_expectation_response(transport_type& transport, http::method request_method, CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
 
       return asio::async_initiate<decltype(bound_token), void(expectation_result)>(
         asio::co_composed<void(expectation_result)>(
-          [&transport, state = std::move(state)](auto, http::method request_method) mutable -> void {
+          [this, &transport](auto, http::method request_method) mutable -> void {
             std::vector<std::byte> response_buffer;
             bool response_started{false};
 
@@ -456,7 +382,7 @@ namespace aero::http {
               if (header_end == std::string_view::npos) {
                 auto [read_headers_ec, read_headers_count] = co_await transport.async_read_until(response_buffer,
                   http::detail::double_crlf,
-                  asio::cancel_after(state->options_.expect_continue_timeout, return_as_deferred_tuple()));
+                  asio::cancel_after(options_.expect_continue_timeout, return_as_deferred_tuple()));
 
                 if (read_headers_ec) {
                   if (read_headers_ec == asio::error::operation_aborted && response_buffer.empty()) {
@@ -519,7 +445,6 @@ namespace aero::http {
                 request_method,
                 std::move(response),
                 std::move(response_buffer),
-                state->options_.max_response_body_size,
                 return_as_deferred_tuple());
 
               co_return expectation_result{
@@ -537,17 +462,13 @@ namespace aero::http {
     }
 
     template <typename CompletionToken>
-    static auto async_read_response(transport_type& transport, http::method request_method,
-      std::vector<std::byte> response_buffer, std::size_t max_response_body_size, CompletionToken&& token) {
+    auto async_read_response(transport_type& transport, http::method request_method, std::vector<std::byte> response_buffer,
+      CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
 
       return asio::async_initiate<decltype(bound_token), void(exchange_result)>(
         asio::co_composed<void(exchange_result)>(
-          [&transport](auto,
-            http::method request_method,
-            std::vector<std::byte>
-              response_buffer,
-            std::size_t max_response_body_size) -> void {
+          [this, &transport](auto, http::method request_method, std::vector<std::byte> response_buffer) -> void {
             bool response_started = !response_buffer.empty();
 
             for (;;) {
@@ -594,7 +515,6 @@ namespace aero::http {
                 request_method,
                 std::move(response),
                 std::move(response_buffer),
-                max_response_body_size,
                 return_as_deferred_tuple());
 
               co_return exchange_result{
@@ -607,23 +527,18 @@ namespace aero::http {
           select_transport_executor(transport)),
         bound_token,
         request_method,
-        std::move(response_buffer),
-        max_response_body_size);
+        std::move(response_buffer));
     }
 
     template <typename CompletionToken>
-    static auto async_read_final_response_body(transport_type& transport, http::method request_method, http::response response,
-      std::vector<std::byte> response_buffer, std::size_t max_response_body_size, CompletionToken&& token) {
+    auto async_read_final_response_body(transport_type& transport, http::method request_method, http::response response,
+      std::vector<std::byte> response_buffer, CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
         asio::co_composed<void(std::error_code, http::response)>(
-          [&transport](auto,
-            http::method request_method,
-            http::response response,
-            std::vector<std::byte>
-              response_buffer,
-            std::size_t max_response_body_size) -> void {
+          [this, &transport](auto, http::method request_method, http::response response, std::vector<std::byte> response_buffer)
+            -> void {
             if (is_successful_connect_response(request_method, response.status_code())) {
               co_return {client_error::connect_tunnel_unsupported, http::response{}};
             }
@@ -642,7 +557,6 @@ namespace aero::http {
               co_return co_await async_read_chunked_body(transport,
                 std::move(response),
                 std::move(response_buffer),
-                max_response_body_size,
                 return_as_deferred_tuple());
             }
 
@@ -650,7 +564,6 @@ namespace aero::http {
               co_return co_await async_read_close_delimited_body(transport,
                 std::move(response),
                 std::move(response_buffer),
-                max_response_body_size,
                 return_as_deferred_tuple());
             }
 
@@ -660,43 +573,35 @@ namespace aero::http {
                 std::move(response),
                 std::move(response_buffer),
                 *content_length,
-                max_response_body_size,
                 return_as_deferred_tuple());
             }
 
             co_return co_await async_read_close_delimited_body(transport,
               std::move(response),
               std::move(response_buffer),
-              max_response_body_size,
               return_as_deferred_tuple());
           },
           select_transport_executor(transport)),
         bound_token,
         request_method,
         std::move(response),
-        std::move(response_buffer),
-        max_response_body_size);
+        std::move(response_buffer));
     }
 
     template <typename CompletionToken>
-    static auto async_read_content_length_body(transport_type& transport, http::response response,
-      std::vector<std::byte> initial_body, std::uint64_t content_length, std::size_t max_response_body_size,
-      CompletionToken&& token) {
+    auto async_read_content_length_body(transport_type& transport, http::response response, std::vector<std::byte> initial_body,
+      std::uint64_t content_length, CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
         asio::co_composed<void(std::error_code, http::response)>(
-          [&transport](auto,
-            http::response response,
-            std::vector<std::byte>
-              initial_body,
-            std::uint64_t content_length,
-            std::size_t max_response_body_size) -> void {
+          [this, &transport](auto, http::response response, std::vector<std::byte> initial_body, std::uint64_t content_length)
+            -> void {
             if (initial_body.size() > content_length) {
               co_return {client_error::content_length_mismatch, http::response{}};
             }
 
-            if (content_length > max_response_body_size) {
+            if (content_length > options_.max_response_body_size) {
               co_return {client_error::response_body_too_large, http::response{}};
             }
 
@@ -718,20 +623,18 @@ namespace aero::http {
         bound_token,
         std::move(response),
         std::move(initial_body),
-        content_length,
-        max_response_body_size);
+        content_length);
     }
 
     template <typename CompletionToken>
-    static auto async_read_close_delimited_body(transport_type& transport, http::response response,
-      std::vector<std::byte> initial_body, std::size_t max_response_body_size, CompletionToken&& token) {
+    auto async_read_close_delimited_body(transport_type& transport, http::response response,
+      std::vector<std::byte> initial_body, CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
         asio::co_composed<void(std::error_code, http::response)>(
-          [&transport](auto, http::response response, std::vector<std::byte> initial_body, std::size_t max_response_body_size)
-            -> void {
-            if (initial_body.size() > max_response_body_size) {
+          [this, &transport](auto, http::response response, std::vector<std::byte> initial_body) -> void {
+            if (initial_body.size() > options_.max_response_body_size) {
               co_return {client_error::response_body_too_large, http::response{}};
             }
 
@@ -739,7 +642,7 @@ namespace aero::http {
 
             for (;;) {
               auto [read_ec, bytes] = co_await transport.async_read_some(return_as_deferred_tuple());
-              if (response_body_would_exceed_limit(response.body.size(), bytes.size(), max_response_body_size)) {
+              if (response_body_would_exceed_limit(response.body.size(), bytes.size(), options_.max_response_body_size)) {
                 co_return {client_error::response_body_too_large, http::response{}};
               }
 
@@ -759,19 +662,17 @@ namespace aero::http {
           select_transport_executor(transport)),
         bound_token,
         std::move(response),
-        std::move(initial_body),
-        max_response_body_size);
+        std::move(initial_body));
     }
 
     template <typename CompletionToken>
-    static auto async_read_chunked_body(transport_type& transport, http::response response, std::vector<std::byte> buffer,
-      std::size_t max_response_body_size, CompletionToken&& token) {
+    auto async_read_chunked_body(transport_type& transport, http::response response, std::vector<std::byte> buffer,
+      CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
         asio::co_composed<void(std::error_code, http::response)>(
-          [&transport](auto, http::response response, std::vector<std::byte> buffer, std::size_t max_response_body_size)
-            -> void {
+          [this, &transport](auto, http::response response, std::vector<std::byte> buffer) -> void {
             for (;;) {
               auto chunk_size_line_end = find_bytes(buffer, http::detail::crlf);
               if (chunk_size_line_end == std::string_view::npos) {
@@ -828,7 +729,7 @@ namespace aero::http {
                 co_return {std::error_code{}, std::move(response)};
               }
 
-              if (response_body_would_exceed_limit(response.body.size(), *chunk_size, max_response_body_size)) {
+              if (response_body_would_exceed_limit(response.body.size(), *chunk_size, options_.max_response_body_size)) {
                 co_return {client_error::response_body_too_large, http::response{}};
               }
 
@@ -858,12 +759,11 @@ namespace aero::http {
           select_transport_executor(transport)),
         bound_token,
         std::move(response),
-        std::move(buffer),
-        max_response_body_size);
+        std::move(buffer));
     }
 
     template <typename CompletionToken>
-    static auto async_append_exactly(transport_type& transport, std::vector<std::byte>& out, std::uint64_t bytes_to_read,
+    auto async_append_exactly(transport_type& transport, std::vector<std::byte>& out, std::uint64_t bytes_to_read,
       CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
 
@@ -891,8 +791,8 @@ namespace aero::http {
         bytes_to_read);
     }
 
-    [[nodiscard]] static std::expected<prepared_request, std::error_code> prepare_request(basic_client::endpoint endpoint,
-      http::request request, const client_options& options) {
+    [[nodiscard]] std::expected<prepared_request, std::error_code> prepare_request(basic_client::endpoint endpoint,
+      http::request request) {
       endpoint = sanitize_endpoint(std::move(endpoint));
       if (endpoint.host.empty()) {
         return std::unexpected(connection_error::endpoint_host_empty);
@@ -928,7 +828,7 @@ namespace aero::http {
       }
 
       apply_content_length_policy(request);
-      apply_connection_policy(request.headers, request.protocol, options.reuse_connections);
+      apply_connection_policy(request.headers, request.protocol, options_.reuse_connections);
 
       auto request_line = http::request_line{
         .method = request.method,
@@ -1198,7 +1098,7 @@ namespace aero::http {
     }
 
     [[nodiscard]] static bool request_method_is_idempotent(const http::request& request) {
-      auto request_line = http::request_line{
+      http::request_line request_line{
         .method = request.method,
         .target = "/",
         .version = http::version::http1_1,
@@ -1423,7 +1323,27 @@ namespace aero::http {
       return asio::as_tuple(asio::deferred);
     }
 
-    std::shared_ptr<state> state_;
+    [[nodiscard]] static connection_pool_type make_connection_pool(executor_type executor, const client_options& options) {
+      detail::pool_options pool_options{
+        .max_idle_connections_per_endpoint = options.max_idle_connections_per_endpoint,
+        .transport_buffer_size = options.transport_buffer_size,
+      };
+
+#ifdef AERO_USE_TLS
+      if constexpr (secure_transport) {
+        if (options.tls_context) {
+          return connection_pool_type{std::move(executor), *options.tls_context, pool_options};
+        }
+      }
+#endif
+
+      return connection_pool_type{std::move(executor), pool_options};
+    }
+
+    std::shared_ptr<aero::io_runtime> runtime_;
+    executor_type executor_;
+    client_options options_;
+    connection_pool_type connection_pool_;
   };
 
 } // namespace aero::http

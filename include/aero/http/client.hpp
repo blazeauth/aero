@@ -127,6 +127,23 @@ namespace aero::http {
     {
     }
 
+#ifdef AERO_USE_TLS
+    client(executor_type executor, asio::ssl::context& tls_context)
+      : tcp_client_(executor, client_options{}),
+        tls_client_(std::move(executor), client_options{.tls_context = std::ref(tls_context)}) {}
+
+    explicit client(asio::ssl::context& tls_context)
+      : runtime_(make_runtime()),
+        tcp_client_(runtime_->get_executor(), client_options{}),
+        tls_client_(runtime_->get_executor(), client_options{.tls_context = std::ref(tls_context)}) {}
+#endif
+
+    client(const client&) = delete;
+    client(client&&) = delete;
+    client& operator=(const client&) = delete;
+    client& operator=(client&&) = delete;
+    ~client() = default;
+
     template <typename CompletionToken>
     auto async_send(client::endpoint endpoint, http::request request, CompletionToken&& token) {
 #ifdef AERO_USE_TLS
