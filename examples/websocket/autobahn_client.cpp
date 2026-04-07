@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
   ::SetThreadUILanguage(MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US));
 #endif
 
-  aero::io_runtime runtime{aero::threads_count_t{1}, aero::wait_threads};
+  aero::io_runtime runtime{1, aero::wait_threads};
 
   auto result_ec = run_autobahn_client(runtime.get_executor(), base_url, agent);
   if (result_ec) {

@@ -17,6 +17,7 @@ Checks: >
     -bugprone-easily-swappable-parameters,
     -bugprone-unchecked-optional-access,
     -bugprone-suspicious-stringview-data-usage,
+    -bugprone-unhandled-exception-at-new,
     -cert-err58-cpp,
     -cppcoreguidelines-pro-bounds-pointer-arithmetic,
     -cppcoreguidelines-pro-type-reinterpret-cast,

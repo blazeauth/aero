@@ -181,7 +181,7 @@ int main() {
     set_english_error_messages();
   };
 
-  aero::io_runtime runtime(aero::threads_count_t{1}, on_thread_init, aero::wait_threads);
+  aero::io_runtime runtime(1, on_thread_init, aero::wait_threads);
 
   aero::tls::system_context tls_context{aero::tls::version::tlsv1_2};
   tls_context.disable_deprecated_versions();
