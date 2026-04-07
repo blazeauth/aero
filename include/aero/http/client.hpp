@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <expected>
 #include <future>
-#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -37,7 +36,6 @@
 #include "aero/http/response.hpp"
 #include "aero/http/uri.hpp"
 #include "aero/http/version.hpp"
-#include "aero/io_runtime.hpp"
 #include "aero/net/tcp_transport.hpp"
 #ifdef AERO_USE_TLS
 #include "aero/net/tls_transport.hpp"
@@ -97,21 +95,19 @@ namespace aero::http {
     };
 
     client()
-      : runtime_(make_runtime()),
-        tcp_client_(runtime_->get_executor(), client_options{})
+      : tcp_client_(aero::get_default_executor(), client_options{})
 #ifdef AERO_USE_TLS
         ,
-        tls_client_(runtime_->get_executor(), client_options{})
+        tls_client_(aero::get_default_executor(), client_options{})
 #endif
     {
     }
 
     explicit client(client_options options)
-      : runtime_(make_runtime()),
-        tcp_client_(runtime_->get_executor(), options)
+      : tcp_client_(aero::get_default_executor(), options)
 #ifdef AERO_USE_TLS
         ,
-        tls_client_(runtime_->get_executor(), options)
+        tls_client_(aero::get_default_executor(), options)
 #endif
     {
     }
@@ -133,9 +129,8 @@ namespace aero::http {
         tls_client_(std::move(executor), client_options{.tls_context = std::ref(tls_context)}) {}
 
     explicit client(asio::ssl::context& tls_context)
-      : runtime_(make_runtime()),
-        tcp_client_(runtime_->get_executor(), client_options{}),
-        tls_client_(runtime_->get_executor(), client_options{.tls_context = std::ref(tls_context)}) {}
+      : tcp_client_(aero::get_default_executor(), client_options{}),
+        tls_client_(aero::get_default_executor(), client_options{.tls_context = std::ref(tls_context)}) {}
 #endif
 
     client(const client&) = delete;
@@ -779,11 +774,6 @@ namespace aero::http {
       return {reinterpret_cast<const std::byte*>(text.data()), text.size()};
     }
 
-    [[nodiscard]] static std::shared_ptr<aero::io_runtime> make_runtime() {
-      return std::make_shared<aero::io_runtime>(threads_count_t{default_runtime_threads}, aero::wait_threads);
-    }
-
-    std::shared_ptr<aero::io_runtime> runtime_;
     tcp_client tcp_client_;
 #ifdef AERO_USE_TLS
     tls_client tls_client_;

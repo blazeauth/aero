@@ -4,7 +4,6 @@
 #include <chrono>
 #include <expected>
 #include <future>
-#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -28,12 +27,12 @@
 #include <asio/use_future.hpp>
 
 #include "aero/deadline.hpp"
+#include "aero/default_executor.hpp"
 #include "aero/detail/aligned_allocator.hpp"
 #include "aero/error.hpp"
 #include "aero/final_action.hpp"
 #include "aero/http/detail/common.hpp"
 #include "aero/http/headers.hpp"
-#include "aero/io_runtime.hpp"
 #include "aero/net/concepts/transport.hpp"
 #include "aero/websocket/client_handshaker.hpp"
 #include "aero/websocket/client_options.hpp"
@@ -59,20 +58,17 @@ namespace aero::websocket {
     using duration = std::chrono::steady_clock::duration;
     using executor_type = typename transport_type::executor_type;
 
-    basic_client()
-      : io_runtime_(std::make_unique<aero::io_runtime>(threads_count_t{1}, aero::wait_threads)),
-        transport_(io_runtime_->get_executor()) {}
+    basic_client(): transport_(aero::get_default_executor()) {}
 
     explicit basic_client(executor_type executor): transport_(executor) {}
     explicit basic_client(asio::strand<executor_type> strand): transport_(std::move(strand)) {}
 
     explicit basic_client(client_options options)
-      : io_runtime_(std::make_unique<aero::io_runtime>(threads_count_t{1}, aero::wait_threads)),
-        client_frame_builder_({
+      : client_frame_builder_({
           .validate_utf8 = options.validate_outcoming_utf8,
         }),
         client_handshaker_(options.client_handshaker),
-        transport_(io_runtime_->get_executor(), options.max_message_size + detail::max_frame_header_size) {}
+        transport_(aero::get_default_executor(), options.max_message_size + detail::max_frame_header_size) {}
 
     explicit basic_client(executor_type executor, client_options options)
       : client_frame_builder_({
@@ -90,17 +86,15 @@ namespace aero::websocket {
 
     template <typename... TransportArgs>
     explicit basic_client(std::in_place_type_t<transport_type>, TransportArgs&&... transport_args)
-      : io_runtime_(std::make_unique<aero::io_runtime>(threads_count_t{1})),
-        transport_(io_runtime_->get_executor(), std::forward<TransportArgs>(transport_args)...) {}
+      : transport_(aero::get_default_executor(), std::forward<TransportArgs>(transport_args)...) {}
 
     template <typename... TransportArgs>
     explicit basic_client(client_options options, std::in_place_type_t<transport_type>, TransportArgs&&... transport_args)
-      : io_runtime_(std::make_unique<aero::io_runtime>(threads_count_t{1})),
-        client_frame_builder_({
+      : client_frame_builder_({
           .validate_utf8 = options.validate_outcoming_utf8,
         }),
         client_handshaker_(options.client_handshaker),
-        transport_(io_runtime_->get_executor(), std::forward<TransportArgs>(transport_args)...,
+        transport_(aero::get_default_executor(), std::forward<TransportArgs>(transport_args)...,
           options.max_message_size + detail::max_frame_header_size) {}
 
     template <typename... TransportArgs>
@@ -1006,7 +1000,6 @@ namespace aero::websocket {
       }
     }
 
-    std::unique_ptr<aero::io_runtime> io_runtime_;
     websocket::detail::client_frame_builder<> client_frame_builder_;
     websocket::detail::message_assembler message_assembler_;
     websocket::client_handshaker client_handshaker_;
