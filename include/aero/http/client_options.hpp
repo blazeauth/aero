@@ -21,7 +21,7 @@ namespace aero::http {
     std::chrono::steady_clock::duration expect_continue_timeout{std::chrono::seconds{1}};
 
 #ifdef AERO_USE_TLS
-    asio::ssl::context* tls_context{nullptr};
+    std::optional<std::reference_wrapper<asio::ssl::context>> tls_context{std::nullopt};
 #endif
   };
 
