@@ -28,6 +28,9 @@ namespace {
   namespace http_test = test::http;
   using tcp = asio::ip::tcp;
 
+  constexpr inline auto local_request_timeout = 5s;
+  constexpr inline auto coordination_timeout = 5s;
+
   http::request make_request(std::string target) {
     return http::request{
       .method = http::method::get,
@@ -50,9 +53,23 @@ namespace {
     };
   }
 
+  http::client::endpoint make_local_endpoint(std::uint16_t port) {
+    return http::client::endpoint{
+      .host = "127.0.0.1",
+      .port = port,
+      .secure = false,
+    };
+  }
+
   void close_socket(tcp::socket& socket) {
     std::error_code ignored_error;
     std::ignore = socket.shutdown(tcp::socket::shutdown_both, ignored_error);
+    std::ignore = socket.close(ignored_error);
+  }
+
+  void abort_socket(tcp::socket& socket) {
+    std::error_code ignored_error;
+    std::ignore = socket.set_option(asio::socket_base::linger(true, 0), ignored_error);
     std::ignore = socket.close(ignored_error);
   }
 
@@ -70,10 +87,24 @@ namespace {
     }
   }
 
+  std::expected<http::response, std::error_code> send_with_timeout(http::client& client, std::string_view uri_text,
+    http::request request, std::chrono::steady_clock::duration timeout) {
+    try {
+      auto future = client.async_send(uri_text, std::move(request), asio::cancel_after(timeout, asio::use_future));
+      return future.get();
+    } catch (const std::system_error& system_error) {
+      return std::unexpected{system_error.code()};
+    } catch (const std::future_error& future_error) {
+      return std::unexpected{future_error.code()};
+    } catch (...) {
+      return std::unexpected{http::error::client_error::unexpected_failure};
+    }
+  }
+
   template <typename ReusedConnectionHandler, typename NewConnectionHandler>
   void wait_for_follow_up_request(http_test::tcp_acceptor& server, tcp::socket& first_socket, std::string& first_read_buffer,
     std::atomic<int>& accepted_connections, ReusedConnectionHandler&& handle_reused_connection,
-    NewConnectionHandler&& handle_new_connection, std::chrono::steady_clock::duration timeout = 5s) {
+    NewConnectionHandler&& handle_new_connection, std::chrono::steady_clock::duration timeout = coordination_timeout) {
     first_socket.non_blocking(true);
 
     std::optional<tcp::socket> second_socket;
@@ -97,6 +128,7 @@ namespace {
 
       if (second_socket.has_value()) {
         if (auto request = http_test::try_read_http_request_nonblocking(*second_socket, second_read_buffer)) {
+          first_socket.non_blocking(false);
           second_socket->non_blocking(false);
           std::forward<NewConnectionHandler>(handle_new_connection)(*second_socket, std::move(*request));
           return;
@@ -104,6 +136,10 @@ namespace {
       }
 
       if (deadline.expired()) {
+        first_socket.non_blocking(false);
+        if (second_socket.has_value()) {
+          second_socket->non_blocking(false);
+        }
         throw std::runtime_error{"timed out waiting for reused request or fallback connection"};
       }
 
@@ -125,15 +161,9 @@ TEST(HttpClient, DefaultClientCanSendRequestToEndpoint) {
 
   http::client client;
 
-  auto response = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/hello"));
+  auto response = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/hello"), local_request_timeout);
 
-  ASSERT_TRUE(response.has_value());
+  ASSERT_TRUE(response.has_value()) << response.error().message();
   EXPECT_EQ(response->status_code(), http::status_code::ok);
   EXPECT_EQ(response->text(), "hello");
 
@@ -174,17 +204,14 @@ TEST(HttpClient, UrlOverloadParsesTargetAndReusesConnection) {
 
   http::client client;
 
-  auto first = client.send("http://127.0.0.1:" + std::to_string(server.port()) + "/first?x=1", make_request({}));
-  auto second = send_with_timeout(client,
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/second"),
-    2s);
+  auto first = send_with_timeout(client,
+    "http://127.0.0.1:" + std::to_string(server.port()) + "/first?x=1",
+    make_request({}),
+    local_request_timeout);
 
-  ASSERT_TRUE(first.has_value());
+  auto second = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/second"), local_request_timeout);
+
+  ASSERT_TRUE(first.has_value()) << first.error().message();
   ASSERT_TRUE(second.has_value()) << second.error().message();
   EXPECT_EQ(first->text(), "one");
   EXPECT_EQ(second->text(), "two");
@@ -209,15 +236,9 @@ TEST(HttpClient, EndpointOverloadNormalizesEmptyTargetToSlash) {
   }};
 
   http::client client;
-  auto response = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request(""));
+  auto response = send_with_timeout(client, make_local_endpoint(server.port()), make_request(""), local_request_timeout);
 
-  ASSERT_TRUE(response.has_value());
+  ASSERT_TRUE(response.has_value()) << response.error().message();
   EXPECT_EQ(response->text(), "ok");
 
   server.join();
@@ -237,15 +258,9 @@ TEST(HttpClient, EndpointOverloadNormalizesQueryOnlyTarget) {
   }};
 
   http::client client;
-  auto response = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("?page=1"));
+  auto response = send_with_timeout(client, make_local_endpoint(server.port()), make_request("?page=1"), local_request_timeout);
 
-  ASSERT_TRUE(response.has_value());
+  ASSERT_TRUE(response.has_value()) << response.error().message();
   EXPECT_EQ(response->text(), "ok");
 
   server.join();
@@ -265,15 +280,12 @@ TEST(HttpClient, SendsRequestBodyAndCorrectContentLength) {
   }};
 
   http::client client;
-  auto response = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request(http::method::post, "/submit", "hello=world"));
+  auto response = send_with_timeout(client,
+    make_local_endpoint(server.port()),
+    make_request(http::method::post, "/submit", "hello=world"),
+    local_request_timeout);
 
-  ASSERT_TRUE(response.has_value());
+  ASSERT_TRUE(response.has_value()) << response.error().message();
   EXPECT_EQ(response->text(), "created");
 
   server.join();
@@ -298,15 +310,9 @@ TEST(HttpClient, PreservesUserProvidedHostHeader) {
   request.headers.add("Host", "example.test");
 
   http::client client;
-  auto response = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    std::move(request));
+  auto response = send_with_timeout(client, make_local_endpoint(server.port()), std::move(request), local_request_timeout);
 
-  ASSERT_TRUE(response.has_value());
+  ASSERT_TRUE(response.has_value()) << response.error().message();
   EXPECT_EQ(response->text(), "ok");
 
   server.join();
@@ -335,15 +341,10 @@ TEST(HttpClient, ReadsChunkedResponseWithExtensions) {
   }};
 
   http::client client;
-  auto response = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/chunked"));
+  auto response =
+    send_with_timeout(client, make_local_endpoint(server.port()), make_request("/chunked"), local_request_timeout);
 
-  ASSERT_TRUE(response.has_value());
+  ASSERT_TRUE(response.has_value()) << response.error().message();
   EXPECT_EQ(response->status_code(), http::status_code::ok);
   EXPECT_EQ(response->text(), "hello world");
 
@@ -378,23 +379,8 @@ TEST(HttpClient, ReadsCloseDelimitedResponseAndDoesNotReuseConnection) {
 
   http::client client;
 
-  auto first = send_with_timeout(client,
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/first"),
-    2s);
-
-  auto second = send_with_timeout(client,
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/second"),
-    2s);
+  auto first = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/first"), local_request_timeout);
+  auto second = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/second"), local_request_timeout);
 
   ASSERT_TRUE(first.has_value()) << first.error().message();
   ASSERT_TRUE(second.has_value()) << second.error().message();
@@ -437,23 +423,8 @@ TEST(HttpClient, ReadsHttp11NonChunkedTransferEncodingAsCloseDelimitedAndDoesNot
 
   http::client client;
 
-  auto first = send_with_timeout(client,
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/first"),
-    2s);
-
-  auto second = send_with_timeout(client,
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/second"),
-    2s);
+  auto first = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/first"), local_request_timeout);
+  auto second = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/second"), local_request_timeout);
 
   ASSERT_TRUE(first.has_value()) << first.error().message();
   ASSERT_TRUE(second.has_value()) << second.error().message();
@@ -479,13 +450,10 @@ TEST(HttpClient, RejectsInvalidHttp11TransferEncodingFraming) {
   }};
 
   http::client client;
-  auto response = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/invalid-transfer-encoding"));
+  auto response = send_with_timeout(client,
+    make_local_endpoint(server.port()),
+    make_request("/invalid-transfer-encoding"),
+    local_request_timeout);
 
   ASSERT_FALSE(response.has_value());
   EXPECT_EQ(response.error(), http::error::client_error::response_encoding_unsupported);
@@ -509,13 +477,10 @@ TEST(HttpClient, RejectsHttp10ResponseWithTransferEncoding) {
   }};
 
   http::client client;
-  auto response = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/http10-transfer-encoding"));
+  auto response = send_with_timeout(client,
+    make_local_endpoint(server.port()),
+    make_request("/http10-transfer-encoding"),
+    local_request_timeout);
 
   ASSERT_FALSE(response.has_value());
   EXPECT_EQ(response.error(), http::error::client_error::response_encoding_unsupported);
@@ -551,24 +516,11 @@ TEST(HttpClient, DoesNotReuseConnectionWhenReuseConnectionsDisabled) {
 
   http::client client{http::client_options{.reuse_connections = false}};
 
-  auto first = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/first"));
+  auto first = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/first"), local_request_timeout);
+  auto second = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/second"), local_request_timeout);
 
-  auto second = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/second"));
-
-  ASSERT_TRUE(first.has_value());
-  ASSERT_TRUE(second.has_value());
+  ASSERT_TRUE(first.has_value()) << first.error().message();
+  ASSERT_TRUE(second.has_value()) << second.error().message();
   EXPECT_EQ(first->text(), "one");
   EXPECT_EQ(second->text(), "two");
 
@@ -606,24 +558,11 @@ TEST(HttpClient, DoesNotReuseConnectionWhenResponseSaysConnectionClose) {
 
   http::client client;
 
-  auto first = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/first"));
+  auto first = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/first"), local_request_timeout);
+  auto second = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/second"), local_request_timeout);
 
-  auto second = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/second"));
-
-  ASSERT_TRUE(first.has_value());
-  ASSERT_TRUE(second.has_value());
+  ASSERT_TRUE(first.has_value()) << first.error().message();
+  ASSERT_TRUE(second.has_value()) << second.error().message();
   EXPECT_EQ(first->text(), "one");
   EXPECT_EQ(second->text(), "two");
 
@@ -662,23 +601,9 @@ TEST(HttpClient, ReusesConnectionAfterNoContentResponse) {
 
   http::client client;
 
-  auto first = send_with_timeout(client,
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/empty"),
-    2s);
-
-  auto second = send_with_timeout(client,
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/after-empty"),
-    2s);
+  auto first = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/empty"), local_request_timeout);
+  auto second =
+    send_with_timeout(client, make_local_endpoint(server.port()), make_request("/after-empty"), local_request_timeout);
 
   ASSERT_TRUE(first.has_value()) << first.error().message();
   ASSERT_TRUE(second.has_value()) << second.error().message();
@@ -724,23 +649,9 @@ TEST(HttpClient, ReusesConnectionAfterResetContentResponse) {
 
   http::client client;
 
-  auto first = send_with_timeout(client,
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/reset"),
-    2s);
-
-  auto second = send_with_timeout(client,
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/after-reset"),
-    2s);
+  auto first = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/reset"), local_request_timeout);
+  auto second =
+    send_with_timeout(client, make_local_endpoint(server.port()), make_request("/after-reset"), local_request_timeout);
 
   ASSERT_TRUE(first.has_value()) << first.error().message();
   ASSERT_TRUE(second.has_value()) << second.error().message();
@@ -802,23 +713,8 @@ TEST(HttpClient, ReadsFinalResponseAfterInterimResponseAndReusesConnection) {
 
   http::client client;
 
-  auto first = send_with_timeout(client,
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/first"),
-    2s);
-
-  auto second = send_with_timeout(client,
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/second"),
-    2s);
+  auto first = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/first"), local_request_timeout);
+  auto second = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/second"), local_request_timeout);
 
   ASSERT_TRUE(first.has_value()) << first.error().message();
   ASSERT_TRUE(second.has_value()) << second.error().message();
@@ -859,15 +755,9 @@ TEST(HttpClient, WaitsForContinueBeforeSendingRequestBodyWhenServerRespondsImmed
   request.headers.add("Expect", "100-continue");
 
   http::client client;
-  auto response = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    std::move(request));
+  auto response = send_with_timeout(client, make_local_endpoint(server.port()), std::move(request), local_request_timeout);
 
-  ASSERT_TRUE(response.has_value());
+  ASSERT_TRUE(response.has_value()) << response.error().message();
   EXPECT_EQ(response->status_code(), http::status_code::ok);
   EXPECT_EQ(response->text(), "ok");
 
@@ -904,15 +794,9 @@ TEST(HttpClient, DoesNotSendRequestBodyAfterFinalResponseToExpectContinue) {
   request.headers.add("Expect", "100-continue");
 
   http::client client;
-  auto response = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    std::move(request));
+  auto response = send_with_timeout(client, make_local_endpoint(server.port()), std::move(request), local_request_timeout);
 
-  ASSERT_TRUE(response.has_value());
+  ASSERT_TRUE(response.has_value()) << response.error().message();
   EXPECT_EQ(std::to_underlying(response->status_code()), 413);
   EXPECT_TRUE(response->body.empty());
 
@@ -928,47 +812,49 @@ TEST(HttpClient, RetriesIdempotentRequestAfterStalePersistentConnectionCloses) {
   std::atomic<int> accepted_connections{0};
   std::vector<std::string> raw_requests;
 
+  std::promise<void> may_abort_first_connection_promise;
+  auto may_abort_first_connection = may_abort_first_connection_promise.get_future();
+
+  std::promise<void> first_connection_aborted_promise;
+  auto first_connection_aborted = first_connection_aborted_promise.get_future();
+
   http_test::tcp_acceptor server{[&](http_test::tcp_acceptor& server) {
-    {
-      auto socket = server.accept();
-      accepted_connections.fetch_add(1, std::memory_order_relaxed);
+    auto first_socket = server.accept();
+    accepted_connections.fetch_add(1, std::memory_order_relaxed);
 
-      std::string read_buffer;
-      raw_requests.push_back(http_test::read_http_request(socket, read_buffer));
-      http_test::write_http_response(socket, "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nfirst");
+    std::string first_read_buffer;
+    raw_requests.push_back(http_test::read_http_request(first_socket, first_read_buffer));
+    http_test::write_http_response(first_socket, "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nfirst");
+
+    if (may_abort_first_connection.wait_for(coordination_timeout) != std::future_status::ready) {
+      throw std::runtime_error{"timed out waiting for permission to abort first persistent connection"};
     }
 
-    {
-      auto socket = server.accept();
-      accepted_connections.fetch_add(1, std::memory_order_relaxed);
+    abort_socket(first_socket);
+    first_connection_aborted_promise.set_value();
 
-      std::string read_buffer;
-      raw_requests.push_back(http_test::read_http_request(socket, read_buffer));
-      http_test::write_http_response(socket, "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecond");
-    }
+    auto second_socket = server.accept();
+    accepted_connections.fetch_add(1, std::memory_order_relaxed);
+
+    std::string second_read_buffer;
+    raw_requests.push_back(http_test::read_http_request(second_socket, second_read_buffer));
+    http_test::write_http_response(second_socket, "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecond");
   }};
 
   http::client client;
 
-  auto first = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/first"));
+  auto first = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/first"), local_request_timeout);
 
-  auto second = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    make_request("/second"));
-
-  ASSERT_TRUE(first.has_value());
-  ASSERT_TRUE(second.has_value());
+  ASSERT_TRUE(first.has_value()) << first.error().message();
   EXPECT_EQ(first->text(), "first");
+
+  may_abort_first_connection_promise.set_value();
+
+  ASSERT_EQ(first_connection_aborted.wait_for(coordination_timeout), std::future_status::ready);
+
+  auto second = send_with_timeout(client, make_local_endpoint(server.port()), make_request("/second"), local_request_timeout);
+
+  ASSERT_TRUE(second.has_value()) << second.error().message();
   EXPECT_EQ(second->text(), "second");
 
   server.join();
@@ -1019,15 +905,9 @@ TEST(HttpClient, Http10RequestWithExpectContinueSendsBodyWithoutWaitingForInteri
   request.headers.add("Expect", "100-continue");
 
   http::client client;
-  auto response = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    std::move(request));
+  auto response = send_with_timeout(client, make_local_endpoint(server.port()), std::move(request), local_request_timeout);
 
-  ASSERT_TRUE(response.has_value());
+  ASSERT_TRUE(response.has_value()) << response.error().message();
   EXPECT_EQ(response->status_code(), http::status_code::ok);
   EXPECT_EQ(response->text(), "ok");
 
@@ -1054,13 +934,7 @@ TEST(HttpClient, ConnectUsesAuthorityFormAndRejectsSuccessfulTunnelResponse) {
   auto request = make_request(http::method::connect, "example.com:443");
 
   http::client client;
-  auto response = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    std::move(request));
+  auto response = send_with_timeout(client, make_local_endpoint(server.port()), std::move(request), local_request_timeout);
 
   ASSERT_FALSE(response.has_value());
   EXPECT_EQ(response.error(), http::error::client_error::connect_tunnel_unsupported);
@@ -1090,15 +964,9 @@ TEST(HttpClient, PreservesAbsoluteFormRequestTargetForProxyStyleRequest) {
   auto request = make_request("http://example.com:8080/proxy/path?x=1");
 
   http::client client;
-  auto response = client.send(
-    http::client::endpoint{
-      .host = "127.0.0.1",
-      .port = server.port(),
-      .secure = false,
-    },
-    std::move(request));
+  auto response = send_with_timeout(client, make_local_endpoint(server.port()), std::move(request), local_request_timeout);
 
-  ASSERT_TRUE(response.has_value());
+  ASSERT_TRUE(response.has_value()) << response.error().message();
   EXPECT_EQ(response->text(), "ok");
 
   server.join();

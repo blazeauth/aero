@@ -17,8 +17,6 @@
 
 namespace aero {
 
-  using threads_count_t = std::size_t;
-
   class io_runtime {
     using wait_threads_tag = aero::detail::wait_threads_tag;
 
@@ -42,40 +40,40 @@ namespace aero {
     explicit io_runtime(thread_init_callback init_callback, exception_callback exception_callback, wait_threads_tag)
       : io_runtime(1, std::move(init_callback), std::move(exception_callback), aero::wait_threads) {}
 
-    explicit io_runtime(threads_count_t num_threads): work_guard_(asio::make_work_guard(io_context_)) {
+    explicit io_runtime(std::size_t num_threads): work_guard_(asio::make_work_guard(io_context_)) {
       run_threads(num_threads, {});
     }
 
-    explicit io_runtime(threads_count_t num_threads, wait_threads_tag): work_guard_(asio::make_work_guard(io_context_)) {
+    explicit io_runtime(std::size_t num_threads, wait_threads_tag): work_guard_(asio::make_work_guard(io_context_)) {
       run_threads(num_threads, {}, aero::wait_threads);
     }
 
-    explicit io_runtime(threads_count_t num_threads, thread_init_callback init_callback)
+    explicit io_runtime(std::size_t num_threads, thread_init_callback init_callback)
       : work_guard_(asio::make_work_guard(io_context_)) {
       run_threads(num_threads, std::move(init_callback));
     }
 
-    explicit io_runtime(threads_count_t num_threads, thread_init_callback init_callback, wait_threads_tag)
+    explicit io_runtime(std::size_t num_threads, thread_init_callback init_callback, wait_threads_tag)
       : work_guard_(asio::make_work_guard(io_context_)) {
       run_threads(num_threads, std::move(init_callback), aero::wait_threads);
     }
 
-    explicit io_runtime(threads_count_t num_threads, exception_callback exception_callback)
+    explicit io_runtime(std::size_t num_threads, exception_callback exception_callback)
       : work_guard_(asio::make_work_guard(io_context_)), exception_callback_(std::move(exception_callback)) {
       run_threads(num_threads, {});
     }
 
-    explicit io_runtime(threads_count_t num_threads, exception_callback exception_callback, wait_threads_tag)
+    explicit io_runtime(std::size_t num_threads, exception_callback exception_callback, wait_threads_tag)
       : work_guard_(asio::make_work_guard(io_context_)), exception_callback_(std::move(exception_callback)) {
       run_threads(num_threads, {}, aero::wait_threads);
     }
 
-    explicit io_runtime(threads_count_t num_threads, thread_init_callback init_callback, exception_callback exception_callback)
+    explicit io_runtime(std::size_t num_threads, thread_init_callback init_callback, exception_callback exception_callback)
       : work_guard_(asio::make_work_guard(io_context_)), exception_callback_(std::move(exception_callback)) {
       run_threads(num_threads, std::move(init_callback));
     }
 
-    explicit io_runtime(threads_count_t num_threads, thread_init_callback init_callback, exception_callback exception_callback,
+    explicit io_runtime(std::size_t num_threads, thread_init_callback init_callback, exception_callback exception_callback,
       wait_threads_tag)
       : work_guard_(asio::make_work_guard(io_context_)), exception_callback_(std::move(exception_callback)) {
       run_threads(num_threads, std::move(init_callback), aero::wait_threads);
@@ -144,10 +142,10 @@ namespace aero {
     }
 
    private:
-    void run_threads(threads_count_t num_threads, thread_init_callback init_callback) {
+    void run_threads(std::size_t num_threads, thread_init_callback init_callback) {
       threads_.reserve(threads_.size() + num_threads);
 
-      for (threads_count_t i{}; i < num_threads; i++) {
+      for (std::size_t i{}; i < num_threads; i++) {
         threads_.emplace_back([this, init_callback] {
           invoke_nothrow_init_callback(init_callback);
           thread_loop();
@@ -155,11 +153,11 @@ namespace aero {
       }
     }
 
-    void run_threads(threads_count_t num_threads, thread_init_callback init_callback, wait_threads_tag) {
+    void run_threads(std::size_t num_threads, thread_init_callback init_callback, wait_threads_tag) {
       std::latch latch{static_cast<std::ptrdiff_t>(num_threads)};
       threads_.reserve(threads_.size() + num_threads);
 
-      for (threads_count_t i{}; i < num_threads; i++) {
+      for (std::size_t i{}; i < num_threads; i++) {
         threads_.emplace_back([this, &latch, init_callback] {
           invoke_nothrow_init_callback(init_callback);
           latch.count_down();

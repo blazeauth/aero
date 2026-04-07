@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <expected>
 #include <future>
-#include <memory>
 #include <ranges>
 #include <span>
 #include <string>
@@ -33,6 +32,7 @@
 #include <asio/system_executor.hpp>
 #include <asio/use_future.hpp>
 
+#include "aero/default_executor.hpp"
 #include "aero/detail/aligned_allocator.hpp"
 #include "aero/detail/string.hpp"
 #include "aero/error.hpp"
@@ -48,7 +48,6 @@
 #include "aero/http/status_line.hpp"
 #include "aero/http/uri.hpp"
 #include "aero/http/version.hpp"
-#include "aero/io_runtime.hpp"
 #include "aero/net/concepts/transport.hpp"
 
 namespace aero::http {
@@ -119,14 +118,10 @@ namespace aero::http {
 
    public:
     basic_client()
-      : runtime_(make_runtime()),
-        executor_(runtime_->get_executor()),
-        options_(),
-        connection_pool_(make_connection_pool(executor_, options_)) {}
+      : executor_(aero::get_default_executor()), options_(), connection_pool_(make_connection_pool(executor_, options_)) {}
 
     explicit basic_client(client_options options)
-      : runtime_(make_runtime()),
-        executor_(runtime_->get_executor()),
+      : executor_(aero::get_default_executor()),
         options_(options),
         connection_pool_(make_connection_pool(executor_, options_)) {}
 
@@ -1315,10 +1310,6 @@ namespace aero::http {
       return to_string_view(buffer).find(pattern);
     }
 
-    [[nodiscard]] static std::shared_ptr<aero::io_runtime> make_runtime() {
-      return std::make_shared<aero::io_runtime>(threads_count_t{default_runtime_threads}, aero::wait_threads);
-    }
-
     [[nodiscard]] static asio::as_tuple_t<asio::deferred_t> return_as_deferred_tuple() {
       return asio::as_tuple(asio::deferred);
     }
@@ -1340,7 +1331,6 @@ namespace aero::http {
       return connection_pool_type{std::move(executor), pool_options};
     }
 
-    std::shared_ptr<aero::io_runtime> runtime_;
     executor_type executor_;
     client_options options_;
     connection_pool_type connection_pool_;

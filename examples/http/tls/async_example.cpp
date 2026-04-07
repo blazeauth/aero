@@ -10,7 +10,7 @@ namespace http = aero::http;
 namespace tls = aero::tls;
 
 int main() {
-  aero::io_runtime io_runtime{aero::threads_count_t{1}};
+  aero::io_runtime io_runtime{1};
 
   tls::system_context tls_context{tls::version::tlsv1_3};
   tls_context.disable_deprecated_versions();

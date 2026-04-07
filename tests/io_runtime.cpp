@@ -23,7 +23,7 @@ TEST(IoRuntime, SpawnsNumThreadsGivenInConstructor) {
     }
   };
 
-  io_runtime runtime(aero::threads_count_t{4}, on_thread_init, aero::wait_threads);
+  io_runtime runtime(4, on_thread_init, aero::wait_threads);
 
   EXPECT_EQ(runtime.threads_count(), thread_ids.size());
 }
