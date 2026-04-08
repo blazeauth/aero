@@ -526,6 +526,12 @@ That means you can use the style that already fits your codebase:
 - `asio::use_awaitable`
 - other compatible completion token patterns
 
+#### Synchronous API behavior
+
+> [!IMPORTANT]
+>
+> Any synchronous function is implemented using `std::future` from an asynchronous function. If you try to call a synchronous function on the same thread on which the executor passed to the client is running, you will get the `aero::basic_error::deadlock_would_occur` error.
+
 ## TLS support
 
 TLS is optional.
@@ -555,18 +561,6 @@ If you pass data into operations such as:
 - close reason strings for async close paths
 
 that data must stay alive until the completion handler is called.
-
-### Synchronous API behavior
-
-The synchronous API is implemented as a convenience layer on top of the asynchronous operations using `std::future`.
-
-Because of that, you must not call a blocking synchronous Aero operation from the same thread that is responsible for progressing the executor work needed to complete that operation.
-
-If that situation is detected, Aero reports:
-
-```cpp
-aero::basic_error::deadlock_would_occur
-```
 
 ## WebSocket interface
 
@@ -677,7 +671,7 @@ struct message {
 };
 ```
 
-## Asynchronous API
+### Asynchronous API
 Any asynchronous operation accepts a completion token from the asio world. This means you can use many different tokens from asio for any operation, and you are not limited to any form of asynchrony. Example of using completion tokens from asio:
 ```cpp
 using namespace std::chrono_literals;
@@ -714,12 +708,7 @@ auto completion_future = client.async_connect("ws://example.com/", asio::use_fut
 >
 > Aero implements a non-copying API, which means that the caller must ensure that the buffer passed to `async_send_text(text)`, `async_send_binary(data)`, `async_ping(data)`, `async_pong(data)`, `async_close(..., close_reason)` remains valid until the operation is complete.
 
-## Synchronous API
-> [!IMPORTANT]
->
-> Any synchronous function is implemented using `std::future` from an asynchronous function. If you try to call a synchronous function on the same thread on which the executor passed to the client is running, you will get the `aero::basic_error::deadlock_would_occur` error.
-
-## Threadsafety
+### Threadsafety
 Please note that all references to functions apply to both synchronous and asynchronous variants. For example, if `async_connect` is mentioned, this implies all overloads of this function and its synchronous variant `connect`.
 
 |Operation|Contract|
