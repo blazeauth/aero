@@ -98,10 +98,6 @@ namespace aero::websocket {
       }
       return text().substr(sizeof(websocket::close_code));
     }
-
-    [[nodiscard]] std::string_view kind_string() const noexcept {
-      return websocket::to_string(kind);
-    }
   };
 
 } // namespace aero::websocket

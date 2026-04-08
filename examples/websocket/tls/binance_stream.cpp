@@ -5,6 +5,7 @@
 #include "aero/tls/system_context.hpp"
 #include "aero/tls/version.hpp"
 #include "aero/websocket/close_code.hpp"
+#include "aero/websocket/message.hpp"
 #include "aero/websocket/tls/client.hpp"
 
 namespace websocket = aero::websocket;
@@ -26,6 +27,8 @@ void print_headers(const http::headers& headers) {
 int main() {
   using namespace std::chrono_literals;
 
+  // System context simply wraps asio::ssl::context and implements
+  // AIA fetching for Win32, otherwise sets default verify paths
   tls::system_context tls_ctx{tls::version::tlsv1_2};
   tls_ctx.disable_deprecated_versions();
 
@@ -58,7 +61,7 @@ int main() {
     }
 
     if (!message->is_text()) {
-      std::println("Received non-text message type ({}), skipping", message->kind_string());
+      std::println("Received non-text message type ({}), skipping", message->kind);
       continue;
     }
 

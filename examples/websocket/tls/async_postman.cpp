@@ -3,6 +3,10 @@
 #include <print>
 #include <system_error>
 
+#include <asio/awaitable.hpp>
+#include <asio/use_awaitable.hpp>
+#include <asio/use_future.hpp>
+
 #include "aero/http/headers.hpp"
 #include "aero/io_runtime.hpp"
 #include "aero/tls/initialize.hpp"
@@ -11,10 +15,6 @@
 #include "aero/wait_threads.hpp"
 #include "aero/websocket/close_code.hpp"
 #include "aero/websocket/tls/client.hpp"
-
-#include <asio/awaitable.hpp>
-#include <asio/use_awaitable.hpp>
-#include <asio/use_future.hpp>
 
 using namespace std::chrono_literals;
 namespace websocket = aero::websocket;
@@ -29,12 +29,6 @@ void print_headers(const aero::http::headers& headers) {
     std::println("{}: {}", name, value);
   }
   std::println("[HEADERS] Done");
-}
-
-void set_english_error_messages() {
-#if _WIN32
-  ::SetThreadUILanguage(MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US));
-#endif
 }
 
 asio::awaitable<std::error_code> async_run_echo_client(websocket::tls::client& client) {
@@ -57,7 +51,7 @@ asio::awaitable<std::error_code> async_run_echo_client(websocket::tls::client& c
     co_return read_ec;
   }
 
-  std::println("Received message from postman echo server. Kind: {}. Text: {}", message.kind_string(), message.text());
+  std::println("Received message from postman echo server. Kind: {}. Text: {}", message.kind, message.text());
 
   auto [close_ec] = co_await client.async_close(websocket::close_code::normal, asio::as_tuple(asio::use_awaitable));
   if (close_ec) {
@@ -72,15 +66,10 @@ asio::awaitable<std::error_code> async_run_echo_client(websocket::tls::client& c
 }
 
 int main() {
-  set_english_error_messages();
-
+  // If using wolfSSL, this step is required
   aero::tls::initialize_library();
 
-  auto on_thread_init = [](std::thread::id) {
-    set_english_error_messages();
-  };
-
-  aero::io_runtime runtime(1, on_thread_init, aero::wait_threads);
+  aero::io_runtime runtime(1, aero::wait_threads);
 
   aero::tls::system_context tls_context{aero::tls::version::tlsv1_2};
   tls_context.disable_deprecated_versions();

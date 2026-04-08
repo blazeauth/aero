@@ -31,7 +31,7 @@ void print_message(const websocket::message& message) {
       message.close_reason().value_or("no reason"));
     break;
   default:
-    std::println("Received message of kind {}", message.kind_string());
+    std::println("Received message of kind {}", message.kind);
   }
 }
 
