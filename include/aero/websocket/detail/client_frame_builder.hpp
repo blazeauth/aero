@@ -14,12 +14,12 @@
 #include <random>
 #endif
 
-#include "aero/detail/utf8.hpp"
 #include "aero/websocket/close_code.hpp"
 #include "aero/websocket/concepts/masking_key_source.hpp"
 #include "aero/websocket/detail/frame.hpp"
 #include "aero/websocket/detail/frame_encoder.hpp"
 #include "aero/websocket/detail/opcode.hpp"
+#include "aero/websocket/detail/utf8_validator.hpp"
 #include "aero/websocket/error.hpp"
 
 namespace aero::websocket::detail {
@@ -172,7 +172,7 @@ namespace aero::websocket::detail {
       if (!validate_utf8_) {
         return true;
       }
-      return aero::detail::is_valid_utf8(content);
+      return websocket::detail::is_valid_utf8(content);
     }
 
     frame_encoder frame_encoder_{};

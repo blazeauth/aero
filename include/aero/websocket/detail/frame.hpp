@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <optional>
 #include <span>
 #include <system_error>
@@ -28,12 +27,13 @@ namespace aero::websocket::detail {
     std::unreachable();
   }
 
-  [[maybe_unused]] constexpr inline auto max_frame_header_size = 14ZU;
-
   using masking_key = concepts::masking_key;
 
   class frame {
    public:
+    constexpr static std::size_t min_header_size = 2;
+    constexpr static std::size_t max_header_size = 14;
+
     // FIN: 1 bit
     bool fin{false};
     // RSV1, RSV2, RSV3: 1 bit each

@@ -7,3 +7,4 @@ Checks: >
   -cppcoreguidelines-avoid-non-const-global-variables,
   -bugprone-use-after-move,
   -hicpp-invalid-access-moved,
+  -modernize-use-designated-initializers,

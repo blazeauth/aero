@@ -18,7 +18,7 @@ namespace aero::websocket::detail {
   template <websocket::detail::role ReceiverRole>
   class frame_decoder {
    public:
-    [[nodiscard]] std::expected<frame, std::error_code> decode(std::span<const std::byte> buf) {
+    [[nodiscard]] std::expected<frame, std::error_code> decode_header(std::span<const std::byte> buf) const {
       using aero::websocket::error::protocol_error;
 
       if (buf.size() < 2) {
@@ -34,15 +34,15 @@ namespace aero::websocket::detail {
       }
 
       std::tie(frame.masked, frame.payload_length) = parse_mask_and_payload_length(buf[1]);
-      if (buf.size() < frame.header_size()) {
-        return std::unexpected(protocol_error::buffer_truncated);
-      }
-      if (frame.masked && receiver_role_ == role::client) {
+      if (frame.masked && ReceiverRole == role::client) {
         return std::unexpected(protocol_error::masked_frame_from_server);
       }
 
       const auto payload_length_offset = frame.payload_length_offset();
       if (frame.payload_length == 126) {
+        if (buf.size() < payload_length_offset + 2U) {
+          return std::unexpected(protocol_error::buffer_truncated);
+        }
         auto payload_length = aero::detail::read_big_endian<uint16_t>(buf.subspan(payload_length_offset).first<2>());
         if (payload_length <= 125) {
           // Protocol violation, no extended length should've been passed
@@ -50,6 +50,9 @@ namespace aero::websocket::detail {
         }
         frame.payload_length = payload_length;
       } else if (frame.payload_length == 127) {
+        if (buf.size() < payload_length_offset + 8U) {
+          return std::unexpected(protocol_error::buffer_truncated);
+        }
         auto payload_length = aero::detail::read_big_endian<uint64_t>(buf.subspan(payload_length_offset).first<8>());
         if (payload_length <= 65535) {
           // Protocol violation, payload_length should've been < 127
@@ -66,20 +69,24 @@ namespace aero::websocket::detail {
 
       if (frame.masked) {
         if (buf.size() < header_size) {
-          return std::unexpected(protocol_error::masking_key_missing);
+          return std::unexpected(protocol_error::buffer_truncated);
         }
         frame.masking_key = read_masking_key(buf.subspan(frame.masking_key_offset()).first<4>());
       }
 
-      if (buf.size() < header_size + frame.payload_length) {
-        return std::unexpected(protocol_error::buffer_truncated);
+      if (frame.rsv1 || frame.rsv2 || frame.rsv3) [[unlikely]] {
+        return std::unexpected(protocol_error::reserved_bits_nonzero);
       }
-
-      frame.payload_data = buf.subspan(header_size, frame.payload_length);
-      frame.application_data = frame.payload_data;
-
-      if (auto ec = frame.validate(); ec) {
-        return std::unexpected(ec);
+      if (frame.is_control()) {
+        if (!frame.fin) [[unlikely]] {
+          return std::unexpected(protocol_error::control_frame_fragmented);
+        }
+        if (frame.payload_length > 125) [[unlikely]] {
+          return std::unexpected(protocol_error::control_frame_payload_too_big);
+        }
+      }
+      if (frame.is_close() && frame.payload_length == 1U) {
+        return std::unexpected(protocol_error::close_frame_payload_too_small);
       }
 
       return frame;
@@ -130,8 +137,6 @@ namespace aero::websocket::detail {
     [[nodiscard]] std::array<std::byte, 4> read_masking_key(std::span<const std::byte, 4> bytes) const noexcept {
       return {bytes[0], bytes[1], bytes[2], bytes[3]};
     }
-
-    websocket::detail::role receiver_role_{ReceiverRole};
   };
 
 } // namespace aero::websocket::detail

@@ -47,21 +47,23 @@ namespace {
   }
 
   template <typename Decoder>
-  void expect_decodes_to(std::span<const std::byte> bytes, const frame& expected) {
-    auto decoded = Decoder{}.decode(bytes);
+  void expect_header_decodes_to(std::span<const std::byte> bytes, const frame& expected) {
+    auto decoded = Decoder{}.decode_header(bytes);
     ASSERT_TRUE(decoded);
     EXPECT_TRUE(frame_headers_equal(expected, decoded.value()));
+    EXPECT_TRUE(decoded->payload_data.empty());
+    EXPECT_TRUE(decoded->application_data.empty());
   }
 
   template <typename Decoder>
   void expect_rejected(std::span<const std::byte> bytes) {
-    auto decoded = Decoder{}.decode(bytes);
+    auto decoded = Decoder{}.decode_header(bytes);
     EXPECT_FALSE(decoded);
   }
 
   template <typename Decoder, typename ErrorEnum>
   void expect_rejected_with(std::span<const std::byte> bytes, ErrorEnum expected_error) {
-    auto decoded = Decoder{}.decode(bytes);
+    auto decoded = Decoder{}.decode_header(bytes);
     ASSERT_FALSE(decoded);
     EXPECT_EQ(decoded.error(), expected_error);
   }
@@ -101,7 +103,7 @@ TEST_P(WebsocketFrameDecoderUnmaskedLengths, DecodesUnmaskedFrames) {
   auto payload = make_payload_bytes(static_cast<std::size_t>(payload_length));
   auto bytes =
     build_frame_bytes_canonical(true, false, false, false, opcode_text_value, false, payload_length, std::nullopt, payload);
-  expect_decodes_to<client_frame_decoder>(bytes, expected_text_frame_unmasked(payload_length));
+  expect_header_decodes_to<client_frame_decoder>(bytes, expected_text_frame_unmasked(payload_length));
 }
 
 INSTANTIATE_TEST_SUITE_P(BoundaryAndTypical, WebsocketFrameDecoderUnmaskedLengths,
@@ -113,7 +115,7 @@ TEST_P(WebsocketFrameDecoderMaskedKeys, DecodesMaskedFramesAndParsesMaskingKey) 
   const auto [payload_length, key] = GetParam();
   auto payload = make_payload_bytes(static_cast<std::size_t>(payload_length));
   auto bytes = build_frame_bytes_canonical(true, false, false, false, opcode_text_value, true, payload_length, key, payload);
-  expect_decodes_to<server_frame_decoder>(bytes, expected_text_frame_masked(payload_length, key));
+  expect_header_decodes_to<server_frame_decoder>(bytes, expected_text_frame_masked(payload_length, key));
 }
 
 INSTANTIATE_TEST_SUITE_P(KeyAcrossLengthEncodings, WebsocketFrameDecoderMaskedKeys,
@@ -167,22 +169,10 @@ TEST(WebsocketFrameDecoder, RejectsMaskedFrameWithoutMaskingKeyEvenIfPayloadLeng
   expect_rejected<client_frame_decoder>(bytes);
 }
 
-TEST(WebsocketFrameDecoder, RejectsTruncatedPayloadFor7bitLength) {
+TEST(WebsocketFrameDecoder, DecodesHeaderBeforeFullPayloadArrives) {
   auto payload = make_payload_bytes(2);
   auto bytes = build_frame_bytes_canonical(true, false, false, false, opcode_text_value, false, 5U, std::nullopt, payload);
-  expect_rejected<client_frame_decoder>(bytes);
-}
-
-TEST(WebsocketFrameDecoder, RejectsTruncatedPayloadFor16bitLength) {
-  auto payload = make_payload_bytes(10);
-  auto bytes = build_frame_bytes_canonical(true, false, false, false, opcode_text_value, false, 50000U, std::nullopt, payload);
-  expect_rejected<client_frame_decoder>(bytes);
-}
-
-TEST(WebsocketFrameDecoder, RejectsTruncatedPayloadFor64bitLength) {
-  auto payload = make_payload_bytes(10);
-  auto bytes = build_frame_bytes_canonical(true, false, false, false, opcode_text_value, false, 100000U, std::nullopt, payload);
-  expect_rejected<client_frame_decoder>(bytes);
+  expect_header_decodes_to<client_frame_decoder>(std::span<const std::byte>{bytes.data(), 2}, expected_text_frame_unmasked(5U));
 }
 
 TEST(WebsocketFrameDecoder, RejectsNonCanonicalLengthEncoding126ForLength125) {
@@ -243,7 +233,7 @@ TEST(WebsocketFrameDecoder, RejectsPayloadLengthTooBig) {
     header_only[2U + i] = extended[i];
   }
 
-  auto decoded = client_frame_decoder{}.decode(header_only);
+  auto decoded = client_frame_decoder{}.decode_header(header_only);
   if (!decoded) {
     EXPECT_EQ(decoded.error(), protocol_error::payload_length_too_big);
   } else {

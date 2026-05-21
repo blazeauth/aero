@@ -43,18 +43,22 @@ def load_results(index_json_path: Path, agent: str) -> list[CaseResult]:
     )
   return results
 
-def should_fail(result: CaseResult, allow_nonstrict_prefix: str) -> tuple[bool, str]:
-  if result.behavior == "OK":
-    return (False, "")
-  if result.behavior == "INFORMATIONAL":
-    return (False, "")
+def failure_reason(result: CaseResult) -> str | None:
   if result.behavior == "NON-STRICT":
-    if result.case_id.startswith(allow_nonstrict_prefix + ".") or result.case_id == allow_nonstrict_prefix:
-      if result.behavior_close != "OK":
-        return (True, "NON-STRICT allowed here, but behaviorClose is not OK")
-      return (False, "")
-    return (True, "NON-STRICT is not allowed")
-  return (True, f"behavior is {result.behavior}")
+    return "behavior is NON-STRICT"
+  if result.behavior == "FAILED":
+    return "behavior is FAILED"
+  if result.behavior not in {"OK", "INFORMATIONAL"}:
+    return f"behavior is {result.behavior}"
+
+  if result.behavior_close == "NON-STRICT":
+    return "behaviorClose is NON-STRICT"
+  if result.behavior_close == "FAILED":
+    return "behaviorClose is FAILED"
+  if result.behavior_close and result.behavior_close != "OK":
+    return f"behaviorClose is {result.behavior_close}"
+
+  return None
 
 async def ws_text(server_base_uri: str, path: str) -> str:
   url = server_base_uri.rstrip("/") + "/" + path.lstrip("/")
@@ -100,7 +104,6 @@ async def main_async() -> int:
   parser.add_argument("--agent", required=True)
   parser.add_argument("--server", required=True)
   parser.add_argument("--index", required=True)
-  parser.add_argument("--allow-nonstrict-prefix", default="6.4")
   args = parser.parse_args()
 
   index_json_path = Path(args.index)
@@ -108,8 +111,7 @@ async def main_async() -> int:
 
   failures: list[tuple[CaseResult, str]] = []
   for result in results:
-    failed, reason = should_fail(result, args.allow_nonstrict_prefix)
-    if failed:
+    if reason := failure_reason(result):
       failures.append((result, reason))
 
   if not failures:
