@@ -9,4 +9,3 @@ set(AERO_TLS_BACKEND "none" CACHE STRING "TLS backend: wolfssl, openssl, none")
 set_property(CACHE AERO_TLS_BACKEND PROPERTY STRINGS wolfssl openssl none)
 
 option(AERO_USE_BUNDLED_ASIO "Fetch ASIO using FetchContent if not found on system or in targets" ${PROJECT_IS_TOP_LEVEL})
-option(AERO_USE_BUNDLED_UTFCPP "Fetch utfcpp using FetchContent if not found on system or in targets" ${PROJECT_IS_TOP_LEVEL})

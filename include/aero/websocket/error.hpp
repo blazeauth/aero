@@ -59,7 +59,7 @@ namespace aero::websocket::error {
     invalid_path
   };
 
-  enum class message_assembler_error : std::uint8_t {
+  enum class message_reader_error : std::uint8_t {
     unexpected_continuation = 1,
     interleaved_data_frame,
     message_too_big,
@@ -200,24 +200,24 @@ namespace aero::websocket::error {
       }
     };
 
-    class message_assembler_error_category final : public std::error_category {
+    class message_reader_error_category final : public std::error_category {
      public:
       [[nodiscard]] const char* name() const noexcept override {
-        return "aero.websocket.message_assembler";
+        return "aero.websocket.message_reader";
       }
 
       [[nodiscard]] std::string message(int condition) const override {
-        switch (static_cast<message_assembler_error>(condition)) {
-        case message_assembler_error::unexpected_continuation:
+        switch (static_cast<message_reader_error>(condition)) {
+        case message_reader_error::unexpected_continuation:
           return "unexpected continuation frame";
-        case message_assembler_error::interleaved_data_frame:
+        case message_reader_error::interleaved_data_frame:
           return "data frame interleaved into fragmented message";
-        case message_assembler_error::message_too_big:
+        case message_reader_error::message_too_big:
           return "message too big";
-        case message_assembler_error::data_after_close:
+        case message_reader_error::data_after_close:
           return "data after close";
         default:
-          return "unknown websocket frame assembler error";
+          return "unknown websocket message reader error";
         }
       }
     };
@@ -238,8 +238,8 @@ namespace aero::websocket::error {
     return category;
   }
 
-  const inline std::error_category& message_assembler_category() noexcept {
-    static const detail::message_assembler_error_category category;
+  const inline std::error_category& message_reader_category() noexcept {
+    static const detail::message_reader_error_category category;
     return category;
   }
 
@@ -255,8 +255,8 @@ namespace aero::websocket::error {
     return {static_cast<int>(value), websocket::error::uri_error_category()};
   }
 
-  inline std::error_code make_error_code(message_assembler_error value) noexcept {
-    return {static_cast<int>(value), websocket::error::message_assembler_category()};
+  inline std::error_code make_error_code(message_reader_error value) noexcept {
+    return {static_cast<int>(value), websocket::error::message_reader_category()};
   }
 
   [[nodiscard]] inline bool is_protocol_violation(const std::error_code& ec) {
@@ -265,9 +265,9 @@ namespace aero::websocket::error {
       return true;
     }
 
-    if (ec == make_error_code(message_assembler_error::unexpected_continuation) ||
-        ec == make_error_code(message_assembler_error::data_after_close) ||
-        ec == make_error_code(message_assembler_error::interleaved_data_frame)) {
+    if (ec == make_error_code(message_reader_error::unexpected_continuation) ||
+        ec == make_error_code(message_reader_error::data_after_close) ||
+        ec == make_error_code(message_reader_error::interleaved_data_frame)) {
       return true;
     }
 
@@ -294,4 +294,4 @@ struct std::is_error_code_enum<aero::websocket::error::handshake_error> : std::t
 template <>
 struct std::is_error_code_enum<aero::websocket::error::uri_error> : std::true_type {};
 template <>
-struct std::is_error_code_enum<aero::websocket::error::message_assembler_error> : std::true_type {};
+struct std::is_error_code_enum<aero::websocket::error::message_reader_error> : std::true_type {};

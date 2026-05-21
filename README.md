@@ -753,7 +753,6 @@ target_link_libraries(my_app PRIVATE aero)
 # set(AERO_TLS_BACKEND wolfssl)
 
 # set(AERO_USE_BUNDLED_ASIO ON) # "Fetch ASIO using FetchContent if not found on system or in targets"
-# set(AERO_USE_BUNDLED_UTFCPP ON) # "Fetch utfcpp using FetchContent if not found on system or in targets"
 ```
 
 ## Tests
@@ -771,11 +770,7 @@ Aero contains ~300+ unit tests of implementation details
 The Websocket protocol is tested using [autobahn](https://github.com/crossbario/autobahn-testsuite) (a set of tests for RFC6455 compliance used by industry giants).
 
 ### RFC6455 compliance
-Aero passes all autobahn tests (excluding cases '9', '12', '13' because they are testing extensions that are not implemented in Aero) except section 6.4 with NON-STRICT results (not an error, but not an ideal implementation also). The decision not to implement 6.4 (Fail-fast on invalid UTF-8) was made based on several factors:
-- Time: implementing a streaming UTF-8 validator is a difficult task that will take a lot of time, so we decided to abandon this idea and leave NON-STRICT behavior in this category due to a severe lack of time for implementation.
-- Optimization: 6.4 requires fail-fast behavior when invalid UTF-8 is detected in a text continuation frame. Current behavior - bytes are not validated for each continuation frame, as this would require a streaming UTF-8 validator, which could significantly impact optimization when receiving large text messages.
-
-If you require strict RFC 6455 conformance or enterprise‑level support, you should consider using Boost.Beast. Aero strives to implement the protocol as faithfully as possible, but it is developed in the author's free time and may potentially contain discrepancies with the RFC.
+If you require enterprise‑level RFC6455 conformance or enterprise‑level support, you should consider using Boost.Beast. Aero strives to implement the protocol as faithfully as possible, but it is developed in the author's free time and may potentially contain discrepancies with the RFC.
 
 ## License
 Aero is distributed under the MIT License.

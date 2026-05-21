@@ -102,8 +102,7 @@ jobs:
           python3 .github/autobahn/validate_reports.py \
             --agent "$AUTOBAHN_AGENT" \
             --server "$AUTOBAHN_SERVER" \
-            --index "${{github.workspace}}/${REPORTS_DIR}/clients/index.json" \
-            --allow-nonstrict-prefix 6.4
+            --index "${{github.workspace}}/${REPORTS_DIR}/clients/index.json"
 
       - name: Upload reports
         if: always()

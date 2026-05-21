@@ -55,7 +55,7 @@ jobs:
 
       - name: Install dependencies via vcpkg
         run: |
-          "${VCPKG_ROOT}/vcpkg" install asio utfcpp magic-enum gtest wolfssl[asio] --triplet "${VCPKG_TARGET_TRIPLET}"
+          "${VCPKG_ROOT}/vcpkg" install asio magic-enum gtest wolfssl[asio] --triplet "${VCPKG_TARGET_TRIPLET}"
 
       - name: Generate build
         run: |

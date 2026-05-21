@@ -39,7 +39,7 @@
 #include "aero/websocket/close_code.hpp"
 #include "aero/websocket/detail/client_frame_builder.hpp"
 #include "aero/websocket/detail/frame.hpp"
-#include "aero/websocket/detail/message_assembler.hpp"
+#include "aero/websocket/detail/message_reader.hpp"
 #include "aero/websocket/error.hpp"
 #include "aero/websocket/message.hpp"
 #include "aero/websocket/state.hpp"
@@ -68,21 +68,21 @@ namespace aero::websocket {
           .validate_utf8 = options.validate_outcoming_utf8,
         }),
         client_handshaker_(options.client_handshaker),
-        transport_(aero::get_default_executor(), options.max_message_size + detail::max_frame_header_size) {}
+        transport_(aero::get_default_executor(), options.max_message_size + detail::frame::max_header_size) {}
 
     explicit basic_client(executor_type executor, client_options options)
       : client_frame_builder_({
           .validate_utf8 = options.validate_outcoming_utf8,
         }),
         client_handshaker_(options.client_handshaker),
-        transport_(executor, options.max_message_size + detail::max_frame_header_size) {}
+        transport_(executor, options.max_message_size + detail::frame::max_header_size) {}
 
     explicit basic_client(asio::strand<executor_type> strand, client_options options)
       : client_frame_builder_({
           .validate_utf8 = options.validate_outcoming_utf8,
         }),
         client_handshaker_(options.client_handshaker),
-        transport_(std::move(strand), options.max_message_size + detail::max_frame_header_size) {}
+        transport_(std::move(strand), options.max_message_size + detail::frame::max_header_size) {}
 
     template <typename... TransportArgs>
     explicit basic_client(std::in_place_type_t<transport_type>, TransportArgs&&... transport_args)
@@ -95,7 +95,7 @@ namespace aero::websocket {
         }),
         client_handshaker_(options.client_handshaker),
         transport_(aero::get_default_executor(), std::forward<TransportArgs>(transport_args)...,
-          options.max_message_size + detail::max_frame_header_size) {}
+          options.max_message_size + detail::frame::max_header_size) {}
 
     template <typename... TransportArgs>
     explicit basic_client(executor_type executor, std::in_place_type_t<transport_type>, TransportArgs&&... transport_args)
@@ -114,7 +114,7 @@ namespace aero::websocket {
         }),
         client_handshaker_(options.client_handshaker),
         transport_(executor, std::forward<TransportArgs>(transport_args)...,
-          options.max_message_size + detail::max_frame_header_size) {}
+          options.max_message_size + detail::frame::max_header_size) {}
 
     template <typename... TransportArgs>
     explicit basic_client(asio::strand<executor_type> strand, client_options options, std::in_place_type_t<transport_type>,
@@ -124,7 +124,7 @@ namespace aero::websocket {
         }),
         client_handshaker_(options.client_handshaker),
         transport_(std::move(strand), std::forward<TransportArgs>(transport_args)...,
-          options.max_message_size + detail::max_frame_header_size) {}
+          options.max_message_size + detail::frame::max_header_size) {}
 
     template <typename CompletionToken>
     auto async_connect(websocket::uri uri, http::headers headers, CompletionToken&& token) {
@@ -478,7 +478,7 @@ namespace aero::websocket {
               consume_data_received_in_handshake_if_present();
 
               // Deliver next assembled message if available
-              if (auto message = message_assembler_.poll()) {
+              if (auto message = message_reader_.poll()) {
                 if (message->is_control()) {
                   // Auto-respond to control frames
                   auto [response_ec] = co_await async_respond_to_control_message(*message, return_as_deferred_tuple());
@@ -535,7 +535,7 @@ namespace aero::websocket {
               }
 
               // Consume incoming bytes into WebSocket frames/messages
-              auto consume_ec = message_assembler_.consume(read_buffer);
+              auto consume_ec = message_reader_.consume(read_buffer);
               if (consume_ec && !deferred_read_ec_) {
                 // Store the first error to report after delivering any remaining message
                 deferred_read_ec_ = consume_ec;
@@ -727,7 +727,7 @@ namespace aero::websocket {
         return;
       }
 
-      auto consume_ec = message_assembler_.consume(*data_received_in_handshake_);
+      auto consume_ec = message_reader_.consume(*data_received_in_handshake_);
       data_received_in_handshake_.reset();
       if (consume_ec && !deferred_read_ec_) {
         deferred_read_ec_ = consume_ec;
@@ -824,7 +824,7 @@ namespace aero::websocket {
             set_close_received_flag(true);
             deferred_read_ec_.reset();
             data_received_in_handshake_.reset();
-            message_assembler_.reset();
+            message_reader_.reset();
 
             // We don't care whether force-shutdown returned an error or not
             std::ignore = co_await async_finalize_session(fatal_ec, return_as_deferred_tuple());
@@ -942,7 +942,7 @@ namespace aero::websocket {
       set_close_sent_flag(false);
       deferred_read_ec_.reset();
       data_received_in_handshake_.reset();
-      message_assembler_.reset();
+      message_reader_.reset();
     }
 
     void signal_close_completion(std::error_code result_ec) {
@@ -1001,7 +1001,7 @@ namespace aero::websocket {
     }
 
     websocket::detail::client_frame_builder<> client_frame_builder_;
-    websocket::detail::message_assembler message_assembler_;
+    websocket::detail::message_reader message_reader_;
     websocket::client_handshaker client_handshaker_;
     transport_type transport_;
     asio::steady_timer close_timer_{transport_.get_strand()};
