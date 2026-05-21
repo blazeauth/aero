@@ -33,13 +33,13 @@ void print_headers(const aero::http::headers& headers) {
 
 asio::awaitable<std::error_code> async_run_echo_client(websocket::tls::client& client) {
   // https://blog.postman.com/introducing-postman-websocket-echo-service/
-  auto [connect_ec, headers] =
+  auto [connect_ec, response] =
     co_await client.async_connect("wss://ws.postman-echo.com/raw", asio::as_tuple(asio::use_awaitable));
   if (connect_ec) {
     co_return connect_ec;
   }
 
-  print_headers(headers);
+  print_headers(response.headers);
 
   auto [write_ec] = co_await client.async_send_text("hello from aero client!!!", asio::as_tuple(asio::use_awaitable));
   if (write_ec) {
