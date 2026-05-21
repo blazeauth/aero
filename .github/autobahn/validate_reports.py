@@ -51,11 +51,9 @@ def failure_reason(result: CaseResult) -> str | None:
   if result.behavior not in {"OK", "INFORMATIONAL"}:
     return f"behavior is {result.behavior}"
 
-  if result.behavior_close == "NON-STRICT":
-    return "behaviorClose is NON-STRICT"
-  if result.behavior_close == "FAILED":
-    return "behaviorClose is FAILED"
-  if result.behavior_close and result.behavior_close != "OK":
+  if result.behavior_close in {"NON-STRICT", "FAILED"}:
+    return f"behaviorClose is {result.behavior_close}"
+  if result.behavior_close and result.behavior_close not in {"OK", "INFORMATIONAL"}:
     return f"behaviorClose is {result.behavior_close}"
 
   return None
