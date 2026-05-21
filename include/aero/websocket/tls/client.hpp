@@ -146,55 +146,55 @@ namespace aero::websocket::tls {
       return basic_client_.async_read(std::forward<CompletionToken>(token));
     }
 
-    std::expected<http::headers, std::error_code> connect(websocket::uri uri, http::headers headers) {
+    std::expected<http::response, std::error_code> connect(websocket::uri uri, http::headers headers) {
       return basic_client_.connect(std::move(uri), std::move(headers));
     }
 
-    std::expected<http::headers, std::error_code> connect(websocket::uri uri, http::headers headers, duration timeout) {
+    std::expected<http::response, std::error_code> connect(websocket::uri uri, http::headers headers, duration timeout) {
       return basic_client_.connect(std::move(uri), std::move(headers), timeout);
     }
 
-    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
+    std::expected<http::response, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
       http::headers headers) {
       return basic_client_.connect(std::move(parsed_uri), std::move(headers));
     }
 
-    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
+    std::expected<http::response, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
       http::headers headers, duration timeout) {
       return basic_client_.connect(std::move(parsed_uri), std::move(headers), timeout);
     }
 
-    std::expected<http::headers, std::error_code> connect(std::string_view uri_string, http::headers headers) {
+    std::expected<http::response, std::error_code> connect(std::string_view uri_string, http::headers headers) {
       return basic_client_.connect(uri_string, std::move(headers));
     }
 
-    std::expected<http::headers, std::error_code> connect(std::string_view uri_string, http::headers headers,
+    std::expected<http::response, std::error_code> connect(std::string_view uri_string, http::headers headers,
       duration timeout) {
       return basic_client_.connect(uri_string, std::move(headers), timeout);
     }
 
-    std::expected<http::headers, std::error_code> connect(websocket::uri uri) {
+    std::expected<http::response, std::error_code> connect(websocket::uri uri) {
       return basic_client_.connect(std::move(uri));
     }
 
-    std::expected<http::headers, std::error_code> connect(websocket::uri uri, duration timeout) {
+    std::expected<http::response, std::error_code> connect(websocket::uri uri, duration timeout) {
       return basic_client_.connect(std::move(uri), timeout);
     }
 
-    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri) {
+    std::expected<http::response, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri) {
       return basic_client_.connect(std::move(parsed_uri));
     }
 
-    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
+    std::expected<http::response, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
       duration timeout) {
       return basic_client_.connect(std::move(parsed_uri), timeout);
     }
 
-    std::expected<http::headers, std::error_code> connect(std::string_view uri_string) {
+    std::expected<http::response, std::error_code> connect(std::string_view uri_string) {
       return basic_client_.connect(uri_string);
     }
 
-    std::expected<http::headers, std::error_code> connect(std::string_view uri_string, duration timeout) {
+    std::expected<http::response, std::error_code> connect(std::string_view uri_string, duration timeout) {
       return basic_client_.connect(uri_string, timeout);
     }
 

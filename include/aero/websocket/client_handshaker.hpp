@@ -10,7 +10,7 @@
 #include "aero/http/headers.hpp"
 #include "aero/http/method.hpp"
 #include "aero/http/request_line.hpp"
-#include "aero/http/status_line.hpp"
+#include "aero/http/response.hpp"
 #include "aero/http/version.hpp"
 #include "aero/websocket/detail/accept_challenge.hpp"
 #include "aero/websocket/error.hpp"
@@ -106,55 +106,39 @@ namespace aero::websocket {
       };
     }
 
-    [[nodiscard]] std::expected<http::headers, std::error_code> parse_response(std::string_view payload,
+    [[nodiscard]] std::error_code validate_server_handshake(const http::response& resp,
       std::string_view sec_websocket_key) const {
       using websocket::error::handshake_error;
 
       if (sec_websocket_key.empty()) {
-        return std::unexpected(handshake_error::accept_challenge_failed);
+        return handshake_error::accept_challenge_failed;
       }
 
-      auto status_line_end = payload.find(http::detail::crlf);
-      if (status_line_end == std::string_view::npos) {
-        return std::unexpected(http::error::protocol_error::status_line_invalid);
-      }
-
-      auto status_line = http::status_line::parse(payload.substr(0, status_line_end));
-      if (!status_line) {
-        return std::unexpected(status_line.error());
-      }
-
-      if (status_line->status_code != http::status_code::switching_protocols) {
-        return std::unexpected(handshake_error::status_code_invalid);
-      }
-
-      auto headers_section_start = status_line_end + http::detail::crlf.size();
-      auto headers = http::headers::parse(payload.substr(headers_section_start));
-      if (!headers) {
-        return std::unexpected(headers.error());
+      if (resp.status_code() != http::status_code::switching_protocols) {
+        return handshake_error::status_code_invalid;
       }
 
       // 5.2: An |Upgrade| header field with value "websocket"
-      if (!headers->contains_token("upgrade", "websocket")) {
-        return std::unexpected(handshake_error::upgrade_header_invalid);
+      if (!resp.headers.contains_token("upgrade", "websocket")) {
+        return handshake_error::upgrade_header_invalid;
       }
 
       // 5.3: A |Connection| header field with value "Upgrade"
-      if (!headers->contains_token("connection", "upgrade")) {
-        return std::unexpected(handshake_error::connection_header_invalid);
+      if (!resp.headers.contains_token("connection", "upgrade")) {
+        return handshake_error::connection_header_invalid;
       }
 
-      auto sec_websocket_accept = headers->first_value("sec-websocket-accept");
+      auto sec_websocket_accept = resp.headers.first_value("sec-websocket-accept");
       if (!sec_websocket_accept.has_value() || sec_websocket_accept->empty()) {
-        return std::unexpected(handshake_error::accept_header_invalid);
+        return handshake_error::accept_header_invalid;
       }
 
       auto generated_accept_key = detail::compute_sec_websocket_accept(sec_websocket_key);
       if (generated_accept_key != sec_websocket_accept) {
-        return std::unexpected(handshake_error::accept_challenge_failed);
+        return handshake_error::accept_challenge_failed;
       }
 
-      return headers;
+      return {};
     }
 
     void set_subprotocols(std::vector<std::string> subprotocols) {
