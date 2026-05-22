@@ -16,6 +16,7 @@
 #include "aero/http/status_line.hpp"
 #include "aero/websocket/client.hpp"
 #include "aero/websocket/detail/accept_challenge.hpp"
+#include "aero/websocket/error.hpp"
 #include "http/tcp_acceptor.hpp"
 
 namespace {
@@ -58,7 +59,7 @@ namespace {
   }
 
   template <typename WriteResponse>
-  std::expected<http::response, std::error_code> connect_with_server_response(WriteResponse&& write_response) {
+  std::tuple<std::error_code, http::response> connect_with_server_response_tuple(WriteResponse&& write_response) {
     http_test::tcp_acceptor server{[&write_response](http_test::tcp_acceptor& acceptor) {
       auto socket = acceptor.accept();
       std::string read_buffer;
@@ -67,14 +68,24 @@ namespace {
     }};
 
     websocket::client client;
-    auto result = client.connect("ws://127.0.0.1:" + std::to_string(server.port()) + "/socket");
+    auto [connect_ec, server_resp] = client.connect("ws://127.0.0.1:" + std::to_string(server.port()) + "/socket");
 
     server.join();
     if (server.exception()) {
       std::rethrow_exception(server.exception());
     }
 
-    return result;
+    return {connect_ec, std::move(server_resp)};
+  }
+
+  template <typename WriteResponse>
+  std::expected<http::response, std::error_code> connect_with_server_response(WriteResponse&& write_response) {
+    auto [connect_ec, server_resp] = connect_with_server_response_tuple(std::forward<WriteResponse>(write_response));
+    if (connect_ec) {
+      return std::unexpected(connect_ec);
+    }
+
+    return std::move(server_resp);
   }
 
 } // namespace
@@ -116,4 +127,25 @@ TEST(WebsocketBasicClientConnect, PropagatesHeadersParseError) {
 
   ASSERT_FALSE(result);
   EXPECT_EQ(result.error(), http::error::header_error::field_invalid);
+}
+
+TEST(WebsocketBasicClientConnect, ReturnsParsedResponseWhenWebsocketChallengeFails) {
+  auto [connect_ec, server_response] =
+    connect_with_server_response_tuple([](http_test::tcp::socket& socket, std::string_view) {
+      http_test::write_http_response(socket,
+        "HTTP/1.1 101 Switching Protocols\r\n"
+        "Upgrade: websocket\r\n"
+        "Connection: Upgrade\r\n"
+        "Sec-WebSocket-Accept: definitely-not-the-accept-challenge\r\n"
+        "X-Trace: parsed\r\n"
+        "\r\n");
+    });
+
+  EXPECT_EQ(connect_ec, websocket::error::handshake_error::accept_challenge_failed);
+  EXPECT_EQ(server_response.status_code(), http::status_code::switching_protocols);
+  EXPECT_TRUE(server_response.headers.contains_token("upgrade", "websocket"));
+
+  auto trace = server_response.headers.first_value("x-trace");
+  ASSERT_TRUE(trace.has_value());
+  EXPECT_EQ(*trace, "parsed");
 }

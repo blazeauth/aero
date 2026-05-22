@@ -62,6 +62,11 @@ namespace {
     return ec == aero::error::errc::canceled;
   }
 
+  std::error_code connect_to_echo(client& websocket_client) {
+    [[maybe_unused]] auto [connect_ec, server_response] = websocket_client.connect(echo_endpoint);
+    return connect_ec;
+  }
+
   template <typename MessageHandler, typename CompletionPredicate>
   std::error_code read_until(client& websocket_client, std::chrono::milliseconds overall_timeout,
     std::size_t max_successful_messages, MessageHandler message_handler, CompletionPredicate completion_predicate) {
@@ -112,9 +117,9 @@ namespace {
   sync_roundtrip_result sync_roundtrip(client& websocket_client, std::chrono::milliseconds overall_timeout) {
     sync_roundtrip_result result{};
 
-    auto connect_result = websocket_client.connect(echo_endpoint);
-    if (!connect_result) {
-      result.connect_ec = connect_result.error();
+    auto connect_ec = connect_to_echo(websocket_client);
+    if (connect_ec) {
+      result.connect_ec = connect_ec;
       result.open_for_writing_after_connect = websocket_client.is_open_for_writing();
       return result;
     }
@@ -160,8 +165,8 @@ namespace {
 TEST(WebsocketNetworkTcpClient, ConnectSucceedsAndIsOpenForWriting) {
   client websocket_client{};
 
-  auto connect_result = websocket_client.connect(echo_endpoint);
-  ASSERT_TRUE(connect_result);
+  auto connect_ec = connect_to_echo(websocket_client);
+  ASSERT_FALSE(connect_ec);
 
   EXPECT_TRUE(websocket_client.is_open_for_writing());
 
@@ -175,8 +180,8 @@ TEST(WebsocketNetworkTcpClient, ConnectSucceedsAndIsOpenForWriting) {
 TEST(WebsocketNetworkTcpClient, TextAndPingRoundtripReturnsTextEchoAndPong) {
   client websocket_client{};
 
-  auto connect_result = websocket_client.connect(echo_endpoint);
-  ASSERT_TRUE(connect_result);
+  auto connect_ec = connect_to_echo(websocket_client);
+  ASSERT_FALSE(connect_ec);
   ASSERT_TRUE(websocket_client.is_open_for_writing());
 
   const auto text_payload = unique_text("aero-text-");
@@ -219,8 +224,8 @@ TEST(WebsocketNetworkTcpClient, TextAndPingRoundtripReturnsTextEchoAndPong) {
 TEST(WebsocketNetworkTcpClient, BinaryRoundtripReturnsBinaryEcho) {
   client websocket_client{};
 
-  auto connect_result = websocket_client.connect(echo_endpoint);
-  ASSERT_TRUE(connect_result);
+  auto connect_ec = connect_to_echo(websocket_client);
+  ASSERT_FALSE(connect_ec);
   ASSERT_TRUE(websocket_client.is_open_for_writing());
 
   const auto binary_payload = unique_binary_payload();
@@ -254,8 +259,8 @@ TEST(WebsocketNetworkTcpClient, BinaryRoundtripReturnsBinaryEcho) {
 TEST(WebsocketNetworkTcpClient, ReadAfterCloseReturnsConnectionClosed) {
   client websocket_client{};
 
-  auto connect_result = websocket_client.connect(echo_endpoint);
-  ASSERT_TRUE(connect_result);
+  auto connect_ec = connect_to_echo(websocket_client);
+  ASSERT_FALSE(connect_ec);
   ASSERT_TRUE(websocket_client.is_open_for_writing());
 
   auto close_ec = websocket_client.close(close_code::normal, "closing");
@@ -272,8 +277,8 @@ TEST(WebsocketNetworkTcpClient, ReadAfterCloseReturnsConnectionClosed) {
 TEST(WebsocketNetworkTcpClient, SendAfterCloseReturnsConnectionClosed) {
   client websocket_client{};
 
-  auto connect_result = websocket_client.connect(echo_endpoint);
-  ASSERT_TRUE(connect_result);
+  auto connect_ec = connect_to_echo(websocket_client);
+  ASSERT_FALSE(connect_ec);
   ASSERT_TRUE(websocket_client.is_open_for_writing());
 
   auto close_ec = websocket_client.close(close_code::normal, "closing");
@@ -312,8 +317,8 @@ TEST(WebsocketNetworkTcpClient, SyncApiRoundtripWorks) {
 TEST(WebsocketNetworkTcpClient, ParallelReadAndCloseCompletesWithoutDeadlock) {
   client websocket_client{};
 
-  auto connect_result = websocket_client.connect(echo_endpoint);
-  ASSERT_TRUE(connect_result);
+  auto connect_ec = connect_to_echo(websocket_client);
+  ASSERT_FALSE(connect_ec);
   ASSERT_TRUE(websocket_client.is_open_for_writing());
 
   auto read_future = std::async(std::launch::async, [&] { return websocket_client.read(); });
@@ -344,8 +349,8 @@ TEST(WebsocketNetworkTcpClient, ParallelReadAndCloseCompletesWithoutDeadlock) {
 TEST(WebsocketNetworkTcpClient, ParallelReadAndConcurrentSendsReturnAllEchoes) {
   client websocket_client{};
 
-  auto connect_result = websocket_client.connect(echo_endpoint);
-  ASSERT_TRUE(connect_result);
+  auto connect_ec = connect_to_echo(websocket_client);
+  ASSERT_FALSE(connect_ec);
   ASSERT_TRUE(websocket_client.is_open_for_writing());
 
   constexpr std::size_t messages_total = 12;

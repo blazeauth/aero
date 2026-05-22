@@ -33,9 +33,9 @@ std::error_code run_autobahn_client(websocket::client::executor_type executor, s
   {
     websocket::client client{executor};
 
-    auto connect_result = client.connect(std::format("{}/getCaseCount", base_url));
-    if (!connect_result) {
-      return connect_result.error();
+    auto [connect_ec, handshake_resp] = client.connect(std::format("{}/getCaseCount", base_url));
+    if (connect_ec) {
+      return connect_ec;
     }
 
     auto read_result = client.read();
@@ -59,9 +59,10 @@ std::error_code run_autobahn_client(websocket::client::executor_type executor, s
     for (std::uint32_t case_id = 1; case_id <= case_count; ++case_id) {
       websocket::client case_client{client.get_executor()};
 
-      auto case_connect_result = case_client.connect(std::format("{}/runCase?case={}&agent={}", base_url, case_id, agent));
-      if (!case_connect_result) {
-        std::println("Case {} connect failed: {}", case_id, case_connect_result.error().message());
+      auto [connect_ec, handshake_resp] =
+        case_client.connect(std::format("{}/runCase?case={}&agent={}", base_url, case_id, agent));
+      if (connect_ec) {
+        std::println("Case {} connect failed: {}", case_id, connect_ec.message());
         continue;
       }
 
@@ -101,9 +102,9 @@ std::error_code run_autobahn_client(websocket::client::executor_type executor, s
 
   {
     websocket::client client{executor};
-    auto connect_result = client.connect(std::format("{}/updateReports?agent={}", base_url, agent));
-    if (!connect_result) {
-      return connect_result.error();
+    auto [connect_ec, handshake_resp] = client.connect(std::format("{}/updateReports?agent={}", base_url, agent));
+    if (connect_ec) {
+      return connect_ec;
     }
 
     for (;;) {

@@ -34,14 +34,14 @@ int main() {
 
   websocket::tls::client client{tls_ctx.context()};
 
-  auto connect_response = client.connect("wss://stream.binance.com:9443/ws/btcusdt@trade", 5s);
-  if (!connect_response) {
-    print_error("Connect to binance stream failed", connect_response.error());
+  auto [connect_ec, handshake_resp] = client.connect("wss://stream.binance.com:9443/ws/btcusdt@trade", 5s);
+  if (connect_ec) {
+    print_error("Connect to binance stream failed", connect_ec);
     return 1;
   }
 
   std::println("Succesfully connected");
-  print_headers(connect_response->headers);
+  print_headers(handshake_resp.headers);
 
   aero::deadline deadline{5min};
 
