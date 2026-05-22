@@ -13,9 +13,14 @@
 #include <asio/io_context.hpp>
 
 #include "aero/error.hpp"
-#include "aero/wait_threads.hpp"
 
 namespace aero {
+
+  namespace detail {
+    struct wait_threads_tag {};
+  } // namespace detail
+
+  [[maybe_unused]] constexpr inline detail::wait_threads_tag wait_threads;
 
   class io_runtime {
     using wait_threads_tag = aero::detail::wait_threads_tag;

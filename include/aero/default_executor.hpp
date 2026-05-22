@@ -3,7 +3,6 @@
 #include <asio/any_io_executor.hpp>
 
 #include "aero/io_runtime.hpp"
-#include "aero/wait_threads.hpp"
 
 namespace aero {
 
