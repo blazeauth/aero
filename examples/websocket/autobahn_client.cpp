@@ -14,7 +14,6 @@
 #include <asio/use_awaitable.hpp>
 
 #include "aero/io_runtime.hpp"
-#include "aero/wait_threads.hpp"
 #include "aero/websocket/client.hpp"
 #include "aero/websocket/message.hpp"
 
