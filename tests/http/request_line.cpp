@@ -12,8 +12,8 @@
 namespace {
 
   namespace http = aero::http;
+  using http::protocol_error;
   using http::request_line;
-  using http::error::protocol_error;
 
 } // namespace
 

@@ -32,7 +32,7 @@ namespace {
   using aero::tests::websocket::to_bytes;
   using aero::tests::websocket::to_string;
 
-  using protocol_error = aero::websocket::error::protocol_error;
+  using protocol_error = aero::websocket::protocol_error;
 
   masking_key extract_masking_key(std::span<const std::byte> frame_bytes) {
     const auto second = std::to_integer<std::uint8_t>(frame_bytes[1]);

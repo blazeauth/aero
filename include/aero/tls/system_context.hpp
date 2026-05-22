@@ -48,7 +48,7 @@ namespace aero::tls {
       requires(sizeof...(Versions) != 0)
     [[nodiscard]] std::error_code disable_version(Versions... versions) {
       if (current_version_either(versions...)) {
-        return tls::error::context_error::cannot_disable_active_tls_version;
+        return tls::context_error::cannot_disable_active_tls_version;
       }
       tls_options options = (version_to_options(versions) | ...);
       ctx_.set_options(options);

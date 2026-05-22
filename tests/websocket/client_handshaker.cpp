@@ -17,7 +17,7 @@ namespace {
   namespace http = aero::http;
   namespace websocket = aero::websocket;
 
-  using websocket::error::handshake_error;
+  using websocket::handshake_error;
 
   std::error_code validate_server_handshake(const http::response& server_response, std::string_view sec_websocket_key) {
     return websocket::client_handshaker{}.validate_server_handshake(server_response, sec_websocket_key);
@@ -158,7 +158,7 @@ TEST(WebsocketServerHandshake, ErrorIfStatusCodeIsNotSwitchingProtocols) {
     });
 
   const auto error_code = validate_server_handshake(handshake, sec_websocket_key);
-  EXPECT_EQ(error_code, websocket::error::handshake_error::status_code_invalid);
+  EXPECT_EQ(error_code, websocket::handshake_error::status_code_invalid);
 }
 
 TEST(WebsocketServerHandshake, ErrorIfUpgradeHeaderIsMissing) {

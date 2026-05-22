@@ -22,7 +22,7 @@ namespace aero::http {
     if (version_str == "HTTP/1.1") {
       return version::http1_1;
     }
-    return std::unexpected(http::error::protocol_error::version_invalid);
+    return std::unexpected(http::protocol_error::version_invalid);
   }
 
   constexpr std::string_view to_string(version version) noexcept {

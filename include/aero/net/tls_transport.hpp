@@ -63,7 +63,7 @@ namespace aero::net {
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto, std::string host, port_type port) -> void {
-            using net::error::connect_error;
+            using net::connect_error;
 
             std::error_code address_parse_ec;
             auto address = asio::ip::make_address(host, address_parse_ec);

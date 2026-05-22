@@ -19,7 +19,7 @@ namespace aero::websocket::detail {
   class frame_decoder {
    public:
     [[nodiscard]] std::expected<frame, std::error_code> decode_header(std::span<const std::byte> buf) const {
-      using aero::websocket::error::protocol_error;
+      using aero::websocket::protocol_error;
 
       if (buf.size() < 2) {
         return std::unexpected(protocol_error::frame_too_small);

@@ -42,7 +42,7 @@ namespace aero::http {
   class uri {
     constexpr static std::size_t scheme_delimiter_length = 3;
     constexpr static std::size_t max_port_text_length = 5;
-    using uri_error = http::error::uri_error;
+    using uri_error = http::uri_error;
 
    public:
     uri() = default;

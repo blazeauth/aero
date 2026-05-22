@@ -7,22 +7,23 @@
 #include "aero/websocket/error.hpp"
 #include "aero/websocket/uri.hpp"
 
-namespace ws = aero::websocket;
-using ws::error::uri_error;
-
 namespace {
 
+  namespace websocket = aero::websocket;
+
+  using aero::websocket::uri_error;
+
   void expect_parse_error(std::string_view uri_text, uri_error expected_error) {
-    auto parsed = ws::uri::parse(uri_text);
+    auto parsed = websocket::uri::parse(uri_text);
     ASSERT_FALSE(parsed);
     EXPECT_EQ(parsed.error(), expected_error);
   }
 
-  ws::uri parse_or_fail(std::string_view uri_text) {
-    auto parsed = ws::uri::parse(uri_text);
+  websocket::uri parse_or_fail(std::string_view uri_text) {
+    auto parsed = websocket::uri::parse(uri_text);
     EXPECT_TRUE(parsed);
     if (!parsed) {
-      return ws::uri{};
+      return websocket::uri{};
     }
     return *parsed;
   }
@@ -30,7 +31,7 @@ namespace {
 } // namespace
 
 TEST(WebSocketUri, ParsesWsSchemeCaseInsensitively) {
-  ws::uri parsed = parse_or_fail("WS://example.com");
+  websocket::uri parsed = parse_or_fail("WS://example.com");
   EXPECT_EQ(parsed.scheme(), "ws");
   EXPECT_EQ(parsed.host(), "example.com");
   EXPECT_EQ(parsed.port(), 80);
@@ -39,7 +40,7 @@ TEST(WebSocketUri, ParsesWsSchemeCaseInsensitively) {
 }
 
 TEST(WebSocketUri, ParsesWssSchemeCaseInsensitivelyAndUsesDefaultPort443) {
-  ws::uri parsed = parse_or_fail("wSs://example.com/chat");
+  websocket::uri parsed = parse_or_fail("wSs://example.com/chat");
   EXPECT_EQ(parsed.scheme(), "wss");
   EXPECT_EQ(parsed.host(), "example.com");
   EXPECT_EQ(parsed.port(), 443);
@@ -48,7 +49,7 @@ TEST(WebSocketUri, ParsesWssSchemeCaseInsensitivelyAndUsesDefaultPort443) {
 }
 
 TEST(WebSocketUri, ParsesExplicitPortWhenProvided) {
-  ws::uri parsed = parse_or_fail("ws://example.com:8080/chat");
+  websocket::uri parsed = parse_or_fail("ws://example.com:8080/chat");
   EXPECT_EQ(parsed.port(), 8080);
   EXPECT_EQ(parsed.to_string(), "ws://example.com:8080/chat");
 }
@@ -82,17 +83,17 @@ TEST(WebSocketUri, RejectsFragmentIdentifiersEverywhere) {
 }
 
 TEST(WebSocketUri, AcceptsEscapedHashInQuery) {
-  ws::uri parsed = parse_or_fail("ws://example.com/chat?topic=%23general");
+  websocket::uri parsed = parse_or_fail("ws://example.com/chat?topic=%23general");
   EXPECT_EQ(parsed.to_string(), "ws://example.com/chat?topic=%23general");
 }
 
 TEST(WebSocketUri, ResourceNameUsesSlashWhenPathIsEmptyAndPreservesQueryDelimiter) {
-  ws::uri parsed = parse_or_fail("ws://example.com?token=abc");
+  websocket::uri parsed = parse_or_fail("ws://example.com?token=abc");
   EXPECT_EQ(parsed.to_string(), "ws://example.com/?token=abc");
 }
 
 TEST(WebSocketUri, ParsesIpv6LiteralHost) {
-  ws::uri parsed = parse_or_fail("ws://[2001:db8::1]/chat");
+  websocket::uri parsed = parse_or_fail("ws://[2001:db8::1]/chat");
   EXPECT_EQ(parsed.scheme(), "ws");
   EXPECT_EQ(parsed.host(), "[2001:db8::1]");
   EXPECT_EQ(parsed.port(), 80);
@@ -117,15 +118,15 @@ TEST(WebSocketUri, RejectsPortThatIsEmptyNonNumericZeroOrOutOfRange) {
 }
 
 TEST(WebSocketUri, DefaultPortDependsOnSchemeWhenPortIsOmitted) {
-  ws::uri ws_uri = parse_or_fail("ws://example.com/chat");
-  ws::uri wss_uri = parse_or_fail("wss://example.com/chat");
+  websocket::uri ws_uri = parse_or_fail("ws://example.com/chat");
+  websocket::uri wss_uri = parse_or_fail("wss://example.com/chat");
 
   EXPECT_EQ(ws_uri.port(), 80);
   EXPECT_EQ(wss_uri.port(), 443);
 }
 
 TEST(WebSocketUri, ValidateRejectsInvalidComponentsInConstructedParts) {
-  ws::uri invalid_scheme_uri(ws::uri_parts{
+  websocket::uri invalid_scheme_uri(websocket::uri_parts{
     .scheme = "http",
     .host = "example.com",
     .port = std::nullopt,
@@ -134,7 +135,7 @@ TEST(WebSocketUri, ValidateRejectsInvalidComponentsInConstructedParts) {
   });
   EXPECT_EQ(invalid_scheme_uri.validate(), uri_error::invalid_scheme);
 
-  ws::uri fragment_in_path_uri(ws::uri_parts{
+  websocket::uri fragment_in_path_uri(websocket::uri_parts{
     .scheme = "ws",
     .host = "example.com",
     .port = std::nullopt,
@@ -143,7 +144,7 @@ TEST(WebSocketUri, ValidateRejectsInvalidComponentsInConstructedParts) {
   });
   EXPECT_EQ(fragment_in_path_uri.validate(), uri_error::fragment_not_allowed);
 
-  ws::uri userinfo_in_host_uri(ws::uri_parts{
+  websocket::uri userinfo_in_host_uri(websocket::uri_parts{
     .scheme = "ws",
     .host = "user@example.com",
     .port = std::nullopt,
@@ -152,7 +153,7 @@ TEST(WebSocketUri, ValidateRejectsInvalidComponentsInConstructedParts) {
   });
   EXPECT_EQ(userinfo_in_host_uri.validate(), uri_error::userinfo_not_allowed);
 
-  ws::uri invalid_port_uri(ws::uri_parts{
+  websocket::uri invalid_port_uri(websocket::uri_parts{
     .scheme = "ws",
     .host = "example.com",
     .port = static_cast<std::uint16_t>(0),

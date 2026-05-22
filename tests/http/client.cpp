@@ -83,7 +83,7 @@ namespace {
     } catch (const std::future_error& future_error) {
       return std::unexpected{future_error.code()};
     } catch (...) {
-      return std::unexpected{http::error::client_error::unexpected_failure};
+      return std::unexpected{http::client_error::unexpected_failure};
     }
   }
 
@@ -97,7 +97,7 @@ namespace {
     } catch (const std::future_error& future_error) {
       return std::unexpected{future_error.code()};
     } catch (...) {
-      return std::unexpected{http::error::client_error::unexpected_failure};
+      return std::unexpected{http::client_error::unexpected_failure};
     }
   }
 
@@ -456,7 +456,7 @@ TEST(HttpClient, RejectsInvalidHttp11TransferEncodingFraming) {
     local_request_timeout);
 
   ASSERT_FALSE(response.has_value());
-  EXPECT_EQ(response.error(), http::error::client_error::response_encoding_unsupported);
+  EXPECT_EQ(response.error(), http::client_error::response_encoding_unsupported);
 
   server.join();
 
@@ -483,7 +483,7 @@ TEST(HttpClient, RejectsHttp10ResponseWithTransferEncoding) {
     local_request_timeout);
 
   ASSERT_FALSE(response.has_value());
-  EXPECT_EQ(response.error(), http::error::client_error::response_encoding_unsupported);
+  EXPECT_EQ(response.error(), http::client_error::response_encoding_unsupported);
 
   server.join();
 
@@ -674,7 +674,7 @@ TEST(HttpClient, ReturnsUriErrorForInvalidScheme) {
   auto response = client.send("ftp://127.0.0.1/resource", make_request({}));
 
   ASSERT_FALSE(response.has_value());
-  EXPECT_EQ(response.error(), http::error::uri_error::invalid_scheme);
+  EXPECT_EQ(response.error(), http::uri_error::invalid_scheme);
 }
 
 TEST(HttpClient, ReadsFinalResponseAfterInterimResponseAndReusesConnection) {
@@ -937,7 +937,7 @@ TEST(HttpClient, ConnectUsesAuthorityFormAndRejectsSuccessfulTunnelResponse) {
   auto response = send_with_timeout(client, make_local_endpoint(server.port()), std::move(request), local_request_timeout);
 
   ASSERT_FALSE(response.has_value());
-  EXPECT_EQ(response.error(), http::error::client_error::connect_tunnel_unsupported);
+  EXPECT_EQ(response.error(), http::client_error::connect_tunnel_unsupported);
 
   server.join();
 

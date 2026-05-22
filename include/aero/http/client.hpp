@@ -26,7 +26,6 @@
 #include <asio/ssl/context.hpp>
 #include <asio/ssl/error.hpp>
 #endif
-#include <asio/system_executor.hpp>
 #include <asio/use_future.hpp>
 
 #include "aero/http/basic_client.hpp"
@@ -50,9 +49,9 @@ namespace aero::http {
 #endif
 
   class client final {
-    using client_error = http::error::client_error;
-    using connection_error = http::error::connection_error;
-    using protocol_error = http::error::protocol_error;
+    using client_error = http::client_error;
+    using connection_error = http::connection_error;
+    using protocol_error = http::protocol_error;
 
     constexpr static std::size_t default_runtime_threads = 1;
 
@@ -153,7 +152,7 @@ namespace aero::http {
       }
 #else
       if (endpoint.secure) {
-        return async_complete_error(aero::error::basic_error::tls_support_unavailable, std::forward<CompletionToken>(token));
+        return async_complete_error(aero::basic_error::tls_support_unavailable, std::forward<CompletionToken>(token));
       }
 #endif
 
@@ -189,7 +188,7 @@ namespace aero::http {
       }
 #else
       if (parsed_uri->is_https()) {
-        return async_complete_error(aero::error::basic_error::tls_support_unavailable, std::forward<CompletionToken>(token));
+        return async_complete_error(aero::basic_error::tls_support_unavailable, std::forward<CompletionToken>(token));
       }
 #endif
 

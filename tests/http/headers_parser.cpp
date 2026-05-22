@@ -12,7 +12,7 @@
 namespace {
 
   namespace http = aero::http;
-  using http::error::header_error;
+  using http::header_error;
 
   std::string generate_headers_buffer(std::vector<std::pair<std::string, std::string>> headers) {
     std::string buffer;

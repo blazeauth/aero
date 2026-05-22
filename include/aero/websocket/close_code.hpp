@@ -72,12 +72,12 @@ namespace aero::websocket {
       return static_cast<close_code>(value);
     }
 
-    return std::unexpected(error::protocol_error::close_code_invalid);
+    return std::unexpected(websocket::protocol_error::close_code_invalid);
   }
 
   [[nodiscard]] inline std::expected<close_code, std::error_code> parse_close_code(std::uint16_t value) {
     if (is_close_code_reserved(value)) {
-      return std::unexpected(error::protocol_error::close_code_reserved);
+      return std::unexpected(websocket::protocol_error::close_code_reserved);
     }
 
     return to_close_code(value);

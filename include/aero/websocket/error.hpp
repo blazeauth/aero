@@ -4,7 +4,7 @@
 #include <string>
 #include <system_error>
 
-namespace aero::websocket::error {
+namespace aero::websocket {
 
   enum class protocol_error : std::uint8_t {
     connection_closed = 1,
@@ -74,7 +74,7 @@ namespace aero::websocket::error {
       }
 
       [[nodiscard]] std::string message(int value) const override {
-        using aero::websocket::error::protocol_error;
+        using aero::websocket::protocol_error;
         switch (static_cast<protocol_error>(value)) {
         case protocol_error::connection_closed:
           return "connection closed";
@@ -137,7 +137,7 @@ namespace aero::websocket::error {
       }
 
       [[nodiscard]] std::string message(int value) const override {
-        using aero::websocket::error::handshake_error;
+        using aero::websocket::handshake_error;
         switch (static_cast<handshake_error>(value)) {
         case handshake_error::accept_header_invalid:
           return "header Sec-WebSocket-Accept is missing or invalid";
@@ -164,7 +164,7 @@ namespace aero::websocket::error {
       }
 
       [[nodiscard]] std::string message(int value) const override {
-        using aero::websocket::error::uri_error;
+        using aero::websocket::uri_error;
         switch (static_cast<uri_error>(value)) {
         case uri_error::invalid_scheme:
           return "invalid scheme (only ws and wss are allowed)";
@@ -244,23 +244,22 @@ namespace aero::websocket::error {
   }
 
   inline std::error_code make_error_code(protocol_error value) {
-    return {static_cast<int>(value), websocket::error::protocol_error_category()};
+    return {static_cast<int>(value), websocket::protocol_error_category()};
   }
 
   inline std::error_code make_error_code(handshake_error value) {
-    return {static_cast<int>(value), websocket::error::handshake_error_category()};
+    return {static_cast<int>(value), websocket::handshake_error_category()};
   }
 
   inline std::error_code make_error_code(uri_error value) {
-    return {static_cast<int>(value), websocket::error::uri_error_category()};
+    return {static_cast<int>(value), websocket::uri_error_category()};
   }
 
   inline std::error_code make_error_code(message_reader_error value) noexcept {
-    return {static_cast<int>(value), websocket::error::message_reader_category()};
+    return {static_cast<int>(value), websocket::message_reader_category()};
   }
 
   [[nodiscard]] inline bool is_protocol_violation(const std::error_code& ec) {
-    using error::make_error_code;
     if (ec.category() == protocol_error_category()) {
       return true;
     }
@@ -275,7 +274,6 @@ namespace aero::websocket::error {
   }
 
   [[nodiscard]] inline bool is_invalid_payload(const std::error_code& ec) {
-    using error::make_error_code;
     if (ec.category() != protocol_error_category()) {
       return false;
     }
@@ -285,13 +283,13 @@ namespace aero::websocket::error {
            ec == make_error_code(protocol_error::payload_text_invalid_utf8);
   }
 
-} // namespace aero::websocket::error
+} // namespace aero::websocket
 
 template <>
-struct std::is_error_code_enum<aero::websocket::error::protocol_error> : std::true_type {};
+struct std::is_error_code_enum<aero::websocket::protocol_error> : std::true_type {};
 template <>
-struct std::is_error_code_enum<aero::websocket::error::handshake_error> : std::true_type {};
+struct std::is_error_code_enum<aero::websocket::handshake_error> : std::true_type {};
 template <>
-struct std::is_error_code_enum<aero::websocket::error::uri_error> : std::true_type {};
+struct std::is_error_code_enum<aero::websocket::uri_error> : std::true_type {};
 template <>
-struct std::is_error_code_enum<aero::websocket::error::message_reader_error> : std::true_type {};
+struct std::is_error_code_enum<aero::websocket::message_reader_error> : std::true_type {};

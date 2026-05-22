@@ -8,7 +8,7 @@
 #include "aero/http/uri.hpp"
 
 namespace http = aero::http;
-using http::error::uri_error;
+using http::uri_error;
 
 namespace {
 

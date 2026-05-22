@@ -119,8 +119,8 @@ namespace aero::websocket::detail {
   };
 
   class data_message_state {
-    using message_reader_error = websocket::error::message_reader_error;
-    using protocol_error = websocket::error::protocol_error;
+    using message_reader_error = websocket::message_reader_error;
+    using protocol_error = websocket::protocol_error;
 
     struct message_in_progress {
       detail::opcode opcode{};
@@ -255,8 +255,8 @@ namespace aero::websocket::detail {
   };
 
   class message_reader {
-    using message_reader_error = websocket::error::message_reader_error;
-    using protocol_error = websocket::error::protocol_error;
+    using message_reader_error = websocket::message_reader_error;
+    using protocol_error = websocket::protocol_error;
 
     enum class reader_state : std::uint8_t {
       waiting_for_frame_header,

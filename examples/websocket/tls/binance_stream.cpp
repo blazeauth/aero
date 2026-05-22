@@ -52,7 +52,7 @@ int main() {
 
     auto message = client.read(deadline.remaining());
     if (!message) {
-      if (message.error() == aero::error::errc::timeout && deadline.expired()) {
+      if (message.error() == aero::errc::timeout && deadline.expired()) {
         std::println("Read deadline expired, breaking from read-loop");
         break;
       }

@@ -306,7 +306,7 @@ namespace aero::http {
     [[nodiscard]] std::expected<T, std::error_code> content_length() const& noexcept {
       auto content_len_str = first_value("content-length");
       if (!content_len_str.has_value()) {
-        return std::unexpected(http::error::header_error::content_length_missing);
+        return std::unexpected(http::header_error::content_length_missing);
       }
 
       return aero::detail::to_decimal<T>(*content_len_str);
@@ -315,7 +315,7 @@ namespace aero::http {
     [[nodiscard]] std::expected<std::string_view, std::error_code> content_type() const& noexcept {
       auto content_type_str = first_value("content-type");
       if (!content_type_str.has_value()) {
-        return std::unexpected(http::error::header_error::content_type_missing);
+        return std::unexpected(http::header_error::content_type_missing);
       }
 
       return *content_type_str;

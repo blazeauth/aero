@@ -352,7 +352,7 @@ TEST(HttpClientRequests, GetRejectsUnsupportedProtocolVersionBeforeNetworkIo) {
   auto response = client.get("http://127.0.0.1/resource", static_cast<http::version>(99));
 
   ASSERT_FALSE(response.has_value());
-  EXPECT_EQ(response.error(), http::error::protocol_error::version_invalid);
+  EXPECT_EQ(response.error(), http::protocol_error::version_invalid);
 }
 
 TEST(HttpClientRequests, AsyncPostRejectsUnsupportedProtocolVersionBeforeNetworkIo) {
@@ -364,7 +364,7 @@ TEST(HttpClientRequests, AsyncPostRejectsUnsupportedProtocolVersionBeforeNetwork
     std::ignore = future.get();
     FAIL() << "expected std::system_error";
   } catch (const std::system_error& system_error) {
-    EXPECT_EQ(system_error.code(), http::error::protocol_error::version_invalid);
+    EXPECT_EQ(system_error.code(), http::protocol_error::version_invalid);
   } catch (...) {
     FAIL() << "unexpected exception type";
   }

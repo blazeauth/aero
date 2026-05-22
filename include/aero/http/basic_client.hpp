@@ -29,7 +29,6 @@
 #include <asio/ssl/context.hpp>
 #include <asio/ssl/error.hpp>
 #endif
-#include <asio/system_executor.hpp>
 #include <asio/use_future.hpp>
 
 #include "aero/default_executor.hpp"
@@ -54,9 +53,9 @@ namespace aero::http {
 
   template <net::concepts::transport Transport>
   class basic_client final {
-    using client_error = http::error::client_error;
-    using connection_error = http::error::connection_error;
-    using protocol_error = http::error::protocol_error;
+    using client_error = http::client_error;
+    using connection_error = http::connection_error;
+    using protocol_error = http::protocol_error;
 
     constexpr static std::size_t default_runtime_threads = 1;
     constexpr static int informational_status_code_min = std::to_underlying(http::status_code::continue_);
@@ -1275,10 +1274,10 @@ namespace aero::http {
 
     [[nodiscard]] static std::error_code unsupported_scheme_error(bool request_is_https) {
       if (request_is_https && !secure_transport) {
-        return aero::error::basic_error::tls_support_unavailable;
+        return aero::basic_error::tls_support_unavailable;
       }
 
-      return http::error::uri_error::invalid_scheme;
+      return http::uri_error::invalid_scheme;
     }
 
     [[nodiscard]] static executor_type select_transport_executor(transport_type& transport) {

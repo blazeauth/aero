@@ -29,7 +29,7 @@ namespace {
   using std::chrono::steady_clock;
   using websocket::close_code;
   using websocket::message;
-  using websocket::error::protocol_error;
+  using websocket::protocol_error;
   using websocket::tls::client;
 
   using aero::tests::websocket::to_bytes;
@@ -45,7 +45,7 @@ namespace {
   }
 
   bool is_timeout_error(const std::error_code& ec) {
-    return ec == aero::error::errc::canceled;
+    return ec == aero::errc::canceled;
   }
 
   std::error_code connect_to_echo(client& websocket_client) {

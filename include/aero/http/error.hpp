@@ -5,7 +5,7 @@
 #include <system_error>
 #include <type_traits>
 
-namespace aero::http::error {
+namespace aero::http {
 
   enum class protocol_error : std::uint8_t {
     status_line_invalid = 1,
@@ -262,19 +262,19 @@ namespace aero::http::error {
     return std::error_code{static_cast<int>(error), client_error_category()};
   }
 
-} // namespace aero::http::error
+} // namespace aero::http
 
 template <>
-struct std::is_error_code_enum<aero::http::error::protocol_error> : std::true_type {};
+struct std::is_error_code_enum<aero::http::protocol_error> : std::true_type {};
 
 template <>
-struct std::is_error_code_enum<aero::http::error::header_error> : std::true_type {};
+struct std::is_error_code_enum<aero::http::header_error> : std::true_type {};
 
 template <>
-struct std::is_error_code_enum<aero::http::error::uri_error> : std::true_type {};
+struct std::is_error_code_enum<aero::http::uri_error> : std::true_type {};
 
 template <>
-struct std::is_error_code_enum<aero::http::error::connection_error> : std::true_type {};
+struct std::is_error_code_enum<aero::http::connection_error> : std::true_type {};
 
 template <>
-struct std::is_error_code_enum<aero::http::error::client_error> : std::true_type {};
+struct std::is_error_code_enum<aero::http::client_error> : std::true_type {};

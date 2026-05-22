@@ -70,8 +70,8 @@ namespace aero::tls::detail {
   // NOLINTEND(*-magic-numbers)
 
   inline std::optional<std::error_code> tls_alert_to_error_code(const tls::detail::alert& alert) {
-    using tls::error::certificate_error;
-    using tls::error::handshake_error;
+    using tls::certificate_error;
+    using tls::handshake_error;
 
     auto description = static_cast<int>(alert.description);
 

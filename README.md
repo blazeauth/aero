@@ -102,7 +102,7 @@ int main() {
 
     auto message = client.read(deadline.remaining());
     if (!message) {
-      if (message.error() == aero::error::errc::timeout && deadline.expired()) {
+      if (message.error() == aero::errc::timeout && deadline.expired()) {
         std::println("Read deadline expired, breaking from read-loop");
         break;
       }
@@ -190,7 +190,7 @@ asio::awaitable<std::error_code> async_run_echo_client(websocket::tls::client& c
 
   auto [close_ec] = co_await client.async_close(websocket::close_code::normal, asio::as_tuple(asio::use_awaitable));
   if (close_ec) {
-    if (close_ec == aero::error::errc::timeout) {
+    if (close_ec == aero::errc::timeout) {
       co_await client.async_force_close(asio::use_awaitable);
       co_return std::error_code{};
     }
@@ -274,7 +274,7 @@ int main() {
 
   auto [connect_ec, handshake_response] = client.connect("ws://websockets.chilkat.io/wsChilkatEcho.ashx", 5s);
   if (connect_ec) {
-    if (connect_ec == aero::error::errc::timeout) {
+    if (connect_ec == aero::errc::timeout) {
       print_error("Connect to echo server timed out", connect_ec);
       return 1;
     }
@@ -721,8 +721,8 @@ Please note that all references to functions apply to both synchronous and async
 |Operation|Contract|
 |-|-|
 |`async_connect`|No other `async_connect` should be outstanding and no read/close is active. Exclusive phase, concurrent usage with `async_connect`, `async_read`, `async_close` is forbidden.|
-|`async_send_text`, `async_send_binary`, `async_ping`, `async_pong`|Can be called concurrently with any operation except `async_connect`. Transport layer should serialize all write operations using strand/mutex/etc. Not meaningful concurrently with `async_connect` before open, because it returns `protocol_error::connection_closed`. Can be called concurenntly with `async_close`, but the result depends on strand ordering - once in closing, it will return `protocol_error::connection_closed`.|
-|`async_close`|Threadsafe, but correct usage is only one close at a time. A second concurrent call returns `protocol_error::already_closing`. Forbidden concurrently with `async_connect` (possible competing reads). Allowed to use with `async_read` concurrently, and if `async_close` starts first, it may start reading and an external `async_read` will return `protocol_error::already_reading`|
+|`async_send_text`, `async_send_binary`, `async_ping`, `async_pong`|Can be called concurrently with any operation except `async_connect`. Transport layer should serialize all write operations using strand/mutex/etc. Not meaningful concurrently with `async_connect` before open, because it returns `websocket::protocol_error::connection_closed`. Can be called concurrently with `async_close`, but the result depends on strand ordering - once in closing, it will return `websocket::protocol_error::connection_closed`.|
+|`async_close`|Threadsafe, but correct usage is only one close at a time. A second concurrent call returns `websocket::protocol_error::already_closing`. Forbidden concurrently with `async_connect` (possible competing reads). Allowed to use with `async_read` concurrently, and if `async_close` starts first, it may start reading and an external `async_read` will return `websocket::protocol_error::already_reading`|
 |`async_force_close`|Threadsafe, cancels all running operations|
 |`is_open_for_writing`, `is_connecting`, `is_closed`, `is_closing`, `get_executor`|Threadsafe getters|
 

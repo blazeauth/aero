@@ -41,7 +41,7 @@ namespace aero::http {
     // NOLINTNEXTLINE(readability-qualified-auto)
     const auto it = std::ranges::find(methods, method_str, &method_entry::first);
     if (it == methods.end()) {
-      return std::unexpected(http::error::protocol_error::method_invalid);
+      return std::unexpected(http::protocol_error::method_invalid);
     }
     return it->second;
   }

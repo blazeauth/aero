@@ -16,11 +16,11 @@
 namespace {
 
   using aero::websocket::close_code;
+  using aero::websocket::protocol_error;
   using aero::websocket::detail::frame;
   using aero::websocket::detail::get_payload_length_size;
   using aero::websocket::detail::masking_key;
   using aero::websocket::detail::opcode;
-  using aero::websocket::error::protocol_error;
 
   using aero::tests::websocket::make_masking_key;
   using aero::tests::websocket::make_minimal_frame;

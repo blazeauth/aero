@@ -4,7 +4,7 @@
 #include <system_error>
 #include <type_traits>
 
-namespace aero::net::error {
+namespace aero::net {
 
   enum class connect_error : std::uint8_t {
     host_resolve_failed = 1,
@@ -21,7 +21,7 @@ namespace aero::net::error {
       }
 
       [[nodiscard]] std::string message(int value) const override {
-        using aero::net::error::connect_error;
+        using aero::net::connect_error;
         switch (static_cast<connect_error>(value)) {
         case connect_error::host_resolve_failed:
           return "host resolve failed";
@@ -46,7 +46,7 @@ namespace aero::net::error {
     return {static_cast<int>(value), connect_error_category()};
   }
 
-} // namespace aero::net::error
+} // namespace aero::net
 
 template <>
-struct std::is_error_code_enum<aero::net::error::connect_error> : std::true_type {};
+struct std::is_error_code_enum<aero::net::connect_error> : std::true_type {};

@@ -126,7 +126,7 @@ TEST(WebsocketBasicClientConnect, PropagatesHeadersParseError) {
   });
 
   ASSERT_FALSE(result);
-  EXPECT_EQ(result.error(), http::error::header_error::field_invalid);
+  EXPECT_EQ(result.error(), http::header_error::field_invalid);
 }
 
 TEST(WebsocketBasicClientConnect, ReturnsParsedResponseWhenWebsocketChallengeFails) {
@@ -140,7 +140,7 @@ TEST(WebsocketBasicClientConnect, ReturnsParsedResponseWhenWebsocketChallengeFai
       "\r\n");
   });
 
-  EXPECT_EQ(connect_ec, websocket::error::handshake_error::accept_challenge_failed);
+  EXPECT_EQ(connect_ec, websocket::handshake_error::accept_challenge_failed);
   EXPECT_EQ(server_response.status_code(), http::status_code::switching_protocols);
   EXPECT_TRUE(server_response.headers.contains_token("upgrade", "websocket"));
 

@@ -4,7 +4,7 @@
 #include <system_error>
 #include <type_traits>
 
-namespace aero::tls::error {
+namespace aero::tls {
 
   enum class handshake_error : std::uint8_t {
     sni_setup_failed = 1,
@@ -40,7 +40,7 @@ namespace aero::tls::error {
       }
 
       [[nodiscard]] std::string message(int value) const override {
-        using aero::tls::error::handshake_error;
+        using aero::tls::handshake_error;
         switch (static_cast<handshake_error>(value)) {
         case handshake_error::sni_setup_failed:
           return "failed to set SNI host name";
@@ -61,7 +61,7 @@ namespace aero::tls::error {
       }
 
       [[nodiscard]] std::string message(int ev) const override {
-        using aero::tls::error::certificate_error;
+        using aero::tls::certificate_error;
         switch (static_cast<certificate_error>(ev)) {
         case certificate_error::verification_failed:
           return "peer certificate verification failed";
@@ -100,7 +100,7 @@ namespace aero::tls::error {
       }
 
       [[nodiscard]] std::string message(int value) const override {
-        using aero::tls::error::context_error;
+        using aero::tls::context_error;
         switch (static_cast<context_error>(value)) {
         case context_error::cannot_disable_active_tls_version:
           return "cannot disable active TLS version";
@@ -139,11 +139,11 @@ namespace aero::tls::error {
     return {static_cast<int>(value), context_error_category()};
   }
 
-} // namespace aero::tls::error
+} // namespace aero::tls
 
 template <>
-struct std::is_error_code_enum<aero::tls::error::handshake_error> : std::true_type {};
+struct std::is_error_code_enum<aero::tls::handshake_error> : std::true_type {};
 template <>
-struct std::is_error_code_enum<aero::tls::error::certificate_error> : std::true_type {};
+struct std::is_error_code_enum<aero::tls::certificate_error> : std::true_type {};
 template <>
-struct std::is_error_code_enum<aero::tls::error::context_error> : std::true_type {};
+struct std::is_error_code_enum<aero::tls::context_error> : std::true_type {};
