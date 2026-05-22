@@ -130,16 +130,15 @@ TEST(WebsocketBasicClientConnect, PropagatesHeadersParseError) {
 }
 
 TEST(WebsocketBasicClientConnect, ReturnsParsedResponseWhenWebsocketChallengeFails) {
-  auto [connect_ec, server_response] =
-    connect_with_server_response_tuple([](http_test::tcp::socket& socket, std::string_view) {
-      http_test::write_http_response(socket,
-        "HTTP/1.1 101 Switching Protocols\r\n"
-        "Upgrade: websocket\r\n"
-        "Connection: Upgrade\r\n"
-        "Sec-WebSocket-Accept: definitely-not-the-accept-challenge\r\n"
-        "X-Trace: parsed\r\n"
-        "\r\n");
-    });
+  auto [connect_ec, server_response] = connect_with_server_response_tuple([](http_test::tcp::socket& socket, std::string_view) {
+    http_test::write_http_response(socket,
+      "HTTP/1.1 101 Switching Protocols\r\n"
+      "Upgrade: websocket\r\n"
+      "Connection: Upgrade\r\n"
+      "Sec-WebSocket-Accept: definitely-not-the-accept-challenge\r\n"
+      "X-Trace: parsed\r\n"
+      "\r\n");
+  });
 
   EXPECT_EQ(connect_ec, websocket::error::handshake_error::accept_challenge_failed);
   EXPECT_EQ(server_response.status_code(), http::status_code::switching_protocols);
