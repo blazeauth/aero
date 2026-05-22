@@ -48,6 +48,11 @@ namespace {
     return ec == aero::error::errc::canceled;
   }
 
+  std::error_code connect_to_echo(client& websocket_client) {
+    [[maybe_unused]] auto [connect_ec, server_response] = websocket_client.connect(echo_endpoint);
+    return connect_ec;
+  }
+
   template <typename MessageHandler, typename CompletionPredicate>
   std::error_code read_until(client& websocket_client, std::chrono::milliseconds overall_timeout,
     std::size_t max_successful_messages, MessageHandler message_handler, CompletionPredicate completion_predicate) {
@@ -98,9 +103,9 @@ namespace {
   sync_roundtrip_result sync_roundtrip(client& websocket_client, std::chrono::milliseconds overall_timeout) {
     sync_roundtrip_result result{};
 
-    auto connect_result = websocket_client.connect(echo_endpoint);
-    if (!connect_result) {
-      result.connect_ec = connect_result.error();
+    auto connect_ec = connect_to_echo(websocket_client);
+    if (connect_ec) {
+      result.connect_ec = connect_ec;
       result.open_for_writing_after_connect = websocket_client.is_open_for_writing();
       return result;
     }
@@ -146,8 +151,8 @@ namespace {
 TEST(WebsocketNetworkTlsClient, ConnectSucceedsAndIsOpenForWriting) {
   client websocket_client{system_tls_ctx};
 
-  auto connect_result = websocket_client.connect(echo_endpoint);
-  ASSERT_TRUE(connect_result) << connect_result.error().category().name() << " : " << connect_result.error().message();
+  auto connect_ec = connect_to_echo(websocket_client);
+  ASSERT_FALSE(connect_ec) << connect_ec.category().name() << " : " << connect_ec.message();
 
   EXPECT_TRUE(websocket_client.is_open_for_writing());
 
@@ -161,8 +166,8 @@ TEST(WebsocketNetworkTlsClient, ConnectSucceedsAndIsOpenForWriting) {
 TEST(WebsocketNetworkTlsClient, TextAndPingRoundtripReturnsTextEchoAndPong) {
   client websocket_client{system_tls_ctx};
 
-  auto connect_result = websocket_client.connect(echo_endpoint);
-  ASSERT_TRUE(connect_result) << connect_result.error().category().name() << " : " << connect_result.error().message();
+  auto connect_ec = connect_to_echo(websocket_client);
+  ASSERT_FALSE(connect_ec) << connect_ec.category().name() << " : " << connect_ec.message();
   ASSERT_TRUE(websocket_client.is_open_for_writing());
 
   const auto text_payload = unique_text("aero-text-");
@@ -205,8 +210,8 @@ TEST(WebsocketNetworkTlsClient, TextAndPingRoundtripReturnsTextEchoAndPong) {
 TEST(WebsocketNetworkTlsClient, ReadAfterCloseReturnsConnectionClosed) {
   client websocket_client{system_tls_ctx};
 
-  auto connect_result = websocket_client.connect(echo_endpoint);
-  ASSERT_TRUE(connect_result) << connect_result.error().category().name() << " : " << connect_result.error().message();
+  auto connect_ec = connect_to_echo(websocket_client);
+  ASSERT_FALSE(connect_ec) << connect_ec.category().name() << " : " << connect_ec.message();
   ASSERT_TRUE(websocket_client.is_open_for_writing());
 
   auto close_ec = websocket_client.close(close_code::normal, "closing");
@@ -223,8 +228,8 @@ TEST(WebsocketNetworkTlsClient, ReadAfterCloseReturnsConnectionClosed) {
 TEST(WebsocketNetworkTlsClient, SendAfterCloseReturnsConnectionClosed) {
   client websocket_client{system_tls_ctx};
 
-  auto connect_result = websocket_client.connect(echo_endpoint);
-  ASSERT_TRUE(connect_result) << connect_result.error().category().name() << " : " << connect_result.error().message();
+  auto connect_ec = connect_to_echo(websocket_client);
+  ASSERT_FALSE(connect_ec) << connect_ec.category().name() << " : " << connect_ec.message();
   ASSERT_TRUE(websocket_client.is_open_for_writing());
 
   auto close_ec = websocket_client.close(close_code::normal, "closing");

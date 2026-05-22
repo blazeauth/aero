@@ -39,14 +39,14 @@ int main() {
   using namespace std::chrono_literals;
   websocket::client client;
 
-  auto connect_result = client.connect("ws://websockets.chilkat.io/wsChilkatEcho.ashx", 5s);
-  if (!connect_result) {
-    if (connect_result.error() == aero::error::errc::timeout) {
-      print_error("Connect to echo server timed out", connect_result.error());
+  auto [connect_ec, handshake_resp] = client.connect("ws://websockets.chilkat.io/wsChilkatEcho.ashx", 5s);
+  if (connect_ec) {
+    if (connect_ec == aero::error::errc::timeout) {
+      print_error("Connect to echo server timed out", connect_ec);
       return 1;
     }
 
-    print_error("Connect to echo server failed", connect_result.error());
+    print_error("Connect to echo server failed", connect_ec);
     return 1;
   }
 

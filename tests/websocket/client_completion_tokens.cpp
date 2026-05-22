@@ -11,7 +11,7 @@
 #include <asio/use_awaitable.hpp>
 #include <asio/use_future.hpp>
 
-#include "aero/http/headers.hpp"
+#include "aero/http/response.hpp"
 #include "aero/websocket/client.hpp"
 #include "aero/websocket/message.hpp"
 
@@ -21,18 +21,18 @@ namespace {
   void compile_token_matrix() {
     using namespace std::chrono_literals;
 
-    using headers_awaitable = asio::awaitable<std::tuple<std::error_code, aero::http::headers>>;
+    using response_awaitable = asio::awaitable<std::tuple<std::error_code, aero::http::response>>;
     using error_awaitable = asio::awaitable<std::tuple<std::error_code>>;
     using message_awaitable = asio::awaitable<std::tuple<std::error_code, aero::websocket::message>>;
 
     constexpr auto as_tuple_awaitable = asio::as_tuple(asio::use_awaitable);
 
-    static_assert(
-      std::same_as<decltype(std::declval<Client&>().async_connect(std::string_view{}, as_tuple_awaitable)), headers_awaitable>);
+    static_assert(std::same_as<decltype(std::declval<Client&>().async_connect(std::string_view{}, as_tuple_awaitable)),
+      response_awaitable>);
 
     static_assert(std::same_as<decltype(std::declval<Client&>().async_connect(std::string_view{},
                                  asio::cancel_after(1s, as_tuple_awaitable))),
-      headers_awaitable>);
+      response_awaitable>);
 
     static_assert(
       std::same_as<decltype(std::declval<Client&>().async_send_text(std::string_view{}, as_tuple_awaitable)), error_awaitable>);
@@ -48,7 +48,7 @@ namespace {
       std::same_as<decltype(std::declval<Client&>().async_send_text(std::string_view{}, asio::use_future)), std::future<void>>);
 
     static_assert(std::same_as<decltype(std::declval<Client&>().async_connect(std::string_view{}, asio::use_future)),
-      std::future<aero::http::headers>>);
+      std::future<aero::http::response>>);
   }
 
 } // namespace

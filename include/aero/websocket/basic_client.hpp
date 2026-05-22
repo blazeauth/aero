@@ -32,7 +32,7 @@
 #include "aero/error.hpp"
 #include "aero/final_action.hpp"
 #include "aero/http/detail/common.hpp"
-#include "aero/http/headers.hpp"
+#include "aero/http/response.hpp"
 #include "aero/net/concepts/transport.hpp"
 #include "aero/websocket/client_handshaker.hpp"
 #include "aero/websocket/client_options.hpp"
@@ -130,29 +130,29 @@ namespace aero::websocket {
     auto async_connect(websocket::uri uri, http::headers headers, CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
 
-      return asio::async_initiate<decltype(bound_token), void(std::error_code, http::headers)>(
-        asio::co_composed<void(std::error_code, http::headers)>(
+      return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
+        asio::co_composed<void(std::error_code, http::response)>(
           [this](auto, websocket::uri uri, http::headers headers) -> void {
             reset_connection_state(state::connecting);
 
             auto [connect_ec] =
               co_await transport_.async_connect(std::string{uri.host()}, uri.port(), return_as_deferred_tuple());
             if (connect_ec) {
-              std::ignore = co_await async_finalize_session({}, return_as_deferred_tuple());
-              co_return {connect_ec, http::headers{}};
+              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_return {connect_ec, http::response{}};
             }
 
             // Build bodyless HTTP websocket upgrade request
             auto handshake = client_handshaker_.build_request(uri, std::move(headers));
             if (!handshake) {
-              std::ignore = co_await async_finalize_session({}, return_as_deferred_tuple());
-              co_return {handshake.error(), http::headers{}};
+              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_return {handshake.error(), http::response{}};
             }
 
             auto [write_ec, bytes_written] = co_await transport_.async_write(handshake->bytes(), return_as_deferred_tuple());
             if (write_ec) {
-              std::ignore = co_await async_finalize_session({}, return_as_deferred_tuple());
-              co_return {write_ec, http::headers{}};
+              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_return {write_ec, http::response{}};
             }
 
             std::vector<std::byte> response_buffer;
@@ -161,8 +161,8 @@ namespace aero::websocket {
             auto [read_ec, bytes_read] =
               co_await transport_.async_read_until(response_buffer, http::detail::double_crlf, return_as_deferred_tuple());
             if (read_ec) {
-              std::ignore = co_await async_finalize_session({}, return_as_deferred_tuple());
-              co_return {read_ec, http::headers{}};
+              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_return {read_ec, http::response{}};
             }
 
             // https://www.boost.org/doc/libs/1_43_0/doc/html/boost_asio/reference/async_read_until.html
@@ -174,17 +174,41 @@ namespace aero::websocket {
               data_received_in_handshake_ = std::vector{std::from_range, data_after_handshake};
             }
 
+            http::response server_response;
             std::string_view handshake_response{reinterpret_cast<const char*>(response_buffer.data()), bytes_read};
 
+            auto status_line_end = handshake_response.find(http::detail::crlf);
+            if (status_line_end == std::string_view::npos) {
+              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_return {http::error::protocol_error::status_line_invalid, http::response{}};
+            }
+
+            auto status_line = http::status_line::parse(handshake_response.substr(0, status_line_end));
+            if (!status_line) {
+              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_return {status_line.error(), http::response{}};
+            }
+
+            server_response.status_line = *status_line;
+
+            auto headers_section_start = status_line_end + http::detail::crlf.size();
+            auto response_headers = http::headers::parse(handshake_response.substr(headers_section_start));
+            if (!response_headers) {
+              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_return {response_headers.error(), std::move(server_response)};
+            }
+
+            server_response.headers = *response_headers;
+
             // Perform upgrade challenge with server handshake response
-            auto parsed_headers = client_handshaker_.parse_response(handshake_response, handshake->sec_websocket_key);
-            if (!parsed_headers.has_value()) {
-              std::ignore = co_await async_finalize_session({}, return_as_deferred_tuple());
-              co_return {parsed_headers.error(), http::headers{}};
+            auto challenge_ec = client_handshaker_.validate_server_handshake(server_response, handshake->sec_websocket_key);
+            if (challenge_ec) {
+              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_return {challenge_ec, std::move(server_response)};
             }
 
             set_connection_state(state::open);
-            co_return {std::error_code{}, std::move(*parsed_headers)};
+            co_return {std::error_code{}, std::move(server_response)};
           },
           transport_.get_strand()),
         bound_token,
@@ -197,11 +221,11 @@ namespace aero::websocket {
       CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
 
-      return asio::async_initiate<decltype(bound_token), void(std::error_code, http::headers)>(
-        asio::co_composed<void(std::error_code, http::headers)>(
+      return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
+        asio::co_composed<void(std::error_code, http::response)>(
           [this](auto, std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers) -> void {
             if (!parsed_uri.has_value()) {
-              co_return {parsed_uri.error(), http::headers{}};
+              co_return {parsed_uri.error(), http::response{}};
             }
 
             co_return co_await this->async_connect(std::move(*parsed_uri), std::move(headers), return_as_deferred_tuple());
@@ -494,10 +518,10 @@ namespace aero::websocket {
                       co_return {final_ec, websocket::message{}};
                     }
                     // Return the close message
-                    co_return {std::error_code{}, *message};
+                    co_return {std::error_code{}, std::move(*message)};
                   }
 
-                  co_return {std::error_code{}, *message};
+                  co_return {std::error_code{}, std::move(*message)};
                 }
 
                 if (is_current_state(state::closing) || is_close_sent()) {
@@ -505,7 +529,7 @@ namespace aero::websocket {
                 }
 
                 // Return any non-control or handled control message to the caller
-                co_return {std::error_code{}, *message};
+                co_return {std::error_code{}, std::move(*message)};
               }
 
               // If a deferred error was stored (e.g. from a previous consume), handle it now
@@ -548,63 +572,62 @@ namespace aero::websocket {
         bound_token);
     }
 
-    std::expected<http::headers, std::error_code> connect(websocket::uri uri, http::headers headers) {
-      return synchronize_awaitable<http::headers>(
+    std::tuple<std::error_code, http::response> connect(websocket::uri uri, http::headers headers) {
+      return synchronize_awaitable<http::response>(
         async_connect(std::move(uri), std::move(headers), return_as_awaitable_tuple()));
     }
 
-    std::expected<http::headers, std::error_code> connect(websocket::uri uri, http::headers headers, duration timeout) {
-      return synchronize_awaitable<http::headers>(
+    std::tuple<std::error_code, http::response> connect(websocket::uri uri, http::headers headers, duration timeout) {
+      return synchronize_awaitable<http::response>(
         async_connect(std::move(uri), std::move(headers), asio::cancel_after(timeout, return_as_awaitable_tuple())));
     }
 
-    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
+    std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
       http::headers headers) {
       if (!parsed_uri) {
-        return std::unexpected(parsed_uri.error());
+        return {parsed_uri.error(), {}};
       }
       return connect(std::move(parsed_uri.value()), std::move(headers));
     }
 
-    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
+    std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
       http::headers headers, duration timeout) {
       if (!parsed_uri) {
-        return std::unexpected(parsed_uri.error());
+        return {parsed_uri.error(), {}};
       }
       return connect(std::move(parsed_uri.value()), std::move(headers), timeout);
     }
 
-    std::expected<http::headers, std::error_code> connect(std::string_view uri_string, http::headers headers) {
+    std::tuple<std::error_code, http::response> connect(std::string_view uri_string, http::headers headers) {
       return connect(websocket::uri::parse(uri_string), std::move(headers));
     }
 
-    std::expected<http::headers, std::error_code> connect(std::string_view uri_string, http::headers headers,
-      duration timeout) {
+    std::tuple<std::error_code, http::response> connect(std::string_view uri_string, http::headers headers, duration timeout) {
       return connect(websocket::uri::parse(uri_string), std::move(headers), timeout);
     }
 
-    std::expected<http::headers, std::error_code> connect(websocket::uri uri) {
+    std::tuple<std::error_code, http::response> connect(websocket::uri uri) {
       return connect(std::move(uri), http::headers{});
     }
 
-    std::expected<http::headers, std::error_code> connect(websocket::uri uri, duration timeout) {
+    std::tuple<std::error_code, http::response> connect(websocket::uri uri, duration timeout) {
       return connect(std::move(uri), http::headers{}, timeout);
     }
 
-    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri) {
+    std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri) {
       return connect(std::move(parsed_uri), http::headers{});
     }
 
-    std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
+    std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
       duration timeout) {
       return connect(std::move(parsed_uri), http::headers{}, timeout);
     }
 
-    std::expected<http::headers, std::error_code> connect(std::string_view uri_string) {
+    std::tuple<std::error_code, http::response> connect(std::string_view uri_string) {
       return connect(uri_string, http::headers{});
     }
 
-    std::expected<http::headers, std::error_code> connect(std::string_view uri_string, duration timeout) {
+    std::tuple<std::error_code, http::response> connect(std::string_view uri_string, duration timeout) {
       return connect(uri_string, http::headers{}, timeout);
     }
 
@@ -659,11 +682,22 @@ namespace aero::websocket {
     }
 
     std::expected<websocket::message, std::error_code> read() {
-      return synchronize_awaitable<websocket::message>(async_read(return_as_awaitable_tuple()));
+      auto [read_ec, message] = synchronize_awaitable<websocket::message>(async_read(return_as_awaitable_tuple()));
+      if (read_ec) {
+        return std::unexpected(read_ec);
+      }
+
+      return message;
     }
 
     std::expected<websocket::message, std::error_code> read(duration timeout) {
-      return synchronize_awaitable<websocket::message>(async_read(asio::cancel_after(timeout, return_as_awaitable_tuple())));
+      auto [read_ec, message] =
+        synchronize_awaitable<websocket::message>(async_read(asio::cancel_after(timeout, return_as_awaitable_tuple())));
+      if (read_ec) {
+        return std::unexpected(read_ec);
+      }
+
+      return message;
     }
 
     [[nodiscard]] bool is_open_for_writing() const noexcept {
@@ -960,24 +994,20 @@ namespace aero::websocket {
     }
 
     template <typename ResultT, typename F>
-      requires(!std::same_as<ResultT, std::error_code>)
-    std::expected<ResultT, std::error_code> synchronize_awaitable(F&& awaitable) {
+      requires(not std::same_as<ResultT, std::error_code>)
+    std::tuple<std::error_code, ResultT> synchronize_awaitable(F&& awaitable) {
       if (transport_.get_strand().running_in_this_thread()) {
-        return std::unexpected(aero::error::basic_error::deadlock_would_occur);
+        return {aero::error::basic_error::deadlock_would_occur, {}};
       }
 
       try {
-        auto [ec, result] = asio::co_spawn(transport_.get_strand(), std::forward<F>(awaitable), asio::use_future).get();
-        if (ec) {
-          return std::unexpected(ec);
-        }
-        return std::move(result);
+        return asio::co_spawn(transport_.get_strand(), std::forward<F>(awaitable), asio::use_future).get();
       } catch (const std::system_error& e) {
-        return std::unexpected(e.code());
+        return {e.code(), {}};
       } catch (const std::future_error& e) {
-        return std::unexpected(e.code());
+        return {e.code(), {}};
       } catch (...) {
-        return std::unexpected(std::make_error_code(std::errc::io_error));
+        return {make_error_code(std::errc::io_error), {}};
       }
     }
 
@@ -996,7 +1026,7 @@ namespace aero::websocket {
       } catch (const std::future_error& e) {
         return e.code();
       } catch (...) {
-        return std::make_error_code(std::errc::io_error);
+        return make_error_code(std::errc::io_error);
       }
     }
 

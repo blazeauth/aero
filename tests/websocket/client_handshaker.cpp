@@ -1,11 +1,12 @@
-#include <format>
+#include <cstddef>
 #include <gtest/gtest.h>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
-#include "aero/http/error.hpp"
+#include "aero/http/headers.hpp"
 #include "aero/http/status_line.hpp"
 #include "aero/websocket/client_handshaker.hpp"
 #include "aero/websocket/detail/accept_challenge.hpp"
@@ -18,32 +19,46 @@ namespace {
 
   using websocket::error::handshake_error;
 
-  std::error_code validate_server_handshake(std::string_view server_handshake, std::string_view sec_websocket_key) {
-    return websocket::client_handshaker{}.parse_response(server_handshake, sec_websocket_key).error_or(std::error_code{});
+  std::error_code validate_server_handshake(const http::response& server_response, std::string_view sec_websocket_key) {
+    return websocket::client_handshaker{}.validate_server_handshake(server_response, sec_websocket_key);
   }
 
-  std::string generate_headers_buffer(std::vector<std::pair<std::string, std::string>> headers) {
-    std::string buffer;
+  http::headers make_headers(std::vector<std::pair<std::string, std::string>> headers) {
+    http::headers fields;
     for (const auto& [header_key, header_value] : headers) {
-      buffer += std::format("{}: {}\r\n", header_key, header_value);
+      fields.add(header_key, header_value);
     }
-    buffer += "\r\n";
-    return buffer;
+
+    auto parsed = http::headers::parse(fields.serialize());
+    if (!parsed.has_value()) {
+      throw std::system_error{parsed.error()};
+    }
+    return std::move(*parsed);
   }
 
-  std::string generate_server_handshake_buffer(std::string_view status_line,
+  std::vector<std::byte> make_bytes(std::string_view text) {
+    std::vector<std::byte> bytes;
+    bytes.reserve(text.size());
+    for (unsigned char character : text) {
+      bytes.push_back(static_cast<std::byte>(character));
+    }
+    return bytes;
+  }
+
+  http::response generate_server_handshake_buffer(std::string_view status_line,
     std::vector<std::pair<std::string, std::string>> headers) {
-    std::string buffer;
-    buffer += std::format("{}\r\n", status_line);
-    buffer += generate_headers_buffer(std::move(headers));
-    return buffer;
+    return http::response{
+      .body = {},
+      .status_line = *http::status_line::parse(status_line),
+      .headers = make_headers(std::move(headers)),
+    };
   }
 
-  std::string generate_server_handshake_with_raw_tail(std::string_view status_line,
+  http::response generate_server_handshake_with_raw_tail(std::string_view status_line,
     std::vector<std::pair<std::string, std::string>> headers, std::string_view tail) {
-    auto buffer = generate_server_handshake_buffer(status_line, std::move(headers));
-    buffer.append(tail.data(), tail.size());
-    return buffer;
+    auto response = generate_server_handshake_buffer(status_line, std::move(headers));
+    response.body = make_bytes(tail);
+    return response;
   }
 
   std::string generate_valid_accept(std::string_view sec_websocket_key) {
@@ -129,39 +144,6 @@ TEST(WebsocketServerHandshake, AcceptsHandshakeEvenIfBodyFollowsHeaders) {
 
   auto error_code = validate_server_handshake(handshake, sec_websocket_key);
   EXPECT_EQ(error_code, std::error_code{});
-}
-
-TEST(WebsocketServerHandshake, ErrorIfStatusLineEndIsMissing) {
-  constexpr std::string_view sec_websocket_key{"dGhlIHNhbXBsZSBub25jZQ=="};
-  constexpr std::string_view handshake{"HTTP/1.1 101 Switching Protocols"};
-
-  auto error_code = validate_server_handshake(handshake, sec_websocket_key);
-  EXPECT_EQ(error_code, http::error::protocol_error::status_line_invalid);
-}
-
-TEST(WebsocketServerHandshake, PropagatesStatusLineParseError) {
-  constexpr std::string_view sec_websocket_key{"dGhlIHNhbXBsZSBub25jZQ=="};
-  const auto sec_websocket_accept = generate_valid_accept(sec_websocket_key);
-
-  const auto handshake = generate_server_handshake_buffer("TP/1.1 101 Switching Protocols",
-    {
-      {"Upgrade", "websocket"},
-      {"Connection", "Upgrade"},
-      {"Sec-WebSocket-Accept", sec_websocket_accept},
-    });
-
-  const auto expected_ec = http::status_line::parse("TP/1.1 101 Switching Protocols").error();
-  const auto error_code = validate_server_handshake(handshake, sec_websocket_key);
-
-  EXPECT_EQ(error_code, expected_ec);
-}
-
-TEST(WebsocketServerHandshake, PropagatesHeadersParseError) {
-  constexpr std::string_view sec_websocket_key{"dGhlIHNhbXBsZSBub25jZQ=="};
-  constexpr std::string_view handshake{"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"};
-
-  const auto error_code = validate_server_handshake(handshake, sec_websocket_key);
-  EXPECT_EQ(error_code, http::error::header_error::section_incomplete);
 }
 
 TEST(WebsocketServerHandshake, ErrorIfStatusCodeIsNotSwitchingProtocols) {

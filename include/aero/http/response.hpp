@@ -30,6 +30,10 @@ namespace aero::http {
     [[nodiscard]] std::expected<std::string_view, std::error_code> content_type() const noexcept {
       return headers.content_type();
     }
+
+    [[nodiscard]] explicit operator bool() const noexcept {
+      return not empty();
+    }
   };
 
 } // namespace aero::http
