@@ -43,9 +43,9 @@ namespace aero::tls::detail {
     ::SSL_set_verify_result(ssl, X509_V_OK);
   }
 
-  inline std::optional<tls::error::certificate_error> verify_error_to_cert_error(tls::detail::x509_verify_error error) {
+  inline std::optional<tls::certificate_error> verify_error_to_cert_error(tls::detail::x509_verify_error error) {
+    using tls::certificate_error;
     using tls::detail::x509_verify_error;
-    using tls::error::certificate_error;
     switch (error) {
     case x509_verify_error::ok:
       return std::nullopt;

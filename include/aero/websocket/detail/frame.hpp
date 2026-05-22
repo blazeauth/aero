@@ -88,7 +88,7 @@ namespace aero::websocket::detail {
 
     // Frame is valid by RFC6455 (without extensions)
     [[nodiscard]] std::error_code validate() const noexcept {
-      using websocket::error::protocol_error;
+      using websocket::protocol_error;
 
       if (masked && !masking_key.has_value()) [[unlikely]] {
         return protocol_error::masking_key_missing;
@@ -145,7 +145,7 @@ namespace aero::websocket::detail {
 
     // Masking-aware close-code parser
     [[nodiscard]] std::expected<websocket::close_code, std::error_code> parse_close_code() const noexcept {
-      using websocket::error::protocol_error;
+      using websocket::protocol_error;
 
       if (application_data.empty()) {
         return std::unexpected(protocol_error::close_code_missing);

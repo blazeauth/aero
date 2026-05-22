@@ -37,7 +37,7 @@ namespace aero::websocket::detail {
       // When TLS is enabled, we just ask the TLS library CSPRNG for 4 bytes
       // which is specifically meant for cryptographic use
       if (RAND_bytes(reinterpret_cast<uint8_t*>(result.data()), result.size()) != 1) {
-        return std::unexpected(websocket::error::protocol_error::masking_key_generation_failed);
+        return std::unexpected(websocket::protocol_error::masking_key_generation_failed);
       }
 #else
       // In a "no TLS" build, std::random_device is the only standard way to
@@ -57,7 +57,7 @@ namespace aero::websocket::detail {
 
   template <concepts::masking_key_source MaskingKeySource = csprng_masking_key_source>
   class client_frame_builder {
-    using protocol_error = websocket::error::protocol_error;
+    using protocol_error = websocket::protocol_error;
     [[maybe_unused]] constexpr static auto max_control_frame_size = 125;
 
    public:

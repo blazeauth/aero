@@ -55,7 +55,7 @@ asio::awaitable<std::error_code> async_run_echo_client(websocket::tls::client& c
 
   auto [close_ec] = co_await client.async_close(websocket::close_code::normal, asio::as_tuple(asio::use_awaitable));
   if (close_ec) {
-    if (close_ec == aero::error::errc::timeout) {
+    if (close_ec == aero::errc::timeout) {
       co_await client.async_force_close(asio::use_awaitable);
       co_return std::error_code{};
     }

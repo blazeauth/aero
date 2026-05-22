@@ -190,7 +190,7 @@ namespace aero::http::detail {
           if constexpr (connection_pool::is_secure_transport()) {
 #ifdef AERO_USE_TLS
             if (tls_context_ == nullptr) {
-              return std::unexpected(http::error::connection_error::tls_context_missing);
+              return std::unexpected(http::connection_error::tls_context_missing);
             }
 
             return pooled_connection{
@@ -199,7 +199,7 @@ namespace aero::http::detail {
               transport_type{executor_, *tls_context_, options_.transport_buffer_size},
             };
 #else
-            return std::unexpected(aero::error::basic_error::tls_support_unavailable);
+            return std::unexpected(aero::basic_error::tls_support_unavailable);
 #endif
           } else {
             return pooled_connection{
@@ -209,7 +209,7 @@ namespace aero::http::detail {
             };
           }
         } catch (const std::bad_alloc&) {
-          return std::unexpected(aero::error::basic_error::not_enough_memory);
+          return std::unexpected(aero::basic_error::not_enough_memory);
         }
       }
 
@@ -372,16 +372,16 @@ namespace aero::http::detail {
 
     [[nodiscard]] std::expected<leased_connection, std::error_code> acquire(std::string host, std::uint16_t port) {
       if (!state_) {
-        return std::unexpected(http::error::connection_error::pool_unavailable);
+        return std::unexpected(http::connection_error::pool_unavailable);
       }
 
       auto key = make_key(std::move(host), port);
       if (key.host.empty()) {
-        return std::unexpected(http::error::connection_error::endpoint_host_empty);
+        return std::unexpected(http::connection_error::endpoint_host_empty);
       }
 
       if (key.port == 0U) {
-        return std::unexpected(http::error::connection_error::endpoint_port_invalid);
+        return std::unexpected(http::connection_error::endpoint_port_invalid);
       }
 
       auto connection = state_->acquire_connection(std::move(key));

@@ -10,7 +10,7 @@
 #include <asio/ssl/error.hpp>
 #endif
 
-namespace aero::error {
+namespace aero {
 
   enum class basic_error : std::uint8_t {
     not_enough_memory = 1,
@@ -35,7 +35,7 @@ namespace aero::error {
       }
 
       [[nodiscard]] std::string message(int value) const override {
-        switch (static_cast<aero::error::basic_error>(value)) {
+        switch (static_cast<aero::basic_error>(value)) {
         case basic_error::not_enough_memory:
           return "not enough memory";
         case basic_error::deadlock_would_occur:
@@ -55,7 +55,7 @@ namespace aero::error {
       }
 
       [[nodiscard]] std::string message(int value) const override {
-        using aero::error::errc;
+        using aero::errc;
         switch (static_cast<errc>(value)) {
         case errc::canceled:
           return "operation canceled";
@@ -96,12 +96,12 @@ namespace aero::error {
     return {static_cast<int>(code), basic_error_category()};
   }
 
-  inline std::error_condition make_error_condition(aero::error::errc value) noexcept {
+  inline std::error_condition make_error_condition(aero::errc value) noexcept {
     return {static_cast<int>(value), error_condition_category()};
   }
 
   [[nodiscard]] inline bool detail::error_condition_category::equivalent(const std::error_code& ec, int value) const noexcept {
-    using aero::error::errc;
+    using aero::errc;
 
     auto is_any_of = [&ec](auto... values) {
       return ((ec == values) || ...);
@@ -134,9 +134,9 @@ namespace aero::error {
     }
   }
 
-} // namespace aero::error
+} // namespace aero
 
 template <>
-struct std::is_error_code_enum<aero::error::basic_error> : std::true_type {};
+struct std::is_error_code_enum<aero::basic_error> : std::true_type {};
 template <>
-struct std::is_error_condition_enum<aero::error::errc> : std::true_type {};
+struct std::is_error_condition_enum<aero::errc> : std::true_type {};

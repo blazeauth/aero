@@ -18,11 +18,11 @@ namespace websocket = aero::websocket;
 
 namespace {
 
+  using websocket::protocol_error;
   using websocket::detail::frame;
   using websocket::detail::frame_encoder;
   using websocket::detail::masking_key;
   using websocket::detail::opcode;
-  using websocket::error::protocol_error;
 
   using aero::tests::websocket::big_endian_bytes;
   using aero::tests::websocket::starts_with;
@@ -217,7 +217,7 @@ TEST(WebsocketFrameEncoder, RejectsOutputTooSmall) {
   auto encoded = frame_encoder{}.encode(out, input);
   EXPECT_FALSE(encoded);
   if (!encoded) {
-    EXPECT_EQ(encoded.error(), aero::error::basic_error::not_enough_memory);
+    EXPECT_EQ(encoded.error(), aero::basic_error::not_enough_memory);
   }
 }
 

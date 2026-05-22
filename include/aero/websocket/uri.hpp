@@ -35,7 +35,7 @@ namespace aero::websocket {
   };
 
   class uri {
-    using uri_error = websocket::error::uri_error;
+    using uri_error = websocket::uri_error;
 
    public:
     uri() = default;

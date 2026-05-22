@@ -93,7 +93,7 @@ namespace aero::http {
     }
     auto code = *parse_result;
     if (!is_valid_status_code(code)) {
-      return std::unexpected(http::error::protocol_error::status_code_invalid);
+      return std::unexpected(http::protocol_error::status_code_invalid);
     }
     return code;
   }

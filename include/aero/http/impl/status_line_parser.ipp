@@ -23,12 +23,12 @@ namespace aero::http {
 
     auto protocol_str_end = buffer.find(' ');
     if (protocol_str_end == std::string_view::npos) {
-      return std::unexpected(http::error::protocol_error::status_line_invalid);
+      return std::unexpected(http::protocol_error::status_line_invalid);
     }
 
     auto protocol = buffer.substr(0, protocol_str_end);
     if (!parse_version(protocol).has_value()) {
-      return std::unexpected(http::error::protocol_error::version_invalid);
+      return std::unexpected(http::protocol_error::version_invalid);
     }
 
     auto remaining = buffer.substr(protocol_str_end + 1);

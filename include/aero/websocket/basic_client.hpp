@@ -49,7 +49,7 @@ namespace aero::websocket {
 
   template <net::concepts::transport Transport>
   class basic_client {
-    using protocol_error = websocket::error::protocol_error;
+    using protocol_error = websocket::protocol_error;
     constexpr static std::span<const std::byte> null_bytes{};
     constexpr static std::chrono::seconds default_close_timeout{5};
 
@@ -180,7 +180,7 @@ namespace aero::websocket {
             auto status_line_end = handshake_response.find(http::detail::crlf);
             if (status_line_end == std::string_view::npos) {
               co_await async_finalize_session({}, return_as_deferred_tuple());
-              co_return {http::error::protocol_error::status_line_invalid, http::response{}};
+              co_return {http::protocol_error::status_line_invalid, http::response{}};
             }
 
             auto status_line = http::status_line::parse(handshake_response.substr(0, status_line_end));
@@ -742,14 +742,14 @@ namespace aero::websocket {
     }
 
     static bool is_fatal_websocket_error(std::error_code ec) {
-      return websocket::error::is_invalid_payload(ec) || websocket::error::is_protocol_violation(ec);
+      return websocket::is_invalid_payload(ec) || websocket::is_protocol_violation(ec);
     }
 
     static websocket::close_code close_code_for_error(std::error_code ec) {
-      if (websocket::error::is_invalid_payload(ec)) {
+      if (websocket::is_invalid_payload(ec)) {
         return close_code::invalid_payload;
       }
-      if (websocket::error::is_protocol_violation(ec)) {
+      if (websocket::is_protocol_violation(ec)) {
         return close_code::protocol_error;
       }
 
@@ -997,7 +997,7 @@ namespace aero::websocket {
       requires(not std::same_as<ResultT, std::error_code>)
     std::tuple<std::error_code, ResultT> synchronize_awaitable(F&& awaitable) {
       if (transport_.get_strand().running_in_this_thread()) {
-        return {aero::error::basic_error::deadlock_would_occur, {}};
+        return {aero::basic_error::deadlock_would_occur, {}};
       }
 
       try {
@@ -1015,7 +1015,7 @@ namespace aero::websocket {
       requires(std::same_as<ResultT, std::error_code>)
     std::error_code synchronize_awaitable(F&& awaitable) {
       if (transport_.get_strand().running_in_this_thread()) {
-        return aero::error::basic_error::deadlock_would_occur;
+        return aero::basic_error::deadlock_would_occur;
       }
 
       try {

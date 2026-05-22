@@ -8,7 +8,7 @@ namespace aero::http {
 
   namespace {
 
-    using http::error::header_error;
+    using http::header_error;
 
     struct field_view {
       std::string_view name;

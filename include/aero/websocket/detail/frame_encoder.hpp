@@ -22,7 +22,7 @@ namespace aero::websocket::detail {
         return std::unexpected(ec);
       }
       if (out.size() < header_size) [[unlikely]] {
-        return std::unexpected(aero::error::basic_error::not_enough_memory);
+        return std::unexpected(aero::basic_error::not_enough_memory);
       }
 
       out[0] = make_first_byte(frame);
@@ -47,7 +47,7 @@ namespace aero::websocket::detail {
     [[nodiscard]] std::error_code mask(std::span<std::byte> out, std::span<const std::byte> payload,
       detail::masking_key masking_key) const noexcept {
       if (out.size() < payload.size()) [[unlikely]] {
-        return aero::error::basic_error::not_enough_memory;
+        return aero::basic_error::not_enough_memory;
       }
 
       for (std::size_t i{}; i < payload.size(); ++i) {

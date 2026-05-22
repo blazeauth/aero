@@ -127,7 +127,7 @@ namespace aero {
       std::erase_if(threads_, [](const thread& worker_thread) { return !worker_thread.joinable(); });
 
       if (join_called_from_worker_thread) {
-        return aero::error::basic_error::deadlock_would_occur;
+        return aero::basic_error::deadlock_would_occur;
       }
       return {};
     }

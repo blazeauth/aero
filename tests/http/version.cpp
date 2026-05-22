@@ -6,8 +6,8 @@
 namespace {
 
   namespace http = aero::http;
+  using http::protocol_error;
   using http::version;
-  using http::error::protocol_error;
 
 } // namespace
 

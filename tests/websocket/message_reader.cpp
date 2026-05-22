@@ -20,11 +20,11 @@ namespace {
   using aero::websocket::close_code;
   using aero::websocket::message;
   using aero::websocket::message_kind;
+  using aero::websocket::message_reader_error;
+  using aero::websocket::protocol_error;
   using aero::websocket::detail::message_reader;
   using aero::websocket::detail::message_reader_config;
   using aero::websocket::detail::opcode;
-  using aero::websocket::error::message_reader_error;
-  using aero::websocket::error::protocol_error;
 
   using aero::tests::websocket::build_frame_bytes_canonical;
   using aero::tests::websocket::make_payload_bytes;

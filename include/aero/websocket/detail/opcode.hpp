@@ -36,12 +36,12 @@ namespace aero::websocket::detail {
       return static_cast<opcode>(value);
     }
 
-    return std::unexpected(error::protocol_error::opcode_invalid);
+    return std::unexpected(websocket::protocol_error::opcode_invalid);
   }
 
   [[nodiscard]] inline std::expected<opcode, std::error_code> parse_opcode(std::uint8_t value) {
     if (is_reserved_opcode(value)) {
-      return std::unexpected(error::protocol_error::opcode_reserved);
+      return std::unexpected(websocket::protocol_error::opcode_reserved);
     }
 
     return to_opcode(value);

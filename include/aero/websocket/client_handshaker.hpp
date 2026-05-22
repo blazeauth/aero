@@ -45,7 +45,7 @@ namespace aero::websocket {
       "sec-websocket-accept",
     };
 
-    using handshake_error = websocket::error::handshake_error;
+    using handshake_error = websocket::handshake_error;
 
    public:
     client_handshaker() = default;
@@ -108,7 +108,7 @@ namespace aero::websocket {
 
     [[nodiscard]] std::error_code validate_server_handshake(const http::response& resp,
       std::string_view sec_websocket_key) const {
-      using websocket::error::handshake_error;
+      using websocket::handshake_error;
 
       if (sec_websocket_key.empty()) {
         return handshake_error::accept_challenge_failed;

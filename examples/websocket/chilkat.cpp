@@ -41,7 +41,7 @@ int main() {
 
   auto [connect_ec, handshake_resp] = client.connect("ws://websockets.chilkat.io/wsChilkatEcho.ashx", 5s);
   if (connect_ec) {
-    if (connect_ec == aero::error::errc::timeout) {
+    if (connect_ec == aero::errc::timeout) {
       print_error("Connect to echo server timed out", connect_ec);
       return 1;
     }

@@ -12,9 +12,9 @@
 namespace {
 
   namespace http = aero::http;
+  using http::header_error;
   using http::detail::crlf;
   using http::detail::double_crlf;
-  using http::error::header_error;
 
   std::vector<std::string> values_of(const http::headers& fields, std::string_view name) {
     std::vector<std::string> values{};

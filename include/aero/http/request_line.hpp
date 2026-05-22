@@ -45,7 +45,7 @@ namespace aero::http {
     }
 
     [[nodiscard]] static std::expected<request_line, std::error_code> parse(std::string_view line) {
-      using http::error::protocol_error;
+      using http::protocol_error;
       constexpr auto npos = std::string_view::npos;
 
       if (line.ends_with(detail::crlf)) {
