@@ -84,14 +84,14 @@ int main() {
 
   websocket::tls::client client{tls_ctx.context()};
 
-  auto handshake_headers = client.connect("wss://stream.binance.com:9443/ws/btcusdt@trade", 5s);
-  if (!handshake_headers) {
-    print_error("Connect to binance stream failed", handshake_headers.error());
+  auto [connect_ec, handshake_response] = client.connect("wss://stream.binance.com:9443/ws/btcusdt@trade", 5s);
+  if (connect_ec) {
+    print_error("Connect to binance stream failed", connect_ec);
     return 1;
   }
 
   std::println("Succesfully connected");
-  print_headers(*handshake_headers);
+  print_headers(handshake_response.headers);
 
   aero::deadline deadline{5min};
 
@@ -168,13 +168,13 @@ void print_headers(const aero::http::headers& headers) {
 
 asio::awaitable<std::error_code> async_run_echo_client(websocket::tls::client& client) {
   // https://blog.postman.com/introducing-postman-websocket-echo-service/
-  auto [connect_ec, headers] =
+  auto [connect_ec, handshake_response] =
     co_await client.async_connect("wss://ws.postman-echo.com/raw", asio::as_tuple(asio::use_awaitable));
   if (connect_ec) {
     co_return connect_ec;
   }
 
-  print_headers(headers);
+  print_headers(handshake_response.headers);
 
   auto [write_ec] = co_await client.async_send_text("hello from aero client!!!", asio::as_tuple(asio::use_awaitable));
   if (write_ec) {
@@ -272,16 +272,20 @@ int main() {
   using namespace std::chrono_literals;
   websocket::client client;
 
-  auto connect_result = client.connect("ws://websockets.chilkat.io/wsChilkatEcho.ashx", 5s);
-  if (!connect_result) {
-    if (connect_result.error() == aero::error::errc::timeout) {
-      print_error("Connect to echo server timed out", connect_result.error());
+  auto [connect_ec, handshake_response] = client.connect("ws://websockets.chilkat.io/wsChilkatEcho.ashx", 5s);
+  if (connect_ec) {
+    if (connect_ec == aero::error::errc::timeout) {
+      print_error("Connect to echo server timed out", connect_ec);
       return 1;
     }
 
-    print_error("Connect to echo server failed", connect_result.error());
+    print_error("Connect to echo server failed", connect_ec);
     return 1;
   }
+
+  std::println("Connected. HTTP status: {} ({})",
+    handshake_response.status_line.reason_phrase,
+    handshake_response.status_code());
 
   auto text_ec = client.send_text("hello from aero client");
   if (text_ec) {
@@ -594,25 +598,25 @@ class basic_client {
   auto async_pong(std::string_view text, CompletionToken&& token);
   auto async_pong(CompletionToken&& token);
 
-  auto async_close(websocket::close_code code, std::string reason, CompletionToken&& token);
+  auto async_close(websocket::close_code code, std::string_view reason, CompletionToken&& token);
   auto async_close(websocket::close_code code, CompletionToken&& token);
   auto async_force_close(CompletionToken&& token);
 
   auto async_read(CompletionToken&& token);
 
-  std::expected<http::headers, std::error_code> connect(websocket::uri uri);
-  std::expected<http::headers, std::error_code> connect(websocket::uri uri, duration timeout);
-  std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri);
-  std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri, duration timeout);
-  std::expected<http::headers, std::error_code> connect(std::string_view uri_string);
-  std::expected<http::headers, std::error_code> connect(std::string_view uri_string, duration timeout);
+  std::tuple<std::error_code, http::response> connect(websocket::uri uri);
+  std::tuple<std::error_code, http::response> connect(websocket::uri uri, duration timeout);
+  std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri);
+  std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri, duration timeout);
+  std::tuple<std::error_code, http::response> connect(std::string_view uri_string);
+  std::tuple<std::error_code, http::response> connect(std::string_view uri_string, duration timeout);
 
-  std::expected<http::headers, std::error_code> connect(websocket::uri uri, http::headers headers);
-  std::expected<http::headers, std::error_code> connect(websocket::uri uri, http::headers headers, duration timeout);
-  std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers);
-  std::expected<http::headers, std::error_code> connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers, duration timeout);
-  std::expected<http::headers, std::error_code> connect(std::string_view uri_string, http::headers headers);
-  std::expected<http::headers, std::error_code> connect(std::string_view uri_string, http::headers headers, duration timeout);
+  std::tuple<std::error_code, http::response> connect(websocket::uri uri, http::headers headers);
+  std::tuple<std::error_code, http::response> connect(websocket::uri uri, http::headers headers, duration timeout);
+  std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers);
+  std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers, duration timeout);
+  std::tuple<std::error_code, http::response> connect(std::string_view uri_string, http::headers headers);
+  std::tuple<std::error_code, http::response> connect(std::string_view uri_string, http::headers headers, duration timeout);
 
   std::error_code send_text(std::string_view text);
   std::error_code send_binary(std::span<const std::byte> data);
@@ -626,7 +630,7 @@ class basic_client {
   std::error_code pong(std::span<const std::byte> data);
 
   std::error_code close(websocket::close_code code);
-  std::error_code close(websocket::close_code code, std::string reason);
+  std::error_code close(websocket::close_code code, std::string_view reason);
   std::error_code force_close();
 
   std::expected<websocket::message, std::error_code> read();
@@ -637,14 +641,15 @@ class basic_client {
   [[nodiscard]] bool is_closed() const noexcept;
   [[nodiscard]] bool is_closing() const noexcept;
   [[nodiscard]] executor_type get_executor() const noexcept;
+  [[nodiscard]] asio::strand<executor_type> get_strand() const noexcept;
   [[nodiscard]] transport_type& transport();
 };
 ```
 
-The synchronous API wraps multiple return values in `std::expected`. By design, the API cannot throw exceptions (although exceptions possibly can be thrown by asio).
+The synchronous API uses `std::error_code`, `std::expected` or `std::tuple` depending on the amount of data an operation needs to return. `async_connect(...)` completes with `http::response`, and `connect(...)` returns `std::tuple<std::error_code, http::response>`. When the HTTP status line and headers were parsed but WebSocket challenge validation failed, `ec` is non-zero and the returned response still contains the parsed peer response. By design, the API cannot throw exceptions (although exceptions possibly can be thrown by asio).
 
-- `aero::websocket::client` is simply an alias to `aero::websocket::basic_client<aero::net::tcp_transport>`
-- `aero::websocket::tls::client` is a class (not an alias since it requires storing and processing the TLS context) that wraps `aero::websocket::basic_client<aero::net::tls_transport>`, it has identical interface to `aero::websocket::client`
+- `aero::websocket::client` is simply an alias to `aero::websocket::basic_client<aero::net::tcp_transport<>>`
+- `aero::websocket::tls::client` is a class (not an alias since it requires storing and processing the TLS context) that wraps `aero::websocket::basic_client<aero::net::tls_transport<>>`, it has identical interface to `aero::websocket::client`
 
 
 Websocket message `aero::websocket::message`:
@@ -677,25 +682,27 @@ Any asynchronous operation accepts a completion token from the asio world. This 
 using namespace std::chrono_literals;
 
 // Return result as an awaitable tuple (asio::awaitable<std::tuple>)
-auto [connect_ec, headers] = co_await client.async_connect("ws://example.com/", asio::as_tuple(asio::use_awaitable));
+auto [connect_ec, handshake_response] =
+  co_await client.async_connect("ws://example.com/", asio::as_tuple(asio::use_awaitable));
 
 // Return result as an awaitable tuple with timeout of 1500ms
 auto [read_ec, message] = co_await client.async_read(asio::cancel_after(1500ms, asio::as_tuple(asio::use_awaitable)));
 
-// Ignore 'async_connect' return-value and only care about error in awaitable context
-std::error_code connect_ec;
-co_await client.async_connect("ws://example.com/", asio::redirect_error(asio::use_awaitable, connect_ec));
+// Capture the error separately and receive only the HTTP response from co_await
+std::error_code redirected_connect_ec;
+auto redirected_handshake_response =
+  co_await client.async_connect("ws://example.com/", asio::redirect_error(asio::use_awaitable, redirected_connect_ec));
 
 // Use functor with correct completion signature instead of coroutines
-client.async_connect("ws://example.com/", [](std::error_code ec, aero::http::headers headers) {});
+client.async_connect("ws://example.com/", [](std::error_code ec, aero::http::response response) {});
 
 // Return 'std::future' from async operation
-auto completion_future = client.async_connect("ws://example.com/", asio::use_future)
+auto completion_future = client.async_connect("ws://example.com/", asio::use_future);
 ```
 
 |Function|Completion Signature|
 |-|-|
-|`async_connect(...)`|void(std::error_code, aero::http::headers)|
+|`async_connect(...)`|void(std::error_code, aero::http::response)|
 |`async_send_text(...)`|void(std::error_code)|
 |`async_send_binary(...)`|void(std::error_code)|
 |`async_ping(...)`|void(std::error_code)|
