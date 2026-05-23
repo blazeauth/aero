@@ -28,7 +28,7 @@
 
 Aero is a lightweight, header-only networking library for modern C++.
 
-Library gives you a clean client-side API for **WebSocket** and **HTTP/1.0 / HTTP/1.1**, with optional **TLS** support. The project is built around a pretty simple idea: networking API should be easy to write, provide clear and straightforward errors, be pretty fast, and not turn into a heavyweight dependency just because you needed a client.
+Library gives you a clean client-side API for **WebSocket** and **HTTP/1.0 / HTTP/1.1**, with optional **TLS** support. The project is built around a pretty simple idea: networking code should be easy to write, provide clear and straightforward errors, be pretty fast, and not turn into a heavyweight dependency just because you needed a client.
 
 The library compiles with both OpenSSL and wolfSSL. The asynchronous model is built on asio completion tokens and feels like an extension of asio rather than part of a different library, in other words, the library is designed to feel like a pleasant addition to asio, but it doesn't adhere to the asio style as strictly as, say, Boost-Beast.
 
