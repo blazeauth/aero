@@ -1,13 +1,34 @@
-# Aero: Modern C++ Networking Library
+<img width="1920" height="400" alt="Github Aero Readme" src="https://github.com/user-attachments/assets/1a5eb6a9-6383-4d0b-8827-7b1614ca3b94" />
 
-<img width="1920" height="302" alt="Github Aero Image" src="https://github.com/user-attachments/assets/d05b01e9-8259-46f5-ae27-c81bf98027b5" />
+<h1 align="center">Aero: Modern C++ Networking Library</h1>
 
+<p align="center">
+  <strong>Networking that feels just right.</strong>
+  <br />
+  C++23 WebSocket-first client library with HTTP/1.x support
+</p>
 
-## TLDR
+<p align="center">
+  <a href="https://github.com/blazeauth/aero/actions/workflows/autobahn-websocket-client.yml"><img alt="Autobahn WebSocket client" src="https://github.com/blazeauth/aero/actions/workflows/autobahn-websocket-client.yml/badge.svg" /></a>
+  <a href="https://github.com/blazeauth/aero/actions/workflows/windows-msvc.yml"><img alt="Windows MSVC" src="https://github.com/blazeauth/aero/actions/workflows/windows-msvc.yml/badge.svg" /></a>
+  <a href="https://github.com/blazeauth/aero/actions/workflows/linux-gcc.yml"><img alt="Linux GCC" src="https://github.com/blazeauth/aero/actions/workflows/linux-gcc.yml/badge.svg" /></a>
+  <a href="https://github.com/blazeauth/aero/actions/workflows/linux-clang.yml"><img alt="Linux Clang" src="https://github.com/blazeauth/aero/actions/workflows/linux-clang.yml/badge.svg" /></a>
+  <a href="https://github.com/blazeauth/aero/actions/workflows/macos-appleclang.yml"><img alt="macOS AppleClang" src="https://github.com/blazeauth/aero/actions/workflows/macos-appleclang.yml/badge.svg" /></a>
+</p>
+
+<p align="center">
+  <code>header-only</code>
+  <code>C++23</code>
+  <code>networking</code>
+  <code>websocket</code>
+  <code>http</code>
+</p>
+
+---
 
 Aero is a lightweight, header-only networking library for modern C++.
 
-Library gives you a clean client-side API for **WebSocket** and **HTTP/1.0 / HTTP/1.1**, with optional **TLS** support. The project is built around a pretty simple idea: networking code should be easy to write, fast in practice, and not turn into a heavyweight dependency just because you needed a client.
+Library gives you a clean client-side API for **WebSocket** and **HTTP/1.0 / HTTP/1.1**, with optional **TLS** support. The project is built around a pretty simple idea: networking API should be easy to write, provide clear and straightforward errors, be pretty fast, and not turn into a heavyweight dependency just because you needed a client.
 
 The library compiles with both OpenSSL and wolfSSL. The asynchronous model is built on asio completion tokens and feels like an extension of asio rather than part of a different library, in other words, the library is designed to feel like a pleasant addition to asio, but it doesn't adhere to the asio style as strictly as, say, Boost-Beast.
 
