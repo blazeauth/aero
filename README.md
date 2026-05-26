@@ -539,7 +539,7 @@ int main() {
 ---
 
 ### Why Aero?
-We created Aero as a hobby project because existing solutions either depended on Boost.Asio or other heavyweight interfaces. Don't get us wrong, Boost.Asio is an excellent library. The only issue we see with using it as a client-side library is its dependency on Boost.Asio and the Boost ecosystem as a whole, as well as the lack of support for standalone-asio, which makes the library feel rather heavy for potentially simple projects. Aero uses standalone Asio and exposes operations via the standard Asio completion-token model. When built with WolfSSL it can produce pretty small binaries, making it suitable for resource‑constrained applications.
+We created Aero as a hobby project because existing solutions either depended on Boost.Asio or other heavyweight interfaces. Don't get us wrong, Boost.Beast is an excellent library. The only issue we see with using it as a client-side library is its dependency on Boost.Asio and the Boost ecosystem as a whole, as well as the lack of support for standalone-asio, which makes the library feel rather heavy for potentially simple projects. Aero uses standalone Asio and exposes operations via the standard Asio completion-token model. When built with WolfSSL it can produce pretty small binaries, making it suitable for resource‑constrained applications.
 
 ### Async model
 Aero uses Asio-style completion tokens instead of inventing its own async model.
@@ -796,9 +796,6 @@ Actions build and test Aero on:
 Aero contains ~300+ unit tests of implementation details
 
 The Websocket protocol is tested using [autobahn](https://github.com/crossbario/autobahn-testsuite) (a set of tests for RFC6455 compliance used by industry giants).
-
-### RFC6455 compliance
-If you require enterprise‑level RFC6455 conformance or enterprise‑level support, you should consider using Boost.Beast. Aero strives to implement the protocol as faithfully as possible, but it is developed in the author's free time and may potentially contain discrepancies with the RFC.
 
 ## License
 Aero is distributed under the MIT License.
