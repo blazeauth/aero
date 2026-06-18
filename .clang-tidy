@@ -18,6 +18,7 @@ Checks: >
     -bugprone-unchecked-optional-access,
     -bugprone-suspicious-stringview-data-usage,
     -bugprone-unhandled-exception-at-new,
+    -bugprone-unused-return-value,
     -cert-err58-cpp,
     -cppcoreguidelines-pro-bounds-pointer-arithmetic,
     -cppcoreguidelines-pro-type-reinterpret-cast,
@@ -37,9 +38,11 @@ Checks: >
     -readability-function-cognitive-complexity,
     -readability-identifier-length,
     -readability-named-parameter,
+    -readability-isolate-declaration,
     -hicpp-named-parameter,
     -hicpp-avoid-c-arrays,
     -performance-unnecessary-value-param,
+    -google-readability-todo,
 WarningsAsErrors: '*'
 HeaderFilterRegex: ''
 FormatStyle: file
@@ -52,5 +55,9 @@ CheckOptions:
       value: '1'
     - key:  google-readability-function-size.StatementThreshold
       value: '300'
-    - key:  readability-redundant-access-specifiers.CheckFirstDeclaration
+    - key: readability-redundant-access-specifiers.CheckFirstDeclaration
       value: '1'
+    - key: readability-identifier-naming.PrivateMemberCase
+      value: lower_case
+    - key: readability-identifier-naming.PrivateMemberSuffix
+      value: '_'

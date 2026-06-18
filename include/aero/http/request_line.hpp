@@ -100,6 +100,10 @@ namespace aero::http {
       };
     }
 
+    [[nodiscard]] static std::expected<request_line, std::error_code> parse(std::span<const std::byte> buffer) {
+      return parse(std::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()});
+    }
+
     [[nodiscard]] std::string serialize() const {
       auto method_str = http::to_string(method);
       if (method_str.empty()) {

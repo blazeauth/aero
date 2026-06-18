@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <vector>
+
 #include "aero/http/headers.hpp"
 #include "aero/http/status_code.hpp"
 #include "aero/http/status_line.hpp"
@@ -29,6 +32,24 @@ namespace aero::http {
 
     [[nodiscard]] std::expected<std::string_view, std::error_code> content_type() const noexcept {
       return headers.content_type();
+    }
+
+    [[nodiscard]] std::string serialize() const {
+      auto status_line_str = status_line.serialize();
+      if (status_line_str.empty()) {
+        return {};
+      }
+
+      auto headers_str = headers.serialize();
+      if (headers_str.empty()) {
+        return {};
+      }
+
+      std::string buffer;
+      buffer.reserve(status_line_str.size() + headers_str.size() + body.size());
+      buffer.append(status_line_str).append(headers_str).append(text());
+
+      return buffer;
     }
 
     [[nodiscard]] explicit operator bool() const noexcept {

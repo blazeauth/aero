@@ -27,16 +27,16 @@ namespace aero::http {
         return {};
       }
 
-      auto status_code_str = std::to_string(std::to_underlying(status_code));
-      return aero::detail::join_strings(std::array{protocol, status_code_str, reason_phrase}, ' ');
+      std::string result = protocol + ' ' + std::to_string(std::to_underlying(status_code)) + ' ';
+      if (!reason_phrase.empty()) {
+        result += reason_phrase;
+      }
+
+      return result + "\r\n";
     }
 
     [[nodiscard]] http::version version() const noexcept {
       return http::parse_version(protocol).value_or(http::version{});
-    }
-
-    [[nodiscard]] bool has_reason_phrase() const noexcept {
-      return !reason_phrase.empty();
     }
 
     [[nodiscard]] bool operator==(const status_line& other) const noexcept = default;
