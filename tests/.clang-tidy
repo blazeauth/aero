@@ -3,6 +3,8 @@ Checks: >
   -*-magic-numbers,
   -google-build-explicit-make-pair,
   -google-global-names-in-headers,
+  -google-build-using-namespace,
+  -google-readability-function-size,
   -*-signed-bitwise,
   -*-special-member-functions,
   -cppcoreguidelines-avoid-non-const-global-variables,

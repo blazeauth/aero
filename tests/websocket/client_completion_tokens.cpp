@@ -1,8 +1,8 @@
-#include "ut.hpp"
 #include <chrono>
 #include <concepts>
 #include <string_view>
 #include <tuple>
+#include <ut/ut.hpp>
 
 #include <asio/as_tuple.hpp>
 #include <asio/cancel_after.hpp>
@@ -13,6 +13,8 @@
 #include "aero/http/response.hpp"
 #include "aero/websocket/client.hpp"
 #include "aero/websocket/message.hpp"
+
+using namespace ut;
 
 template <typename Client>
 void compile_token_matrix() {
@@ -48,10 +50,10 @@ void compile_token_matrix() {
     std::future<aero::http::response>>);
 }
 
-ut::suite websocket_client_completion_tokens = [] {
-  "compiles the supported completion token matrix"_test = [] {
-    compile_token_matrix<aero::websocket::client>();
+int main() {
+  suite websocket_client_completion_tokens = [] {
+    "compiles the supported completion token matrix"_test = [] {
+      compile_token_matrix<aero::websocket::client>();
+    };
   };
-};
-
-int main() {}
+}

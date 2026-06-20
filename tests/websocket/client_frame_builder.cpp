@@ -1,4 +1,3 @@
-#include "ut.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -7,6 +6,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <ut/ut.hpp>
 #include <vector>
 
 #include "aero/websocket/close_code.hpp"
@@ -15,6 +15,8 @@
 #include "aero/websocket/error.hpp"
 
 #include "websocket/test_helpers.hpp"
+
+using namespace ut;
 
 using aero::websocket::close_code;
 using aero::websocket::detail::client_frame_builder;
@@ -135,336 +137,336 @@ struct sequence_masking_key_source {
   }
 };
 
-ut::suite websocket_client_frame_builder = [] {
-  "builds masked final text frame with zeroed rsv bits"_test = [] {
-    const masking_key key = make_masking_key(0x00, 0x01, 0x02, 0x03);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+int main() {
+  suite websocket_client_frame_builder = [] {
+    "builds masked final text frame with zeroed rsv bits"_test = [] {
+      const masking_key key = make_masking_key(0x00, 0x01, 0x02, 0x03);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
-    auto built = builder.build_text_frame("Hi");
-    expect(fatal(built.has_value()));
+      auto built = builder.build_text_frame("Hi");
+      expect[built.has_value()];
 
-    const auto expected_prefix = expected_masked_header_prefix(opcode::text, 2U, key);
-    expect(fatal(starts_with(*built, expected_prefix)));
+      const auto expected_prefix = expected_masked_header_prefix(opcode::text, 2U, key);
+      expect[starts_with(*built, expected_prefix)];
 
-    expect(fatal(built->size() == expected_prefix.size() + 2U));
+      expect[built->size() == expected_prefix.size() + 2U];
 
-    const auto first = std::to_integer<std::uint8_t>((*built)[0]);
-    const auto first_fin_bit = first & 0x80U;
-    const auto first_rsv_bits = first & 0x70U;
-    const auto first_opcode_bits = first & 0x0FU;
-    const auto expected_opcode_bits = static_cast<std::uint8_t>(opcode::text) & 0x0FU;
-    expect(first_fin_bit == 0x80U);
-    expect(first_rsv_bits == 0x00U);
-    expect(first_opcode_bits == expected_opcode_bits);
+      const auto first = std::to_integer<std::uint8_t>((*built)[0]);
+      const auto first_fin_bit = first & 0x80U;
+      const auto first_rsv_bits = first & 0x70U;
+      const auto first_opcode_bits = first & 0x0FU;
+      const auto expected_opcode_bits = static_cast<std::uint8_t>(opcode::text) & 0x0FU;
+      expect(first_fin_bit == 0x80U);
+      expect(first_rsv_bits == 0x00U);
+      expect(first_opcode_bits == expected_opcode_bits);
 
-    const auto second = std::to_integer<std::uint8_t>((*built)[1]);
-    const auto second_mask_bit = second & 0x80U;
-    expect(second_mask_bit == 0x80U);
+      const auto second = std::to_integer<std::uint8_t>((*built)[1]);
+      const auto second_mask_bit = second & 0x80U;
+      expect(second_mask_bit == 0x80U);
+    };
+
+    "masks text payload using provided masking key"_test = [] {
+      const masking_key key = make_masking_key(0x12, 0x34, 0x56, 0x78);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      const auto payload = to_bytes("abcd");
+      auto built = builder.build_text_frame("abcd");
+      expect[built.has_value()];
+
+      const auto header_prefix = expected_masked_header_prefix(opcode::text, payload.size(), key);
+      expect[starts_with(*built, header_prefix)];
+
+      const auto extracted_key = extract_masking_key(*built);
+      expect(extracted_key == key);
+
+      const auto masked_payload = payload_bytes(*built);
+      const auto expected_masked = mask_payload(payload, key);
+      expect[masked_payload.size() == expected_masked.size()];
+
+      for (std::size_t i{}; i < expected_masked.size(); ++i) {
+        expect(masked_payload[i] == expected_masked[i]);
+      }
+    };
+
+    "encodes masked payload length using 7-bit encoding for small payloads"_test = [] {
+      const masking_key key = make_masking_key(0xAA, 0xBB, 0xCC, 0xDD);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      std::string payload(125, 'x');
+      auto built = builder.build_text_frame(payload);
+      expect[built.has_value()];
+
+      const auto expected_prefix = expected_masked_header_prefix(opcode::text, 125U, key);
+      expect[starts_with(*built, expected_prefix)];
+      expect(built->size() == expected_prefix.size() + 125U);
+
+      const auto second = std::to_integer<std::uint8_t>((*built)[1]);
+      expect(second == static_cast<std::uint8_t>(0x80U | 125U));
+    };
+
+    "encodes masked payload length using 16-bit extended encoding from 126 to 65535"_test = [] {
+      const masking_key key = make_masking_key(0x00, 0x00, 0x00, 0x01);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      std::string payload(126, 'y');
+      auto built = builder.build_text_frame(payload);
+      expect[built.has_value()];
+
+      const auto expected_prefix = expected_masked_header_prefix(opcode::text, 126U, key);
+      expect[starts_with(*built, expected_prefix)];
+      expect(built->size() == expected_prefix.size() + 126U);
+
+      const auto second = std::to_integer<std::uint8_t>((*built)[1]);
+      expect(second == static_cast<std::uint8_t>(0x80U | 126U));
+
+      const auto extended = big_endian_bytes<2>(126U);
+      const auto& frame = *built;
+      expect(frame[2] == extended[0]);
+      expect(frame[3] == extended[1]);
+    };
+
+    "encodes masked payload length using 64-bit extended encoding from 65536 upwards"_test = [] {
+      const masking_key key = make_masking_key(0x10, 0x11, 0x12, 0x13);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      std::string payload(65536, 'z');
+      auto built = builder.build_text_frame(payload);
+      expect[built.has_value()];
+
+      const auto expected_prefix = expected_masked_header_prefix(opcode::text, 65536U, key);
+      expect[starts_with(*built, expected_prefix)];
+      expect(built->size() == expected_prefix.size() + 65536U);
+
+      const auto second = std::to_integer<std::uint8_t>((*built)[1]);
+      expect(second == static_cast<std::uint8_t>(0x80U | 127U));
+
+      const auto extended = big_endian_bytes<8>(65536U);
+      const auto& frame = *built;
+      for (std::size_t i{}; i < 8U; ++i) {
+        expect(frame[2U + i] == extended[i]);
+      }
+    };
+
+    "builds masked binary frame and masks payload bytes"_test = [] {
+      const masking_key key = make_masking_key(0x01, 0x02, 0x03, 0x04);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      std::vector<std::byte> payload{std::byte{0x00}, std::byte{0xFF}, std::byte{0x10}, std::byte{0x20}, std::byte{0x30}};
+      auto built = builder.build_binary_frame(payload);
+      expect[built.has_value()];
+
+      const auto expected_prefix = expected_masked_header_prefix(opcode::binary, payload.size(), key);
+      expect[starts_with(*built, expected_prefix)];
+      expect(built->size() == expected_prefix.size() + payload.size());
+
+      const auto masked = payload_bytes(*built);
+      const auto expected_masked = mask_payload(payload, key);
+
+      for (std::size_t i{}; i < payload.size(); ++i) {
+        expect(masked[i] == expected_masked[i]);
+      }
+    };
+
+    "requests new masking key for each frame"_test = [] {
+      sequence_masking_key_source source;
+      source.keys.push_back(make_masking_key(0x00, 0x00, 0x00, 0x00));
+      source.keys.push_back(make_masking_key(0x01, 0x01, 0x01, 0x01));
+      client_frame_builder<sequence_masking_key_source> builder{source};
+
+      auto first = builder.build_text_frame("a");
+      expect[first.has_value()];
+
+      auto second = builder.build_text_frame("b");
+      expect[second.has_value()];
+
+      const auto first_key = extract_masking_key(*first);
+      const auto second_key = extract_masking_key(*second);
+
+      expect(first_key != second_key);
+    };
+
+    "propagates masking key source failure"_test = [] {
+      failing_masking_key_source source;
+      source.error = protocol_error::masking_key_generation_failed;
+
+      client_frame_builder<failing_masking_key_source> builder{source};
+      auto built = builder.build_text_frame("x");
+
+      expect[not built.has_value()];
+      expect(built.error() == protocol_error::masking_key_generation_failed);
+    };
+
+    "builds ping frame as final masked control frame"_test = [] {
+      const masking_key key = make_masking_key(0xAB, 0xCD, 0xEF, 0x01);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      auto payload = to_bytes("p");
+      auto built = builder.build_ping_frame(std::span<const std::byte>{payload});
+      expect[built.has_value()];
+
+      const auto expected_prefix = expected_masked_header_prefix(opcode::ping, 1U, key);
+      expect[starts_with(*built, expected_prefix)];
+      expect(built->size() == expected_prefix.size() + 1U);
+
+      const auto first = std::to_integer<std::uint8_t>((*built)[0]);
+      const auto fin_bit = first & 0x80U;
+      const auto rsv_bits = first & 0x70U;
+      const auto opcode_bits = first & 0x0FU;
+      const auto expected_opcode_bits = static_cast<std::uint8_t>(opcode::ping) & 0x0FU;
+      expect(fin_bit == 0x80U);
+      expect(rsv_bits == 0x00U);
+      expect(opcode_bits == expected_opcode_bits);
+    };
+
+    "rejects ping payload longer than 125 bytes"_test = [] {
+      const masking_key key = make_masking_key(0x00, 0x01, 0x02, 0x03);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      auto payload = make_payload_bytes(126, std::byte{0x11});
+      auto built = builder.build_ping_frame(std::span<const std::byte>{payload});
+
+      expect[not built.has_value()];
+      expect(built.error() == protocol_error::control_frame_payload_too_big);
+    };
+
+    "rejects pong payload longer than 125 bytes with control frame error"_test = [] {
+      const masking_key key = make_masking_key(0x00, 0x01, 0x02, 0x03);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      auto payload = make_payload_bytes(126, std::byte{0x22});
+      auto built = builder.build_pong_frame(std::span<const std::byte>{payload});
+
+      expect[not built.has_value()];
+      expect(built.error() == protocol_error::control_frame_payload_too_big);
+    };
+
+    "builds pong frame as final masked control frame"_test = [] {
+      const masking_key key = make_masking_key(0x10, 0x20, 0x30, 0x40);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      auto payload = make_payload_bytes(125, std::byte{0x33});
+      auto built = builder.build_pong_frame(std::span<const std::byte>{payload});
+      expect[built.has_value()];
+
+      const auto expected_prefix = expected_masked_header_prefix(opcode::pong, 125U, key);
+      expect[starts_with(*built, expected_prefix)];
+      expect(built->size() == expected_prefix.size() + 125U);
+
+      const auto first = std::to_integer<std::uint8_t>((*built)[0]);
+      const auto fin_bit = first & 0x80U;
+      const auto opcode_bits = first & 0x0FU;
+      const auto expected_opcode_bits = static_cast<std::uint8_t>(opcode::pong) & 0x0FU;
+      expect(fin_bit == 0x80U);
+      expect(opcode_bits == expected_opcode_bits);
+    };
+
+    "builds close frame with status code in network byte order"_test = [] {
+      const masking_key key = make_masking_key(0x55, 0x66, 0x77, 0x88);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      auto built = builder.build_close_frame(close_code::normal, std::nullopt);
+      expect[built.has_value()];
+
+      const auto expected_prefix = expected_masked_header_prefix(opcode::close, 2U, key);
+      expect[starts_with(*built, expected_prefix)];
+      expect(built->size() == expected_prefix.size() + 2U);
+
+      const auto masked = payload_bytes(*built);
+      const auto unmasked = unmask_payload(masked, key);
+
+      const auto expected_code = big_endian_bytes<2>(std::to_underlying(close_code::normal));
+      expect[unmasked.size() == 2U];
+      expect(unmasked[0] == expected_code[0]);
+      expect(unmasked[1] == expected_code[1]);
+    };
+
+    "builds close frame with reason without padding or duplication"_test = [] {
+      const masking_key key = make_masking_key(0x01, 0x23, 0x45, 0x67);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      constexpr std::string_view reason = "bye";
+      auto built = builder.build_close_frame(close_code::normal, reason);
+      expect[built.has_value()];
+
+      constexpr auto payload_length = 2U + reason.size();
+      const auto expected_prefix = expected_masked_header_prefix(opcode::close, payload_length, key);
+      expect[starts_with(*built, expected_prefix)];
+      expect(built->size() == expected_prefix.size() + payload_length);
+
+      const auto unmasked = unmask_payload(payload_bytes(*built), key);
+      expect[unmasked.size() == payload_length];
+
+      const auto expected_code = big_endian_bytes<2>(std::to_underlying(close_code::normal));
+      expect(unmasked[0] == expected_code[0]);
+      expect(unmasked[1] == expected_code[1]);
+
+      const std::string recovered_reason = to_string(std::span<const std::byte>{unmasked}.subspan(2));
+      expect(recovered_reason == reason);
+    };
+
+    "rejects close reason that is not valid utf8"_test = [] {
+      const masking_key key = make_masking_key(0x99, 0x88, 0x77, 0x66);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      std::string invalid_utf8;
+      invalid_utf8.push_back(static_cast<char>(0xC3));
+      invalid_utf8.push_back(static_cast<char>(0x28));
+
+      auto built = builder.build_close_frame(close_code::normal, invalid_utf8);
+      expect[not built.has_value()];
+      expect(built.error() == protocol_error::close_reason_invalid_utf8);
+    };
+
+    "rejects text payload that is not valid utf8"_test = [] {
+      const masking_key key = make_masking_key(0x01, 0x02, 0x03, 0x04);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      std::string invalid_utf8;
+      invalid_utf8.push_back(static_cast<char>(0xC3));
+      invalid_utf8.push_back(static_cast<char>(0x28));
+
+      auto built = builder.build_text_frame(invalid_utf8);
+      expect[not built.has_value()];
+      expect(built.error() == protocol_error::payload_text_invalid_utf8);
+    };
+
+    "ignores invalid utf8 when validation is disabled via config"_test = [] {
+      const masking_key key = make_masking_key(0x99, 0x88, 0x77, 0x66);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}, {.validate_utf8 = false}};
+
+      std::string invalid_utf8;
+      invalid_utf8.push_back(static_cast<char>(0xC3));
+      invalid_utf8.push_back(static_cast<char>(0x28));
+
+      auto built = builder.build_close_frame(close_code::normal, invalid_utf8);
+      expect[built.has_value()];
+
+      built = builder.build_text_frame(invalid_utf8);
+      expect[built.has_value()];
+    };
+
+    "accepts maximum allowed close reason length for control frame payload limit"_test = [] {
+      const masking_key key = make_masking_key(0x01, 0x02, 0x03, 0x04);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      std::string reason(123, 'r');
+      auto built = builder.build_close_frame(close_code::normal, reason);
+      expect[built.has_value()];
+
+      const std::size_t payload_length = 125U;
+      const auto expected_prefix = expected_masked_header_prefix(opcode::close, payload_length, key);
+      expect[starts_with(*built, expected_prefix)];
+      expect(built->size() == expected_prefix.size() + payload_length);
+    };
+
+    "rejects close reason that would exceed control frame payload limit"_test = [] {
+      const masking_key key = make_masking_key(0x01, 0x02, 0x03, 0x04);
+      client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
+
+      std::string reason(124, 'r');
+      auto built = builder.build_close_frame(close_code::normal, reason);
+      expect[not built.has_value()];
+      expect(built.error() == protocol_error::control_frame_payload_too_big);
+    };
   };
-
-  "masks text payload using provided masking key"_test = [] {
-    const masking_key key = make_masking_key(0x12, 0x34, 0x56, 0x78);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    const auto payload = to_bytes("abcd");
-    auto built = builder.build_text_frame("abcd");
-    expect(fatal(built.has_value()));
-
-    const auto header_prefix = expected_masked_header_prefix(opcode::text, payload.size(), key);
-    expect(fatal(starts_with(*built, header_prefix)));
-
-    const auto extracted_key = extract_masking_key(*built);
-    expect(extracted_key == key);
-
-    const auto masked_payload = payload_bytes(*built);
-    const auto expected_masked = mask_payload(payload, key);
-    expect(fatal(masked_payload.size() == expected_masked.size()));
-
-    for (std::size_t i{}; i < expected_masked.size(); ++i) {
-      expect(masked_payload[i] == expected_masked[i]);
-    }
-  };
-
-  "encodes masked payload length using 7-bit encoding for small payloads"_test = [] {
-    const masking_key key = make_masking_key(0xAA, 0xBB, 0xCC, 0xDD);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    std::string payload(125, 'x');
-    auto built = builder.build_text_frame(payload);
-    expect(fatal(built.has_value()));
-
-    const auto expected_prefix = expected_masked_header_prefix(opcode::text, 125U, key);
-    expect(fatal(starts_with(*built, expected_prefix)));
-    expect(built->size() == expected_prefix.size() + 125U);
-
-    const auto second = std::to_integer<std::uint8_t>((*built)[1]);
-    expect(second == static_cast<std::uint8_t>(0x80U | 125U));
-  };
-
-  "encodes masked payload length using 16-bit extended encoding from 126 to 65535"_test = [] {
-    const masking_key key = make_masking_key(0x00, 0x00, 0x00, 0x01);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    std::string payload(126, 'y');
-    auto built = builder.build_text_frame(payload);
-    expect(fatal(built.has_value()));
-
-    const auto expected_prefix = expected_masked_header_prefix(opcode::text, 126U, key);
-    expect(fatal(starts_with(*built, expected_prefix)));
-    expect(built->size() == expected_prefix.size() + 126U);
-
-    const auto second = std::to_integer<std::uint8_t>((*built)[1]);
-    expect(second == static_cast<std::uint8_t>(0x80U | 126U));
-
-    const auto extended = big_endian_bytes<2>(126U);
-    const auto& frame = *built;
-    expect(frame[2] == extended[0]);
-    expect(frame[3] == extended[1]);
-  };
-
-  "encodes masked payload length using 64-bit extended encoding from 65536 upwards"_test = [] {
-    const masking_key key = make_masking_key(0x10, 0x11, 0x12, 0x13);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    std::string payload(65536, 'z');
-    auto built = builder.build_text_frame(payload);
-    expect(fatal(built.has_value()));
-
-    const auto expected_prefix = expected_masked_header_prefix(opcode::text, 65536U, key);
-    expect(fatal(starts_with(*built, expected_prefix)));
-    expect(built->size() == expected_prefix.size() + 65536U);
-
-    const auto second = std::to_integer<std::uint8_t>((*built)[1]);
-    expect(second == static_cast<std::uint8_t>(0x80U | 127U));
-
-    const auto extended = big_endian_bytes<8>(65536U);
-    const auto& frame = *built;
-    for (std::size_t i{}; i < 8U; ++i) {
-      expect(frame[2U + i] == extended[i]);
-    }
-  };
-
-  "builds masked binary frame and masks payload bytes"_test = [] {
-    const masking_key key = make_masking_key(0x01, 0x02, 0x03, 0x04);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    std::vector<std::byte> payload{std::byte{0x00}, std::byte{0xFF}, std::byte{0x10}, std::byte{0x20}, std::byte{0x30}};
-    auto built = builder.build_binary_frame(payload);
-    expect(fatal(built.has_value()));
-
-    const auto expected_prefix = expected_masked_header_prefix(opcode::binary, payload.size(), key);
-    expect(fatal(starts_with(*built, expected_prefix)));
-    expect(built->size() == expected_prefix.size() + payload.size());
-
-    const auto masked = payload_bytes(*built);
-    const auto expected_masked = mask_payload(payload, key);
-
-    for (std::size_t i{}; i < payload.size(); ++i) {
-      expect(masked[i] == expected_masked[i]);
-    }
-  };
-
-  "requests new masking key for each frame"_test = [] {
-    sequence_masking_key_source source;
-    source.keys.push_back(make_masking_key(0x00, 0x00, 0x00, 0x00));
-    source.keys.push_back(make_masking_key(0x01, 0x01, 0x01, 0x01));
-    client_frame_builder<sequence_masking_key_source> builder{source};
-
-    auto first = builder.build_text_frame("a");
-    expect(fatal(first.has_value()));
-
-    auto second = builder.build_text_frame("b");
-    expect(fatal(second.has_value()));
-
-    const auto first_key = extract_masking_key(*first);
-    const auto second_key = extract_masking_key(*second);
-
-    expect(first_key != second_key);
-  };
-
-  "propagates masking key source failure"_test = [] {
-    failing_masking_key_source source;
-    source.error = protocol_error::masking_key_generation_failed;
-
-    client_frame_builder<failing_masking_key_source> builder{source};
-    auto built = builder.build_text_frame("x");
-
-    expect(fatal(not built.has_value()));
-    expect(built.error() == protocol_error::masking_key_generation_failed);
-  };
-
-  "builds ping frame as final masked control frame"_test = [] {
-    const masking_key key = make_masking_key(0xAB, 0xCD, 0xEF, 0x01);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    auto payload = to_bytes("p");
-    auto built = builder.build_ping_frame(std::span<const std::byte>{payload});
-    expect(fatal(built.has_value()));
-
-    const auto expected_prefix = expected_masked_header_prefix(opcode::ping, 1U, key);
-    expect(fatal(starts_with(*built, expected_prefix)));
-    expect(built->size() == expected_prefix.size() + 1U);
-
-    const auto first = std::to_integer<std::uint8_t>((*built)[0]);
-    const auto fin_bit = first & 0x80U;
-    const auto rsv_bits = first & 0x70U;
-    const auto opcode_bits = first & 0x0FU;
-    const auto expected_opcode_bits = static_cast<std::uint8_t>(opcode::ping) & 0x0FU;
-    expect(fin_bit == 0x80U);
-    expect(rsv_bits == 0x00U);
-    expect(opcode_bits == expected_opcode_bits);
-  };
-
-  "rejects ping payload longer than 125 bytes"_test = [] {
-    const masking_key key = make_masking_key(0x00, 0x01, 0x02, 0x03);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    auto payload = make_payload_bytes(126, std::byte{0x11});
-    auto built = builder.build_ping_frame(std::span<const std::byte>{payload});
-
-    expect(fatal(not built.has_value()));
-    expect(built.error() == protocol_error::control_frame_payload_too_big);
-  };
-
-  "rejects pong payload longer than 125 bytes with control frame error"_test = [] {
-    const masking_key key = make_masking_key(0x00, 0x01, 0x02, 0x03);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    auto payload = make_payload_bytes(126, std::byte{0x22});
-    auto built = builder.build_pong_frame(std::span<const std::byte>{payload});
-
-    expect(fatal(not built.has_value()));
-    expect(built.error() == protocol_error::control_frame_payload_too_big);
-  };
-
-  "builds pong frame as final masked control frame"_test = [] {
-    const masking_key key = make_masking_key(0x10, 0x20, 0x30, 0x40);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    auto payload = make_payload_bytes(125, std::byte{0x33});
-    auto built = builder.build_pong_frame(std::span<const std::byte>{payload});
-    expect(fatal(built.has_value()));
-
-    const auto expected_prefix = expected_masked_header_prefix(opcode::pong, 125U, key);
-    expect(fatal(starts_with(*built, expected_prefix)));
-    expect(built->size() == expected_prefix.size() + 125U);
-
-    const auto first = std::to_integer<std::uint8_t>((*built)[0]);
-    const auto fin_bit = first & 0x80U;
-    const auto opcode_bits = first & 0x0FU;
-    const auto expected_opcode_bits = static_cast<std::uint8_t>(opcode::pong) & 0x0FU;
-    expect(fin_bit == 0x80U);
-    expect(opcode_bits == expected_opcode_bits);
-  };
-
-  "builds close frame with status code in network byte order"_test = [] {
-    const masking_key key = make_masking_key(0x55, 0x66, 0x77, 0x88);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    auto built = builder.build_close_frame(close_code::normal, std::nullopt);
-    expect(fatal(built.has_value()));
-
-    const auto expected_prefix = expected_masked_header_prefix(opcode::close, 2U, key);
-    expect(fatal(starts_with(*built, expected_prefix)));
-    expect(built->size() == expected_prefix.size() + 2U);
-
-    const auto masked = payload_bytes(*built);
-    const auto unmasked = unmask_payload(masked, key);
-
-    const auto expected_code = big_endian_bytes<2>(std::to_underlying(close_code::normal));
-    expect(fatal(unmasked.size() == 2U));
-    expect(unmasked[0] == expected_code[0]);
-    expect(unmasked[1] == expected_code[1]);
-  };
-
-  "builds close frame with reason without padding or duplication"_test = [] {
-    const masking_key key = make_masking_key(0x01, 0x23, 0x45, 0x67);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    constexpr std::string_view reason = "bye";
-    auto built = builder.build_close_frame(close_code::normal, reason);
-    expect(fatal(built.has_value()));
-
-    constexpr auto payload_length = 2U + reason.size();
-    const auto expected_prefix = expected_masked_header_prefix(opcode::close, payload_length, key);
-    expect(fatal(starts_with(*built, expected_prefix)));
-    expect(built->size() == expected_prefix.size() + payload_length);
-
-    const auto unmasked = unmask_payload(payload_bytes(*built), key);
-    expect(fatal(unmasked.size() == payload_length));
-
-    const auto expected_code = big_endian_bytes<2>(std::to_underlying(close_code::normal));
-    expect(unmasked[0] == expected_code[0]);
-    expect(unmasked[1] == expected_code[1]);
-
-    const std::string recovered_reason = to_string(std::span<const std::byte>{unmasked}.subspan(2));
-    expect(recovered_reason == reason);
-  };
-
-  "rejects close reason that is not valid utf8"_test = [] {
-    const masking_key key = make_masking_key(0x99, 0x88, 0x77, 0x66);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    std::string invalid_utf8;
-    invalid_utf8.push_back(static_cast<char>(0xC3));
-    invalid_utf8.push_back(static_cast<char>(0x28));
-
-    auto built = builder.build_close_frame(close_code::normal, invalid_utf8);
-    expect(fatal(not built.has_value()));
-    expect(built.error() == protocol_error::close_reason_invalid_utf8);
-  };
-
-  "rejects text payload that is not valid utf8"_test = [] {
-    const masking_key key = make_masking_key(0x01, 0x02, 0x03, 0x04);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    std::string invalid_utf8;
-    invalid_utf8.push_back(static_cast<char>(0xC3));
-    invalid_utf8.push_back(static_cast<char>(0x28));
-
-    auto built = builder.build_text_frame(invalid_utf8);
-    expect(fatal(not built.has_value()));
-    expect(built.error() == protocol_error::payload_text_invalid_utf8);
-  };
-
-  "ignores invalid utf8 when validation is disabled via config"_test = [] {
-    const masking_key key = make_masking_key(0x99, 0x88, 0x77, 0x66);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}, {.validate_utf8 = false}};
-
-    std::string invalid_utf8;
-    invalid_utf8.push_back(static_cast<char>(0xC3));
-    invalid_utf8.push_back(static_cast<char>(0x28));
-
-    auto built = builder.build_close_frame(close_code::normal, invalid_utf8);
-    expect(fatal(built.has_value()));
-
-    built = builder.build_text_frame(invalid_utf8);
-    expect(fatal(built.has_value()));
-  };
-
-  "accepts maximum allowed close reason length for control frame payload limit"_test = [] {
-    const masking_key key = make_masking_key(0x01, 0x02, 0x03, 0x04);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    std::string reason(123, 'r');
-    auto built = builder.build_close_frame(close_code::normal, reason);
-    expect(fatal(built.has_value()));
-
-    const std::size_t payload_length = 125U;
-    const auto expected_prefix = expected_masked_header_prefix(opcode::close, payload_length, key);
-    expect(fatal(starts_with(*built, expected_prefix)));
-    expect(built->size() == expected_prefix.size() + payload_length);
-  };
-
-  "rejects close reason that would exceed control frame payload limit"_test = [] {
-    const masking_key key = make_masking_key(0x01, 0x02, 0x03, 0x04);
-    client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
-
-    std::string reason(124, 'r');
-    auto built = builder.build_close_frame(close_code::normal, reason);
-    expect(fatal(not built.has_value()));
-    expect(built.error() == protocol_error::control_frame_payload_too_big);
-  };
-};
-
-int main() {}
+}

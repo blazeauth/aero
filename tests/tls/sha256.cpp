@@ -1,12 +1,14 @@
-#include "ut.hpp"
 #include <array>
 #include <cstddef>
 #include <span>
 #include <string>
 #include <string_view>
+#include <ut/ut.hpp>
 #include <vector>
 
 #include "aero/tls/sha256.hpp"
+
+using namespace ut;
 
 using aero::tls::sha256;
 
@@ -57,123 +59,123 @@ std::vector<std::byte> make_zero_bytes(std::size_t size) {
   return {size, std::byte{0}};
 }
 
-ut::suite tls_sha256 = [] {
-  "produces expected hex digest for basic input"_test = [] {
-    constexpr std::string_view input{"hello aero!"};
-    constexpr std::string_view expected_hex{"8788ef0b2ba1b0a72faf024f733f68c7a667e94b02dedc7c4e5bb8300e32ad5b"};
+int main() {
+  suite tls_sha256 = [] {
+    "produces expected hex digest for basic input"_test = [] {
+      constexpr std::string_view input{"hello aero!"};
+      constexpr std::string_view expected_hex{"8788ef0b2ba1b0a72faf024f733f68c7a667e94b02dedc7c4e5bb8300e32ad5b"};
 
-    expect(expected_hex == sha256::hash_to_hex(input));
-    expect(expected_hex == sha256::hash_to_hex(as_bytes(input)));
-  };
+      expect(expected_hex == sha256::hash_to_hex(input));
+      expect(expected_hex == sha256::hash_to_hex(as_bytes(input)));
+    };
 
-  "matches known test vectors"_test = [] {
-    for (const auto& test_vector : sha256_vectors) {
+    "matches known test vectors"_test = [] {
+      for (const auto& test_vector : sha256_vectors) {
 
-      expect(test_vector.expected_hex == sha256::hash_to_hex(test_vector.input));
-      expect(test_vector.expected_hex == sha256::hash_to_hex(as_bytes(test_vector.input)));
+        expect(test_vector.expected_hex == sha256::hash_to_hex(test_vector.input));
+        expect(test_vector.expected_hex == sha256::hash_to_hex(as_bytes(test_vector.input)));
 
-      const auto expected_digest = sha256::hash(test_vector.input);
+        const auto expected_digest = sha256::hash(test_vector.input);
 
-      expect(expected_digest == sha256::hash(test_vector.input));
-      expect(expected_digest == sha256::hash(as_bytes(test_vector.input)));
-    }
-  };
+        expect(expected_digest == sha256::hash(test_vector.input));
+        expect(expected_digest == sha256::hash(as_bytes(test_vector.input)));
+      }
+    };
 
-  "produces same digest for string view and byte span"_test = [] {
-    constexpr std::string_view input{"abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"};
+    "produces same digest for string view and byte span"_test = [] {
+      constexpr std::string_view input{"abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"};
 
-    expect(sha256::hash_to_hex(input) == sha256::hash_to_hex(as_bytes(input)));
-    expect(sha256::hash(input) == sha256::hash(as_bytes(input)));
-  };
+      expect(sha256::hash_to_hex(input) == sha256::hash_to_hex(as_bytes(input)));
+      expect(sha256::hash(input) == sha256::hash(as_bytes(input)));
+    };
 
-  "writes digest into provided buffer"_test = [] {
-    constexpr std::string_view input{"hello aero!"};
+    "writes digest into provided buffer"_test = [] {
+      constexpr std::string_view input{"hello aero!"};
 
-    const auto expected = sha256::hash(input);
-
-    sha256 hasher;
-    hasher.update(input);
-
-    std::array<std::byte, sha256::digest_size> written_digest{};
-    hasher.final(written_digest);
-
-    expect(expected == written_digest);
-  };
-
-  "supports incremental updates across block boundaries"_test = [] {
-    auto data = make_pattern_bytes(512);
-    std::span<const std::byte> full_span{data};
-
-    const auto expected_digest = sha256::hash(full_span);
-    const auto expected_hex = sha256::hash_to_hex(full_span);
-
-    const std::array<std::size_t, 10> split_points{0, 1, 2, 3, 63, 64, 65, 127, 128, 255};
-
-    for (const auto split_point : split_points) {
+      const auto expected = sha256::hash(input);
 
       sha256 hasher;
-      hasher.update({data.data(), split_point});
-      hasher.update({data.data() + split_point, data.size() - split_point});
+      hasher.update(input);
 
-      expect(expected_digest == hasher.final());
-    }
+      std::array<std::byte, sha256::digest_size> written_digest{};
+      hasher.final(written_digest);
 
-    for (const auto split_point : split_points) {
+      expect(expected == written_digest);
+    };
+
+    "supports incremental updates across block boundaries"_test = [] {
+      auto data = make_pattern_bytes(512);
+      std::span<const std::byte> full_span{data};
+
+      const auto expected_digest = sha256::hash(full_span);
+      const auto expected_hex = sha256::hash_to_hex(full_span);
+
+      const std::array<std::size_t, 10> split_points{0, 1, 2, 3, 63, 64, 65, 127, 128, 255};
+
+      for (const auto split_point : split_points) {
+
+        sha256 hasher;
+        hasher.update({data.data(), split_point});
+        hasher.update({data.data() + split_point, data.size() - split_point});
+
+        expect(expected_digest == hasher.final());
+      }
+
+      for (const auto split_point : split_points) {
+
+        sha256 hasher;
+        hasher.update({data.data(), split_point});
+        hasher.update({data.data() + split_point, data.size() - split_point});
+
+        expect(expected_hex == hasher.final_hex());
+      }
+    };
+
+    "empty update does not affect digest"_test = [] {
+      constexpr std::string_view input{"abc"};
+      constexpr std::string_view expected_hex{"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"};
 
       sha256 hasher;
-      hasher.update({data.data(), split_point});
-      hasher.update({data.data() + split_point, data.size() - split_point});
+      hasher.update(input);
+
+      std::array<std::byte, 0> empty{};
+      hasher.update(empty);
 
       expect(expected_hex == hasher.final_hex());
-    }
+    };
+
+    "hashes zero-filled buffers at block boundaries"_test = [] {
+      auto zeros_63 = make_zero_bytes(63);
+      auto zeros_64 = make_zero_bytes(64);
+      auto zeros_65 = make_zero_bytes(65);
+
+      expect("c7723fa1e0127975e49e62e753db53924c1bd84b8ac1ac08df78d09270f3d971" == sha256::hash_to_hex(zeros_63));
+      expect("f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b" == sha256::hash_to_hex(zeros_64));
+      expect("98ce42deef51d40269d542f5314bef2c7468d401ad5d85168bfab4c0108f75f7" == sha256::hash_to_hex(zeros_65));
+    };
+
+    "treats embedded null bytes as data"_test = [] {
+      std::string binary{};
+      binary.push_back('a');
+      binary.push_back('\0');
+      binary.push_back('b');
+      binary.push_back('\0');
+      binary.push_back('c');
+
+      std::string_view binary_view{binary};
+      std::span<const std::byte> binary_bytes{reinterpret_cast<const std::byte*>(binary.data()), binary.size()};
+
+      expect("8badde10c760e9b702defb4b5e225de79c515b1d2a5cfb000e140f3c6fbb5629" == sha256::hash_to_hex(binary_bytes));
+      expect(sha256::hash_to_hex(binary_view) == sha256::hash_to_hex(binary_bytes));
+      expect(sha256::hash(binary_view) == sha256::hash(binary_bytes));
+    };
+
+    "hashes one million a characters correctly"_test = [] {
+      std::string million_a;
+      million_a.resize(1'000'000, 'a');
+
+      expect("cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0" ==
+             (sha256::hash_to_hex(std::string_view{million_a})));
+    };
   };
-
-  "empty update does not affect digest"_test = [] {
-    constexpr std::string_view input{"abc"};
-    constexpr std::string_view expected_hex{"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"};
-
-    sha256 hasher;
-    hasher.update(input);
-
-    std::array<std::byte, 0> empty{};
-    hasher.update(empty);
-
-    expect(expected_hex == hasher.final_hex());
-  };
-
-  "hashes zero-filled buffers at block boundaries"_test = [] {
-    auto zeros_63 = make_zero_bytes(63);
-    auto zeros_64 = make_zero_bytes(64);
-    auto zeros_65 = make_zero_bytes(65);
-
-    expect("c7723fa1e0127975e49e62e753db53924c1bd84b8ac1ac08df78d09270f3d971" == sha256::hash_to_hex(zeros_63));
-    expect("f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b" == sha256::hash_to_hex(zeros_64));
-    expect("98ce42deef51d40269d542f5314bef2c7468d401ad5d85168bfab4c0108f75f7" == sha256::hash_to_hex(zeros_65));
-  };
-
-  "treats embedded null bytes as data"_test = [] {
-    std::string binary{};
-    binary.push_back('a');
-    binary.push_back('\0');
-    binary.push_back('b');
-    binary.push_back('\0');
-    binary.push_back('c');
-
-    std::string_view binary_view{binary};
-    std::span<const std::byte> binary_bytes{reinterpret_cast<const std::byte*>(binary.data()), binary.size()};
-
-    expect("8badde10c760e9b702defb4b5e225de79c515b1d2a5cfb000e140f3c6fbb5629" == sha256::hash_to_hex(binary_bytes));
-    expect(sha256::hash_to_hex(binary_view) == sha256::hash_to_hex(binary_bytes));
-    expect(sha256::hash(binary_view) == sha256::hash(binary_bytes));
-  };
-
-  "hashes one million a characters correctly"_test = [] {
-    std::string million_a;
-    million_a.resize(1'000'000, 'a');
-
-    expect(
-      "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0" == (sha256::hash_to_hex(std::string_view{million_a})));
-  };
-};
-
-int main() {}
+}

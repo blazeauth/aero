@@ -1,10 +1,10 @@
-#include "ut.hpp"
 #include <exception>
 #include <expected>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <ut/ut.hpp>
 #include <utility>
 
 #include "aero/http/detail/common.hpp"
@@ -17,6 +17,8 @@
 #include "aero/websocket/detail/accept_challenge.hpp"
 #include "aero/websocket/error.hpp"
 #include "http/tcp_acceptor.hpp"
+
+using namespace ut;
 
 namespace http = aero::http;
 namespace websocket = aero::websocket;
@@ -85,66 +87,66 @@ std::expected<http::response, std::error_code> connect_with_server_response(Writ
   return std::move(server_resp);
 }
 
-ut::suite websocket_basic_client = [] {
-  "returns parsed server response"_test = [] {
-    auto result = connect_with_server_response([](http_test::tcp::socket& socket, std::string_view raw_request) {
-      http_test::write_http_response(socket, make_valid_switching_response(raw_request, "X-Test: yes\r\n"));
-    });
+int main() {
+  suite websocket_basic_client = [] {
+    "returns parsed server response"_test = [] {
+      auto result = connect_with_server_response([](http_test::tcp::socket& socket, std::string_view raw_request) {
+        http_test::write_http_response(socket, make_valid_switching_response(raw_request, "X-Test: yes\r\n"));
+      });
 
-    expect(fatal(result.has_value()));
-    expect(result->status_code() == http::status_code::switching_protocols);
-    expect(result->headers.contains_token("upgrade", "websocket"));
+      expect[result.has_value()];
+      expect(result->status_code() == http::status_code::switching_protocols);
+      expect(result->headers.contains_token("upgrade", "websocket"));
 
-    auto test_header = result->headers.first_value("x-test");
-    expect(fatal(test_header.has_value()));
-    expect(*test_header == "yes");
-  };
+      auto test_header = result->headers.first_value("x-test");
+      expect[test_header.has_value()];
+      expect(*test_header == "yes");
+    };
 
-  "propagates status line parse error"_test = [] {
-    auto result = connect_with_server_response([](http_test::tcp::socket& socket, std::string_view) {
-      http_test::write_http_response(socket,
-        "TP/1.1 101 Switching Protocols\r\n"
-        "Upgrade: websocket\r\n"
-        "Connection: Upgrade\r\n"
-        "\r\n");
-    });
-
-    expect(fatal(not result.has_value()));
-    expect(result.error() == http::status_line::parse("TP/1.1 101 Switching Protocols").error());
-  };
-
-  "propagates headers parse error"_test = [] {
-    auto result = connect_with_server_response([](http_test::tcp::socket& socket, std::string_view) {
-      http_test::write_http_response(socket,
-        "HTTP/1.1 101 Switching Protocols\r\n"
-        "Upgrade websocket\r\n"
-        "\r\n");
-    });
-
-    expect(fatal(not result.has_value()));
-    expect(result.error() == http::header_error::field_invalid);
-  };
-
-  "returns parsed response when websocket challenge fails"_test = [] {
-    auto [connect_ec, server_response] =
-      connect_with_server_response_tuple([](http_test::tcp::socket& socket, std::string_view) {
+    "propagates status line parse error"_test = [] {
+      auto result = connect_with_server_response([](http_test::tcp::socket& socket, std::string_view) {
         http_test::write_http_response(socket,
-          "HTTP/1.1 101 Switching Protocols\r\n"
+          "TP/1.1 101 Switching Protocols\r\n"
           "Upgrade: websocket\r\n"
           "Connection: Upgrade\r\n"
-          "Sec-WebSocket-Accept: definitely-not-the-accept-challenge\r\n"
-          "X-Trace: parsed\r\n"
           "\r\n");
       });
 
-    expect(connect_ec == websocket::handshake_error::accept_challenge_failed);
-    expect(server_response.status_code() == http::status_code::switching_protocols);
-    expect(server_response.headers.contains_token("upgrade", "websocket"));
+      expect[not result.has_value()];
+      expect(result.error() == http::status_line::parse("TP/1.1 101 Switching Protocols").error());
+    };
 
-    auto trace = server_response.headers.first_value("x-trace");
-    expect(fatal(trace.has_value()));
-    expect(*trace == "parsed");
+    "propagates headers parse error"_test = [] {
+      auto result = connect_with_server_response([](http_test::tcp::socket& socket, std::string_view) {
+        http_test::write_http_response(socket,
+          "HTTP/1.1 101 Switching Protocols\r\n"
+          "Upgrade websocket\r\n"
+          "\r\n");
+      });
+
+      expect[not result.has_value()];
+      expect(result.error() == http::header_error::field_invalid);
+    };
+
+    "returns parsed response when websocket challenge fails"_test = [] {
+      auto [connect_ec, server_response] =
+        connect_with_server_response_tuple([](http_test::tcp::socket& socket, std::string_view) {
+          http_test::write_http_response(socket,
+            "HTTP/1.1 101 Switching Protocols\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            "Sec-WebSocket-Accept: definitely-not-the-accept-challenge\r\n"
+            "X-Trace: parsed\r\n"
+            "\r\n");
+        });
+
+      expect(connect_ec == websocket::handshake_error::accept_challenge_failed);
+      expect(server_response.status_code() == http::status_code::switching_protocols);
+      expect(server_response.headers.contains_token("upgrade", "websocket"));
+
+      auto trace = server_response.headers.first_value("x-trace");
+      expect[trace.has_value()];
+      expect(*trace == "parsed");
+    };
   };
-};
-
-int main() {}
+}

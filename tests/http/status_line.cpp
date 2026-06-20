@@ -1,8 +1,10 @@
-#include "ut.hpp"
+#include <ut/ut.hpp>
 #include <utility>
 
 #include "aero/http/status_code.hpp"
 #include "aero/http/status_line.hpp"
+
+using namespace ut;
 
 namespace http = aero::http;
 using aero::http::status_code;
@@ -16,76 +18,76 @@ std::string generate_status_line_buffer(status_line status_line) {
   return status_line_str + "\r\n";
 }
 
-ut::suite http_status_line = [] {
-  "parses with reason phrase"_test = [] {
-    status_line status_line{
-      .protocol = "HTTP/1.1",
-      .status_code = status_code::ok,
-      .reason_phrase = "OK",
+int main() {
+  suite http_status_line = [] {
+    "parses with reason phrase"_test = [] {
+      status_line status_line{
+        .protocol = "HTTP/1.1",
+        .status_code = status_code::ok,
+        .reason_phrase = "OK",
+      };
+
+      auto status_line_buf = generate_status_line_buffer(status_line);
+      auto parsed_status_line = http::status_line::parse(status_line_buf);
+
+      expect[parsed_status_line.has_value()];
+      expect(parsed_status_line == status_line);
     };
 
-    auto status_line_buf = generate_status_line_buffer(status_line);
-    auto parsed_status_line = http::status_line::parse(status_line_buf);
+    "parses without reason phrase"_test = [] {
+      status_line status_line{
+        .protocol = "HTTP/1.1",
+        .status_code = status_code::ok,
+      };
 
-    expect(fatal(parsed_status_line.has_value()));
-    expect(parsed_status_line == status_line);
-  };
+      auto status_line_buf = generate_status_line_buffer(status_line);
+      auto parsed_status_line = http::status_line::parse(status_line_buf);
 
-  "parses without reason phrase"_test = [] {
-    status_line status_line{
-      .protocol = "HTTP/1.1",
-      .status_code = status_code::ok,
+      expect[parsed_status_line.has_value()];
+      expect(parsed_status_line->reason_phrase.empty());
+      expect(parsed_status_line == status_line);
     };
 
-    auto status_line_buf = generate_status_line_buffer(status_line);
-    auto parsed_status_line = http::status_line::parse(status_line_buf);
+    "rejects invalid protocol"_test = [] {
+      status_line status_line{
+        .protocol = "TP/1.1",
+        .status_code = status_code::ok,
+      };
 
-    expect(fatal(parsed_status_line.has_value()));
-    expect(parsed_status_line->reason_phrase.empty());
-    expect(parsed_status_line == status_line);
-  };
+      auto status_line_buf = generate_status_line_buffer(status_line);
+      auto parsed_status_line = http::status_line::parse(status_line_buf);
 
-  "rejects invalid protocol"_test = [] {
-    status_line status_line{
-      .protocol = "TP/1.1",
-      .status_code = status_code::ok,
+      expect[not parsed_status_line.has_value()];
     };
 
-    auto status_line_buf = generate_status_line_buffer(status_line);
-    auto parsed_status_line = http::status_line::parse(status_line_buf);
+    // HTTP 1.1 RFC says that header section can have "zero or more header field lines"
+    "parses status line when no headers follow"_test = [] {
+      status_line status_line{
+        .protocol = "HTTP/1.0",
+        .status_code = status_code::ok,
+        .reason_phrase = "OK",
+      };
+      std::string_view status_line_buf{"HTTP/1.0 200 OK\r\n\r\n"};
+      auto parsed_status_line = http::status_line::parse(status_line_buf);
 
-    expect(fatal(not parsed_status_line.has_value()));
-  };
-
-  // HTTP 1.1 RFC says that header section can have "zero or more header field lines"
-  "parses status line when no headers follow"_test = [] {
-    status_line status_line{
-      .protocol = "HTTP/1.0",
-      .status_code = status_code::ok,
-      .reason_phrase = "OK",
-    };
-    std::string_view status_line_buf{"HTTP/1.0 200 OK\r\n\r\n"};
-    auto parsed_status_line = http::status_line::parse(status_line_buf);
-
-    expect(fatal(parsed_status_line.has_value()));
-    expect(not parsed_status_line->reason_phrase.empty());
-    expect(parsed_status_line == status_line);
-  };
-
-  "serializes a valid status line"_test = [] {
-    status_line status_line{
-      .protocol = "HTTP/1.0",
-      .status_code = status_code::ok,
-      .reason_phrase = "OK",
+      expect[parsed_status_line.has_value()];
+      expect(not parsed_status_line->reason_phrase.empty());
+      expect(parsed_status_line == status_line);
     };
 
-    expect(status_line.serialize() == "HTTP/1.0 200 OK");
-  };
+    "serializes a valid status line"_test = [] {
+      status_line status_line{
+        .protocol = "HTTP/1.0",
+        .status_code = status_code::ok,
+        .reason_phrase = "OK",
+      };
 
-  "serializes an empty status line as an empty string"_test = [] {
-    status_line status_line{};
-    expect(status_line.serialize().empty());
-  };
-};
+      expect(status_line.serialize() == "HTTP/1.0 200 OK");
+    };
 
-int main() {}
+    "serializes an empty status line as an empty string"_test = [] {
+      status_line status_line{};
+      expect(status_line.serialize().empty());
+    };
+  };
+}

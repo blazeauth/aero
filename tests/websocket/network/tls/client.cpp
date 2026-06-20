@@ -1,4 +1,3 @@
-#include "ut.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
@@ -7,6 +6,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <ut/ut.hpp>
 
 #include "aero/deadline.hpp"
 
@@ -18,6 +18,8 @@
 #include "aero/websocket/tls/client.hpp"
 
 #include "websocket/test_helpers.hpp"
+
+using namespace ut;
 
 namespace websocket = aero::websocket;
 
@@ -143,123 +145,123 @@ sync_roundtrip_result sync_roundtrip(client& websocket_client, std::chrono::mill
   return result;
 }
 
-ut::suite websocket_network_tls_client = [] {
-  "connect succeeds and is open for writing"_test = [] {
-    client websocket_client{system_tls_ctx};
+int main() {
+  suite websocket_network_tls_client = [] {
+    "connect succeeds and is open for writing"_test = [] {
+      client websocket_client{system_tls_ctx};
 
-    auto connect_ec = connect_to_echo(websocket_client);
-    expect(fatal(not connect_ec));
+      auto connect_ec = connect_to_echo(websocket_client);
+      expect[not connect_ec];
 
-    expect(websocket_client.is_open_for_writing());
+      expect(websocket_client.is_open_for_writing());
 
-    auto close_ec = websocket_client.close(close_code::normal, "bye");
-    expect(not close_ec);
+      auto close_ec = websocket_client.close(close_code::normal, "bye");
+      expect(not close_ec);
 
-    expect(websocket_client.is_closed());
-    expect(not websocket_client.is_open_for_writing());
+      expect(websocket_client.is_closed());
+      expect(not websocket_client.is_open_for_writing());
+    };
+
+    "text and ping roundtrip returns text echo and pong"_test = [] {
+      client websocket_client{system_tls_ctx};
+
+      auto connect_ec = connect_to_echo(websocket_client);
+      expect[not connect_ec];
+      expect[websocket_client.is_open_for_writing()];
+
+      const auto text_payload = unique_text("aero-text-");
+      const auto ping_payload = unique_text("aero-ping-");
+
+      auto send_text_ec = websocket_client.send_text(text_payload);
+      expect[not send_text_ec];
+
+      auto ping_ec = websocket_client.ping(ping_payload);
+      expect[not ping_ec];
+
+      const auto expected_pong_bytes = to_bytes(ping_payload);
+
+      bool got_text_echo = false;
+      bool got_expected_pong = false;
+
+      auto read_loop_ec = read_until(
+        websocket_client,
+        2s,
+        64,
+        [&](const message& received_message) {
+          if (received_message.is_text() && received_message.text() == text_payload) {
+            got_text_echo = true;
+          }
+          if (received_message.is_pong() && std::ranges::equal(received_message.bytes(), expected_pong_bytes)) {
+            got_expected_pong = true;
+          }
+        },
+        [&]() { return got_text_echo && got_expected_pong; });
+
+      expect[not read_loop_ec];
+
+      expect(got_text_echo);
+      expect(got_expected_pong);
+
+      auto close_ec = websocket_client.close(close_code::normal, "done");
+      expect(not close_ec);
+    };
+
+    "read after close returns connection closed"_test = [] {
+      client websocket_client{system_tls_ctx};
+
+      auto connect_ec = connect_to_echo(websocket_client);
+      expect[not connect_ec];
+      expect[websocket_client.is_open_for_writing()];
+
+      auto close_ec = websocket_client.close(close_code::normal, "closing");
+      expect[not close_ec];
+
+      expect(not websocket_client.is_open_for_writing());
+      expect(websocket_client.is_closed());
+
+      auto read_result = websocket_client.read(50ms);
+      expect[not read_result.has_value()];
+      expect(read_result.error() == protocol_error::connection_closed);
+    };
+
+    "send after close returns connection closed"_test = [] {
+      client websocket_client{system_tls_ctx};
+
+      auto connect_ec = connect_to_echo(websocket_client);
+      expect[not connect_ec];
+      expect[websocket_client.is_open_for_writing()];
+
+      auto close_ec = websocket_client.close(close_code::normal, "closing");
+      expect[not close_ec];
+
+      expect(websocket_client.is_closed());
+
+      auto send_ec = websocket_client.send_text("x");
+      expect(send_ec == protocol_error::connection_closed);
+    };
+
+    "sync api roundtrip works"_test = [] {
+      client websocket_client{system_tls_ctx};
+
+      auto result = sync_roundtrip(websocket_client, 3s);
+
+      expect(not result.connect_ec);
+      expect(result.open_for_writing_after_connect);
+
+      expect(not result.send_text_ec);
+      expect(not result.ping_ec);
+
+      expect(not result.read_loop_ec);
+
+      expect(result.got_text);
+      expect(result.got_pong);
+
+      expect(not result.close_ec);
+      expect(not result.open_for_writing_after_close);
+
+      auto read_after_close = websocket_client.read(50ms);
+      expect[not read_after_close.has_value()];
+      expect(read_after_close.error() == protocol_error::connection_closed);
+    };
   };
-
-  "text and ping roundtrip returns text echo and pong"_test = [] {
-    client websocket_client{system_tls_ctx};
-
-    auto connect_ec = connect_to_echo(websocket_client);
-    expect(fatal(not connect_ec));
-    expect(fatal(websocket_client.is_open_for_writing()));
-
-    const auto text_payload = unique_text("aero-text-");
-    const auto ping_payload = unique_text("aero-ping-");
-
-    auto send_text_ec = websocket_client.send_text(text_payload);
-    expect(fatal(not send_text_ec));
-
-    auto ping_ec = websocket_client.ping(ping_payload);
-    expect(fatal(not ping_ec));
-
-    const auto expected_pong_bytes = to_bytes(ping_payload);
-
-    bool got_text_echo = false;
-    bool got_expected_pong = false;
-
-    auto read_loop_ec = read_until(
-      websocket_client,
-      2s,
-      64,
-      [&](const message& received_message) {
-        if (received_message.is_text() && received_message.text() == text_payload) {
-          got_text_echo = true;
-        }
-        if (received_message.is_pong() && std::ranges::equal(received_message.bytes(), expected_pong_bytes)) {
-          got_expected_pong = true;
-        }
-      },
-      [&]() { return got_text_echo && got_expected_pong; });
-
-    expect(fatal(not read_loop_ec));
-
-    expect(got_text_echo);
-    expect(got_expected_pong);
-
-    auto close_ec = websocket_client.close(close_code::normal, "done");
-    expect(not close_ec);
-  };
-
-  "read after close returns connection closed"_test = [] {
-    client websocket_client{system_tls_ctx};
-
-    auto connect_ec = connect_to_echo(websocket_client);
-    expect(fatal(not connect_ec));
-    expect(fatal(websocket_client.is_open_for_writing()));
-
-    auto close_ec = websocket_client.close(close_code::normal, "closing");
-    expect(fatal(not close_ec));
-
-    expect(not websocket_client.is_open_for_writing());
-    expect(websocket_client.is_closed());
-
-    auto read_result = websocket_client.read(50ms);
-    expect(fatal(not read_result.has_value()));
-    expect(read_result.error() == protocol_error::connection_closed);
-  };
-
-  "send after close returns connection closed"_test = [] {
-    client websocket_client{system_tls_ctx};
-
-    auto connect_ec = connect_to_echo(websocket_client);
-    expect(fatal(not connect_ec));
-    expect(fatal(websocket_client.is_open_for_writing()));
-
-    auto close_ec = websocket_client.close(close_code::normal, "closing");
-    expect(fatal(not close_ec));
-
-    expect(websocket_client.is_closed());
-
-    auto send_ec = websocket_client.send_text("x");
-    expect(send_ec == protocol_error::connection_closed);
-  };
-
-  "sync api roundtrip works"_test = [] {
-    client websocket_client{system_tls_ctx};
-
-    auto result = sync_roundtrip(websocket_client, 3s);
-
-    expect(not result.connect_ec);
-    expect(result.open_for_writing_after_connect);
-
-    expect(not result.send_text_ec);
-    expect(not result.ping_ec);
-
-    expect(not result.read_loop_ec);
-
-    expect(result.got_text);
-    expect(result.got_pong);
-
-    expect(not result.close_ec);
-    expect(not result.open_for_writing_after_close);
-
-    auto read_after_close = websocket_client.read(50ms);
-    expect(fatal(not read_after_close.has_value()));
-    expect(read_after_close.error() == protocol_error::connection_closed);
-  };
-};
-
-int main() {}
+}
