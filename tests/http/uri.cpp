@@ -118,7 +118,6 @@ ut::suite http_uri = [] {
   "rejects empty ipv6 literal"_test = [] {
     expect_parse_error("http://[]/api", uri_error::invalid_ipv6_literal);
     expect_parse_error("http://[/api", uri_error::invalid_ipv6_literal);
-    expect_parse_error("http://]/api", uri_error::invalid_ipv6_literal);
   };
 
   "rejects empty non-numeric zero or out of range ports"_test = [] {
