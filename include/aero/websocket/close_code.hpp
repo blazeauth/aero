@@ -6,6 +6,7 @@
 #include <expected>
 #include <format>
 #include <system_error>
+#include <utility>
 
 #include "aero/websocket/error.hpp"
 
