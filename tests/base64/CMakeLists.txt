@@ -1,0 +1,2 @@
+aero_add_unit_test(aero_base64_base64_encode base64_encode.cpp)
+aero_add_unit_test(aero_base64_base64_impl base64_impl.cpp)

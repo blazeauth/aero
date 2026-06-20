@@ -1,9 +1,12 @@
 #pragma once
 
+#include "ut.hpp"
 #include <magic_enum/magic_enum.hpp>
 
 #include <format>
 #include <system_error>
+#include <type_traits>
+#include <utility>
 
 namespace aero::tests {
 
@@ -16,7 +19,7 @@ namespace aero::tests {
       auto error_message = std::error_code{status}.message();
       auto is_unknown_error = error_message == unknown_error_message;
 
-      EXPECT_FALSE(is_unknown_error) << std::format("Error code '{}' ({}) does not have an error message",
+      expect(not is_unknown_error) << std::format("Error code '{}' ({}) does not have an error message",
         name,
         std::to_underlying(status));
     }
@@ -31,7 +34,7 @@ namespace aero::tests {
       auto error_message = std::error_condition{status}.message();
       auto is_unknown_error = error_message == unknown_error_message;
 
-      EXPECT_FALSE(is_unknown_error) << std::format("Error condition '{}' ({}) does not have an error message",
+      expect(not is_unknown_error) << std::format("Error condition '{}' ({}) does not have an error message",
         name,
         std::to_underlying(status));
     }

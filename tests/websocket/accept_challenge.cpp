@@ -1,16 +1,20 @@
-#include <gtest/gtest.h>
-
 #include "aero/websocket/detail/accept_challenge.hpp"
+#include "ut.hpp"
+#include <string_view>
 
-namespace detail = aero::websocket::detail;
+namespace websocket_detail = aero::websocket::detail;
 
-TEST(WebsocketAcceptChallenge, GeneratesRandomKey) {
-  for (int i{}; i < 10; i++) {
-    EXPECT_NE(detail::generate_sec_websocket_key(), detail::generate_sec_websocket_key());
-  }
-}
+ut::suite websocket_accept_challenge = [] {
+  "generates random key"_test = [] {
+    for (int i{}; i < 10; i++) {
+      expect(websocket_detail::generate_sec_websocket_key() != websocket_detail::generate_sec_websocket_key());
+    }
+  };
 
-TEST(WebsocketAcceptChallenge, Rfc6455Conformant) {
-  constexpr std::string_view sec_websocket_key{"dGhlIHNhbXBsZSBub25jZQ=="};
-  EXPECT_EQ(detail::compute_sec_websocket_accept(sec_websocket_key), "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
-}
+  "matches the rfc 6455 challenge example"_test = [] {
+    constexpr std::string_view sec_websocket_key{"dGhlIHNhbXBsZSBub25jZQ=="};
+    expect(websocket_detail::compute_sec_websocket_accept(sec_websocket_key) == "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
+  };
+};
+
+int main() {}

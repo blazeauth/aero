@@ -34,6 +34,11 @@ function(aero_use_magic_enum dependent_target)
     endif()
   endif()
 
-  target_link_libraries(${dependent_target} PRIVATE magic_enum::magic_enum)
+  get_target_property(aero_dependent_target_type ${dependent_target} TYPE)
+  if(aero_dependent_target_type STREQUAL "INTERFACE_LIBRARY")
+    target_link_libraries(${dependent_target} INTERFACE magic_enum::magic_enum)
+  else()
+    target_link_libraries(${dependent_target} PRIVATE magic_enum::magic_enum)
+  endif()
 endfunction()
 
