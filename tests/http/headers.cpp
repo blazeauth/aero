@@ -51,7 +51,7 @@ int main() {
       http::headers fields{};
 
       expect(fields.empty());
-      expect(fields.size() == 0U);
+      expect(fields.empty());
       expect(fields.begin() == fields.end());
     };
 
@@ -480,7 +480,6 @@ int main() {
       expect(fields.size() == 2U);
 
       expect(other_fields.empty());
-      expect(other_fields.size() == 0U);
       expect(other_fields.begin() == other_fields.end());
     };
 
@@ -528,7 +527,6 @@ int main() {
       expect(fields.size() == other_fields_size_before_append);
 
       expect(other_fields.empty());
-      expect(other_fields.size() == 0U);
     };
 
     "append copies nothing when both objects empty"_test = [] {
@@ -539,7 +537,6 @@ int main() {
 
       expect(fields.empty());
       expect(other_fields.empty());
-      expect(fields.size() == 0U);
     };
 
     "append preserves duplicate header values on copy"_test = [] {
@@ -696,7 +693,6 @@ int main() {
       expect(contains_case_insensitive_value(fields, "X-Header-999", "Value-999"));
 
       expect(other_fields.empty());
-      expect(other_fields.size() == 0U);
     };
 
     "self append does nothing"_test = [] {

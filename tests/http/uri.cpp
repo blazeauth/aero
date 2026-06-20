@@ -99,7 +99,7 @@ int main() {
     "preserves empty query delimiter"_test = [] {
       http::uri parsed = parse_or_fail("http://example.com?");
       expect(parsed.has_query());
-      expect(parsed.query() == "");
+      expect(parsed.query().empty());
       expect(parsed.target() == "/?");
       expect(parsed.to_string() == "http://example.com/?");
     };
