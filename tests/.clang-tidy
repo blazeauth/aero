@@ -9,6 +9,7 @@ Checks: >
   -*-special-member-functions,
   -cppcoreguidelines-avoid-non-const-global-variables,
   -bugprone-use-after-move,
+  -bugprone-exception-escape,
   -hicpp-invalid-access-moved,
   -modernize-use-designated-initializers,
   -misc-use-internal-linkage,
