@@ -24,22 +24,6 @@ std::vector<std::string> values_of(const http::headers& fields, std::string_view
   return values;
 }
 
-std::vector<std::string> collect_values_to_strings(auto&& values_range) {
-  std::vector<std::string> result{};
-  for (auto&& value : values_range) {
-    result.emplace_back(value);
-  }
-  return result;
-}
-
-std::vector<std::string_view> collect_values_to_string_views(auto&& values_range) {
-  std::vector<std::string_view> result{};
-  for (std::string_view value_view : values_range) {
-    result.emplace_back(value_view);
-  }
-  return result;
-}
-
 bool contains_case_insensitive_value(const http::headers& fields, std::string_view name, std::string_view expected_value) {
   return std::ranges::any_of(fields.values(name),
     [expected_value](std::string_view value) { return aero::detail::ascii_iequal(value, expected_value); });
@@ -57,7 +41,7 @@ int main() {
 
     "initializer list preserves insertion order and duplicates"_test = [] {
       http::headers fields{{"A", "1"}, {"B", "2"}, {"C", "3"}, {"D", "4"}, {"A", "11"}};
-      auto repeated_record_values = collect_values_to_strings(fields.values("A"));
+      auto repeated_record_values = fields.values("A") | std::ranges::to<std::vector<std::string>>();
 
       expect(fields.size() == 5U);
       expect[repeated_record_values.size() == 2U];
@@ -133,7 +117,7 @@ int main() {
       fields.add("Y", "y");
       fields.add("SET-COOKIE", "c=3");
 
-      const auto cookies = values_of(fields, "set-cookie");
+      const auto cookies = fields.values("set-cookie") | std::ranges::to<std::vector<std::string>>();
 
       expect[cookies.size() == 3U];
       expect(cookies[0] == "a=1");
@@ -224,7 +208,7 @@ int main() {
       fields.add("set-cookie", "b=2");
       fields.add("SET-COOKIE", "c=3");
 
-      auto values = collect_values_to_strings(fields.values("set-cookie"));
+      auto values = fields.values("set-cookie") | std::ranges::to<std::vector<std::string>>();
 
       expect[values.size() == 3U];
       expect(values[0] == "a=1");
@@ -239,7 +223,7 @@ int main() {
       mutable_fields.add("X", "x");
 
       const auto& fields = mutable_fields;
-      auto values = collect_values_to_strings(fields.values("SET-COOKIE"));
+      auto values = fields.values("SET-COOKIE") | std::ranges::to<std::vector<std::string>>();
 
       expect[values.size() == 2U];
       expect(values[0] == "a=1");
@@ -252,7 +236,7 @@ int main() {
       fields.add("X", "x");
       fields.add("set-cookie", "b=2");
 
-      auto values = collect_values_to_string_views(fields.values("SET-COOKIE"));
+      auto values = fields.values("SET-COOKIE") | std::ranges::to<std::vector<std::string_view>>();
 
       expect[values.size() == 2U];
       expect(values[0] == "a=1");
@@ -554,7 +538,7 @@ int main() {
       expect(contains_case_insensitive_value(fields, "Set-Cookie", "b=2"));
       expect(fields.size() == 2U);
 
-      auto cookie_values = values_of(fields, "Set-Cookie");
+      auto cookie_values = fields.values("Set-Cookie") | std::ranges::to<std::vector<std::string>>();
 
       expect[cookie_values.size() == 2U];
       expect(cookie_values[0] == "a=1");
@@ -579,7 +563,7 @@ int main() {
       expect(contains_case_insensitive_value(fields, "Set-Cookie", "b=2"));
       expect(fields.size() == 2U);
 
-      auto cookie_values = values_of(fields, "Set-Cookie");
+      auto cookie_values = fields.values("Set-Cookie") | std::ranges::to<std::vector<std::string>>();
 
       expect[cookie_values.size() == 2U];
       expect(cookie_values[0] == "a=1");
@@ -602,7 +586,7 @@ int main() {
       expect(contains_case_insensitive_value(fields, "Host", "example.com"));
       expect(contains_case_insensitive_value(fields, "HOST", "example.org"));
 
-      auto host_values = values_of(fields, "HOST");
+      auto host_values = fields.values("HOST") | std::ranges::to<std::vector<std::string>>();
 
       expect[host_values.size() == 2U];
       expect(host_values[0] == "example.com");
