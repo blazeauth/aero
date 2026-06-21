@@ -10,7 +10,7 @@
 
 namespace aero::http {
 
-  enum class status_code : int { // NOLINT(performance-enum-size)
+  enum class status : int { // NOLINT(performance-enum-size)
     continue_ = 100,
     switching_protocols = 101,
     processing = 102,
@@ -80,14 +80,14 @@ namespace aero::http {
     network_authentication_required = 511
   };
 
-  constexpr bool is_valid_status_code(status_code code) {
+  constexpr bool is_valid_status_code(status code) {
     const int value = std::to_underlying(code);
     const auto [min_valid_code, max_valid_code] = std::tuple{100, 599};
     return value >= min_valid_code && value <= max_valid_code;
   }
 
-  inline std::expected<status_code, std::error_code> to_status_code(std::string_view str) {
-    auto parse_result = aero::detail::to_decimal<status_code>(str);
+  inline std::expected<status, std::error_code> parse_status(std::string_view str) {
+    auto parse_result = aero::detail::to_decimal<status>(str);
     if (!parse_result) {
       return std::unexpected(parse_result.error());
     }
@@ -98,137 +98,137 @@ namespace aero::http {
     return code;
   }
 
-  constexpr std::string_view to_string(status_code code) {
+  constexpr std::string_view to_string(status code) {
     switch (code) {
-    case status_code::continue_:
+    case status::continue_:
       return "Continue";
-    case status_code::switching_protocols:
+    case status::switching_protocols:
       return "Switching Protocols";
-    case status_code::processing:
+    case status::processing:
       return "Processing";
-    case status_code::early_hints:
+    case status::early_hints:
       return "Early Hints";
 
-    case status_code::ok:
+    case status::ok:
       return "OK";
-    case status_code::created:
+    case status::created:
       return "Created";
-    case status_code::accepted:
+    case status::accepted:
       return "Accepted";
-    case status_code::non_authoritative_information:
+    case status::non_authoritative_information:
       return "Non Authoritative Information";
-    case status_code::no_content:
+    case status::no_content:
       return "No Content";
-    case status_code::reset_content:
+    case status::reset_content:
       return "Reset Content";
-    case status_code::partial_content:
+    case status::partial_content:
       return "Partial Content";
-    case status_code::multi_status:
+    case status::multi_status:
       return "Multi-Status";
-    case status_code::already_reported:
+    case status::already_reported:
       return "Already Reported";
-    case status_code::im_used:
+    case status::im_used:
       return "IM Used";
 
-    case status_code::multiple_choices:
+    case status::multiple_choices:
       return "Multiple Choices";
-    case status_code::moved_permanently:
+    case status::moved_permanently:
       return "Moved Permanently";
-    case status_code::found:
+    case status::found:
       return "Found";
-    case status_code::see_other:
+    case status::see_other:
       return "See Other";
-    case status_code::not_modified:
+    case status::not_modified:
       return "Not Modified";
-    case status_code::use_proxy:
+    case status::use_proxy:
       return "Use Proxy";
-    case status_code::switch_proxy:
+    case status::switch_proxy:
       return "Switch Proxy";
-    case status_code::temporary_redirect:
+    case status::temporary_redirect:
       return "Temporary Redirect";
-    case status_code::permanent_redirect:
+    case status::permanent_redirect:
       return "Permanent Redirect";
 
-    case status_code::bad_request:
+    case status::bad_request:
       return "Bad Request";
-    case status_code::unauthorized:
+    case status::unauthorized:
       return "Unauthorized";
-    case status_code::payment_required:
+    case status::payment_required:
       return "Payment Required";
-    case status_code::forbidden:
+    case status::forbidden:
       return "Forbidden";
-    case status_code::not_found:
+    case status::not_found:
       return "Not Found";
-    case status_code::method_not_allowed:
+    case status::method_not_allowed:
       return "Method Not Allowed";
-    case status_code::not_acceptable:
+    case status::not_acceptable:
       return "Not Acceptable";
-    case status_code::proxy_authentication_required:
+    case status::proxy_authentication_required:
       return "Proxy Authentication Required";
-    case status_code::request_timeout:
+    case status::request_timeout:
       return "Request Timeout";
-    case status_code::conflict:
+    case status::conflict:
       return "Conflict";
-    case status_code::gone:
+    case status::gone:
       return "Gone";
-    case status_code::length_required:
+    case status::length_required:
       return "Length Required";
-    case status_code::precondition_failed:
+    case status::precondition_failed:
       return "Precondition Failed";
-    case status_code::payload_too_large:
+    case status::payload_too_large:
       return "Payload Too Large";
-    case status_code::uri_too_long:
+    case status::uri_too_long:
       return "URI Too Long";
-    case status_code::unsupported_media_type:
+    case status::unsupported_media_type:
       return "Unsupported Media Type";
-    case status_code::range_not_satisfiable:
+    case status::range_not_satisfiable:
       return "Range Not Satisfiable";
-    case status_code::expectation_failed:
+    case status::expectation_failed:
       return "Expectation Failed";
-    case status_code::im_a_teapot:
+    case status::im_a_teapot:
       return "I'm a teapot";
-    case status_code::misdirected_request:
+    case status::misdirected_request:
       return "Misdirected Request";
-    case status_code::unprocessable_content:
+    case status::unprocessable_content:
       return "Unprocessable Content";
-    case status_code::locked:
+    case status::locked:
       return "Locked";
-    case status_code::failed_dependency:
+    case status::failed_dependency:
       return "Failed Dependency";
-    case status_code::too_early:
+    case status::too_early:
       return "Too Early";
-    case status_code::upgrade_required:
+    case status::upgrade_required:
       return "Upgrade Required";
-    case status_code::precondition_required:
+    case status::precondition_required:
       return "Precondition Required";
-    case status_code::too_many_requests:
+    case status::too_many_requests:
       return "Too Many Requests";
-    case status_code::request_header_fields_too_large:
+    case status::request_header_fields_too_large:
       return "Request Header Fields Too Large";
-    case status_code::unavailable_for_legal_reasons:
+    case status::unavailable_for_legal_reasons:
       return "Unavailable For Legal Reasons";
 
-    case status_code::internal_server_error:
+    case status::internal_server_error:
       return "Internal Server Error";
-    case status_code::not_implemented:
+    case status::not_implemented:
       return "Not Implemented";
-    case status_code::bad_gateway:
+    case status::bad_gateway:
       return "Bad Gateway";
-    case status_code::service_unavailable:
+    case status::service_unavailable:
       return "Service Unavailable";
-    case status_code::gateway_timeout:
+    case status::gateway_timeout:
       return "Gateway Timeout";
-    case status_code::http_version_not_supported:
+    case status::http_version_not_supported:
       return "HTTP Version Not Supported";
-    case status_code::variant_also_negotiates:
+    case status::variant_also_negotiates:
       return "Variant Also Negotiates";
-    case status_code::insufficient_storage:
+    case status::insufficient_storage:
       return "Insufficient Storage";
-    case status_code::loop_detected:
+    case status::loop_detected:
       return "Loop Detected";
-    case status_code::not_extended:
+    case status::not_extended:
       return "Not Extended";
-    case status_code::network_authentication_required:
+    case status::network_authentication_required:
       return "Network Authentication Required";
     default:
       return {};
@@ -238,8 +238,8 @@ namespace aero::http {
 } // namespace aero::http
 
 template <>
-struct std::formatter<aero::http::status_code> : std::formatter<std::underlying_type_t<aero::http::status_code>> {
-  auto format(const aero::http::status_code& status_code, std::format_context& ctx) const {
-    return std::formatter<std::underlying_type_t<aero::http::status_code>>{}.format(std::to_underlying(status_code), ctx);
+struct std::formatter<aero::http::status> : std::formatter<std::underlying_type_t<aero::http::status>> {
+  auto format(const aero::http::status& status_code, std::format_context& ctx) const {
+    return std::formatter<std::underlying_type_t<aero::http::status>>{}.format(std::to_underlying(status_code), ctx);
   }
 };

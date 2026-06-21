@@ -1,13 +1,13 @@
 #include <ut/ut.hpp>
 #include <utility>
 
-#include "aero/http/status_code.hpp"
+#include "aero/http/status.hpp"
 #include "aero/http/status_line.hpp"
 
 using namespace ut;
 
 namespace http = aero::http;
-using aero::http::status_code;
+using aero::http::status;
 using aero::http::status_line;
 
 std::string generate_status_line_buffer(status_line status_line) {
@@ -23,7 +23,7 @@ int main() {
     "parses with reason phrase"_test = [] {
       status_line status_line{
         .protocol = "HTTP/1.1",
-        .status_code = status_code::ok,
+        .status_code = status::ok,
         .reason_phrase = "OK",
       };
 
@@ -37,7 +37,7 @@ int main() {
     "parses without reason phrase"_test = [] {
       status_line status_line{
         .protocol = "HTTP/1.1",
-        .status_code = status_code::ok,
+        .status_code = status::ok,
       };
 
       auto status_line_buf = generate_status_line_buffer(status_line);
@@ -51,7 +51,7 @@ int main() {
     "rejects invalid protocol"_test = [] {
       status_line status_line{
         .protocol = "TP/1.1",
-        .status_code = status_code::ok,
+        .status_code = status::ok,
       };
 
       auto status_line_buf = generate_status_line_buffer(status_line);
@@ -64,7 +64,7 @@ int main() {
     "parses status line when no headers follow"_test = [] {
       status_line status_line{
         .protocol = "HTTP/1.0",
-        .status_code = status_code::ok,
+        .status_code = status::ok,
         .reason_phrase = "OK",
       };
       std::string_view status_line_buf{"HTTP/1.0 200 OK\r\n\r\n"};
@@ -78,7 +78,7 @@ int main() {
     "serializes a valid status line"_test = [] {
       status_line status_line{
         .protocol = "HTTP/1.0",
-        .status_code = status_code::ok,
+        .status_code = status::ok,
         .reason_phrase = "OK",
       };
 

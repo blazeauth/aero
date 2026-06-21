@@ -25,7 +25,7 @@
 #include "aero/http/port.hpp"
 #include "aero/http/request.hpp"
 #include "aero/http/response.hpp"
-#include "aero/http/status_code.hpp"
+#include "aero/http/status.hpp"
 #include "aero/http/version.hpp"
 #include "aero/net/concepts/transport.hpp"
 #include "aero/net/detail/basic_transport.hpp"
@@ -63,10 +63,10 @@ namespace aero::http::detail {
     using executor_type = asio::any_io_executor;
     using transport_type = Transport;
 
-    constexpr static int informational_status_code_min = std::to_underlying(http::status_code::continue_);
-    constexpr static int informational_status_code_max = std::to_underlying(http::status_code::ok);
-    constexpr static int succesfull_status_code_min = std::to_underlying(http::status_code::ok);
-    constexpr static int succesfull_status_code_max = std::to_underlying(http::status_code::multiple_choices);
+    constexpr static int informational_status_code_min = std::to_underlying(http::status::continue_);
+    constexpr static int informational_status_code_max = std::to_underlying(http::status::ok);
+    constexpr static int succesfull_status_code_min = std::to_underlying(http::status::ok);
+    constexpr static int succesfull_status_code_max = std::to_underlying(http::status::multiple_choices);
 
     [[nodiscard]] constexpr static bool is_secure_transport() noexcept {
       return secure_transport_trait<transport_type>::value;
@@ -457,14 +457,13 @@ namespace aero::http::detail {
       }
     }
 
-    [[nodiscard]] static bool is_bodyless_response(http::method request_method, http::status_code status_code) noexcept {
+    [[nodiscard]] static bool is_bodyless_response(http::method request_method, http::status status_code) noexcept {
       auto status_value = std::to_underlying(status_code);
       bool is_informational_status_code =
         (status_value >= informational_status_code_min && status_value < informational_status_code_max);
 
-      return request_method == http::method::head || is_informational_status_code ||
-             status_code == http::status_code::no_content || status_code == http::status_code::reset_content ||
-             status_code == http::status_code::not_modified;
+      return request_method == http::method::head || is_informational_status_code || status_code == http::status::no_content ||
+             status_code == http::status::reset_content || status_code == http::status::not_modified;
     }
 
     static void trim_http_whitespace(std::string_view& value) noexcept {
@@ -568,8 +567,7 @@ namespace aero::http::detail {
       return transfer_encoding_framing::close_delimited;
     }
 
-    [[nodiscard]] static bool is_successful_connect_response(http::method request_method,
-      http::status_code status_code) noexcept {
+    [[nodiscard]] static bool is_successful_connect_response(http::method request_method, http::status status_code) noexcept {
       auto status_value = std::to_underlying(status_code);
       bool is_succesfull_status_code =
         (status_value >= succesfull_status_code_min && status_value < succesfull_status_code_max);
@@ -604,7 +602,7 @@ namespace aero::http::detail {
     }
 
     [[nodiscard]] static bool is_upgrade_response(const http::headers& request_headers, const http::response& response) {
-      if (response.status_code() == http::status_code::switching_protocols) {
+      if (response.status_code() == http::status::switching_protocols) {
         return true;
       }
 

@@ -43,7 +43,7 @@
 #include "aero/http/request.hpp"
 #include "aero/http/request_line.hpp"
 #include "aero/http/response.hpp"
-#include "aero/http/status_code.hpp"
+#include "aero/http/status.hpp"
 #include "aero/http/status_line.hpp"
 #include "aero/http/uri.hpp"
 #include "aero/http/version.hpp"
@@ -58,10 +58,10 @@ namespace aero::http {
     using protocol_error = http::protocol_error;
 
     constexpr static std::size_t default_runtime_threads = 1;
-    constexpr static int informational_status_code_min = std::to_underlying(http::status_code::continue_);
-    constexpr static int informational_status_code_max = std::to_underlying(http::status_code::ok);
-    constexpr static int succesfull_status_code_min = std::to_underlying(http::status_code::ok);
-    constexpr static int succesfull_status_code_max = std::to_underlying(http::status_code::multiple_choices);
+    constexpr static int informational_status_code_min = std::to_underlying(http::status::continue_);
+    constexpr static int informational_status_code_max = std::to_underlying(http::status::ok);
+    constexpr static int succesfull_status_code_min = std::to_underlying(http::status::ok);
+    constexpr static int succesfull_status_code_max = std::to_underlying(http::status::multiple_choices);
 
    public:
     using transport_type = Transport;
@@ -419,7 +419,7 @@ namespace aero::http {
               auto response = std::move(parsed_head->response);
               response_buffer = std::move(parsed_head->body_prefix);
 
-              if (response.status_code() == http::status_code::continue_) {
+              if (response.status_code() == http::status::continue_) {
                 co_return expectation_result{
                   .error = std::error_code{},
                   .continue_sending_body = true,
@@ -1044,24 +1044,22 @@ namespace aero::http {
       return format_host_header(endpoint.host, endpoint.port, default_endpoint_port);
     }
 
-    [[nodiscard]] static bool is_bodyless_response(http::method request_method, http::status_code status_code) noexcept {
+    [[nodiscard]] static bool is_bodyless_response(http::method request_method, http::status status_code) noexcept {
       auto status_value = std::to_underlying(status_code);
       bool is_informational_status_code =
         (status_value >= informational_status_code_min && status_value < informational_status_code_max);
 
-      return request_method == http::method::head || is_informational_status_code ||
-             status_code == http::status_code::no_content || status_code == http::status_code::reset_content ||
-             status_code == http::status_code::not_modified;
+      return request_method == http::method::head || is_informational_status_code || status_code == http::status::no_content ||
+             status_code == http::status::reset_content || status_code == http::status::not_modified;
     }
 
-    [[nodiscard]] static bool is_interim_response(http::status_code status_code) noexcept {
+    [[nodiscard]] static bool is_interim_response(http::status status_code) noexcept {
       auto status_value = std::to_underlying(status_code);
       return status_value >= informational_status_code_min && status_value < informational_status_code_max &&
-             status_code != http::status_code::switching_protocols;
+             status_code != http::status::switching_protocols;
     }
 
-    [[nodiscard]] static bool is_successful_connect_response(http::method request_method,
-      http::status_code status_code) noexcept {
+    [[nodiscard]] static bool is_successful_connect_response(http::method request_method, http::status status_code) noexcept {
       auto status_value = std::to_underlying(status_code);
       bool is_succesfull_status_code =
         (status_value >= succesfull_status_code_min && status_value < succesfull_status_code_max);

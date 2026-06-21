@@ -114,7 +114,7 @@ namespace aero::websocket {
         return handshake_error::accept_challenge_failed;
       }
 
-      if (resp.status_code() != http::status_code::switching_protocols) {
+      if (resp.status_code() != http::status::switching_protocols) {
         return handshake_error::status_code_invalid;
       }
 

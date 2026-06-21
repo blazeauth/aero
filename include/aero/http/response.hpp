@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "aero/http/headers.hpp"
-#include "aero/http/status_code.hpp"
+#include "aero/http/status.hpp"
 #include "aero/http/status_line.hpp"
 
 namespace aero::http {
@@ -14,7 +14,7 @@ namespace aero::http {
     http::status_line status_line;
     http::headers headers;
 
-    [[nodiscard]] http::status_code status_code() const {
+    [[nodiscard]] http::status status_code() const {
       return status_line.status_code;
     }
 
