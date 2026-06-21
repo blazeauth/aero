@@ -1,173 +1,174 @@
-#include "gtest/gtest.h"
-
 #include <format>
 #include <string>
 #include <string_view>
+#include <ut/ut.hpp>
 
 #include "aero/http/error.hpp"
 #include "aero/http/method.hpp"
 #include "aero/http/request_line.hpp"
 #include "aero/http/version.hpp"
 
-namespace {
+using namespace ut;
 
-  namespace http = aero::http;
-  using http::protocol_error;
-  using http::request_line;
+namespace http = aero::http;
+using http::protocol_error;
+using http::request_line;
 
-} // namespace
+int main() {
+  suite http_request_line = [] {
+    "serializes a trivial request line"_test = [] {
+      for (http::method method : http::methods) {
+        request_line line{
+          .method = method,
+          .target = "/products",
+          .version = http::version::http1_1,
+        };
 
-TEST(HttpRequestLine, TrivialSerializeSucceeds) {
-  for (http::method method : http::methods) {
-    request_line line{
-      .method = method,
-      .target = "/products",
-      .version = http::version::http1_1,
+        auto expected = std::format("{} /products HTTP/1.1\r\n", http::to_string(method));
+        expect(line.serialize() == expected);
+      }
     };
 
-    auto expected = std::format("{} /products HTTP/1.1\r\n", http::to_string(method));
-    EXPECT_EQ(line.serialize(), expected);
-  }
-}
+    "returns an empty string for an unknown method"_test = [] {
+      request_line line{
+        .method = static_cast<http::method>(0xFF),
+        .target = "/products",
+        .version = http::version::http1_1,
+      };
 
-TEST(HttpRequestLine, SerializeReturnsEmptyForUnknownMethod) {
-  request_line line{
-    .method = static_cast<http::method>(0xFF),
-    .target = "/products",
-    .version = http::version::http1_1,
-  };
-
-  EXPECT_TRUE(line.serialize().empty());
-}
-
-TEST(HttpRequestLine, SerializeReturnsEmptyForUnknownVersion) {
-  request_line line{
-    .method = http::method::get,
-    .target = "/products",
-    .version = static_cast<http::version>(0xFF),
-  };
-
-  EXPECT_TRUE(line.serialize().empty());
-}
-
-TEST(HttpRequestLine, SerializeEmptyReturnsEmptyString) {
-  request_line line{};
-  EXPECT_TRUE(line.serialize().empty());
-}
-
-TEST(HttpRequestLine, ParseTrivialStringSucceeds) {
-  for (http::method method : http::methods) {
-    request_line expected{
-      .method = method,
-      .target = "/products",
-      .version = http::version::http1_1,
+      expect(line.serialize().empty());
     };
 
-    auto text = std::format("{} /products HTTP/1.1", http::to_string(method));
-    EXPECT_EQ(expected, request_line::parse(text));
-  }
-}
+    "returns an empty string for an unknown version"_test = [] {
+      request_line line{
+        .method = http::method::get,
+        .target = "/products",
+        .version = static_cast<http::version>(0xFF),
+      };
 
-TEST(HttpRequestLine, ParseWithCrlfSuffixSucceeds) {
-  request_line expected{
-    .method = http::method::get,
-    .target = "/products",
-    .version = http::version::http1_1,
+      expect(line.serialize().empty());
+    };
+
+    "serializes an empty request line as an empty string"_test = [] {
+      request_line line{};
+      expect(line.serialize().empty());
+    };
+
+    "parses a trivial request line"_test = [] {
+      for (http::method method : http::methods) {
+        request_line expected{
+          .method = method,
+          .target = "/products",
+          .version = http::version::http1_1,
+        };
+
+        auto text = std::format("{} /products HTTP/1.1", http::to_string(method));
+        expect(expected == request_line::parse(text));
+      }
+    };
+
+    "parses a request line with a crlf suffix"_test = [] {
+      request_line expected{
+        .method = http::method::get,
+        .target = "/products",
+        .version = http::version::http1_1,
+      };
+
+      expect(expected == request_line::parse("GET /products HTTP/1.1\r\n"));
+    };
+
+    "rejects empty string"_test = [] {
+      auto parsed = request_line::parse("");
+      expect[not parsed.has_value()];
+      expect(parsed.error() == protocol_error::request_line_invalid);
+    };
+
+    "rejects only crlf"_test = [] {
+      auto parsed = request_line::parse("\r\n");
+      expect[not parsed.has_value()];
+      expect(parsed.error() == protocol_error::request_line_invalid);
+    };
+
+    "rejects lf-only line ending"_test = [] {
+      auto parsed = request_line::parse("GET /products HTTP/1.1\n");
+      expect[not parsed.has_value()];
+      expect(parsed.error() == protocol_error::request_line_invalid);
+    };
+
+    "rejects embedded crlf inside line"_test = [] {
+      auto parsed = request_line::parse("GET /products\r\nHTTP/1.1");
+      expect[not parsed.has_value()];
+      expect(parsed.error() == protocol_error::request_line_invalid);
+    };
+
+    "rejects leading space before method"_test = [] {
+      auto parsed = request_line::parse(" GET /products HTTP/1.1");
+      expect[not parsed.has_value()];
+      expect(parsed.error() == protocol_error::request_line_invalid);
+    };
+
+    "rejects missing spaces between tokens"_test = [] {
+      auto parsed = request_line::parse("GET/productsHTTP/1.1");
+      expect[not parsed.has_value()];
+      expect(parsed.error() == protocol_error::request_line_invalid);
+    };
+
+    "rejects missing second space"_test = [] {
+      auto parsed = request_line::parse("GET /productsHTTP/1.1");
+      expect[not parsed.has_value()];
+      expect(parsed.error() == protocol_error::request_line_invalid);
+    };
+
+    "rejects double space between method and target"_test = [] {
+      auto parsed = request_line::parse("GET  /products HTTP/1.1");
+      expect[not parsed.has_value()];
+      expect(parsed.error() == protocol_error::request_line_invalid);
+    };
+
+    "rejects double space between target and version"_test = [] {
+      auto parsed = request_line::parse("GET /products  HTTP/1.1");
+      expect[not parsed.has_value()];
+      expect(parsed.error() == protocol_error::request_line_invalid);
+    };
+
+    "rejects trailing space after version"_test = [] {
+      auto parsed = request_line::parse("GET /products HTTP/1.1 ");
+      expect[not parsed.has_value()];
+      expect(parsed.error() == protocol_error::request_line_invalid);
+    };
+
+    "rejects extra token"_test = [] {
+      auto parsed = request_line::parse("GET /products HI HTTP/1.1");
+      expect[not parsed.has_value()];
+      expect(parsed.error() == protocol_error::request_line_invalid);
+    };
+
+    "rejects an invalid http version"_test = [] {
+      auto parsed = request_line::parse("GET /products HTP/1.8");
+      expect[not parsed.has_value()];
+      expect(parsed.error() == protocol_error::version_invalid);
+    };
+
+    "rejects an invalid http method"_test = [] {
+      auto parsed = request_line::parse("POP /products HTTP/1.1");
+      expect[not parsed.has_value()];
+      expect(parsed.error() == protocol_error::method_invalid);
+    };
+
+    "accepts target without leading slash"_test = [] {
+      auto parsed = request_line::parse("GET products HTTP/1.1");
+      expect[parsed.has_value()];
+      expect(parsed->method == http::method::get);
+      expect(parsed->target == "products");
+      expect(parsed->version == http::version::http1_1);
+    };
+
+    "accepts asterisk target"_test = [] {
+      auto parsed = request_line::parse("OPTIONS * HTTP/1.1");
+      expect[parsed.has_value()];
+      expect(parsed->method == http::method::options);
+      expect(parsed->target == "*");
+      expect(parsed->version == http::version::http1_1);
+    };
   };
-
-  EXPECT_EQ(expected, request_line::parse("GET /products HTTP/1.1\r\n"));
-}
-
-TEST(HttpRequestLine, ParseRejectsEmptyString) {
-  auto parsed = request_line::parse("");
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::request_line_invalid);
-}
-
-TEST(HttpRequestLine, ParseRejectsOnlyCrlf) {
-  auto parsed = request_line::parse("\r\n");
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::request_line_invalid);
-}
-
-TEST(HttpRequestLine, ParseRejectsLfOnlyLineEnding) {
-  auto parsed = request_line::parse("GET /products HTTP/1.1\n");
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::request_line_invalid);
-}
-
-TEST(HttpRequestLine, ParseRejectsEmbeddedCrlfInsideLine) {
-  auto parsed = request_line::parse("GET /products\r\nHTTP/1.1");
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::request_line_invalid);
-}
-
-TEST(HttpRequestLine, ParseRejectsLeadingSpaceBeforeMethod) {
-  auto parsed = request_line::parse(" GET /products HTTP/1.1");
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::request_line_invalid);
-}
-
-TEST(HttpRequestLine, ParseRejectsMissingSpacesBetweenTokens) {
-  auto parsed = request_line::parse("GET/productsHTTP/1.1");
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::request_line_invalid);
-}
-
-TEST(HttpRequestLine, ParseRejectsMissingSecondSpace) {
-  auto parsed = request_line::parse("GET /productsHTTP/1.1");
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::request_line_invalid);
-}
-
-TEST(HttpRequestLine, ParseRejectsDoubleSpaceBetweenMethodAndTarget) {
-  auto parsed = request_line::parse("GET  /products HTTP/1.1");
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::request_line_invalid);
-}
-
-TEST(HttpRequestLine, ParseRejectsDoubleSpaceBetweenTargetAndVersion) {
-  auto parsed = request_line::parse("GET /products  HTTP/1.1");
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::request_line_invalid);
-}
-
-TEST(HttpRequestLine, ParseRejectsTrailingSpaceAfterVersion) {
-  auto parsed = request_line::parse("GET /products HTTP/1.1 ");
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::request_line_invalid);
-}
-
-TEST(HttpRequestLine, ParseRejectsExtraToken) {
-  auto parsed = request_line::parse("GET /products HI HTTP/1.1");
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::request_line_invalid);
-}
-
-TEST(HttpRequestLine, ParseWithInvalidHttpVersionFails) {
-  auto parsed = request_line::parse("GET /products HTP/1.8");
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::version_invalid);
-}
-
-TEST(HttpRequestLine, ParseWithInvalidHttpMethodFails) {
-  auto parsed = request_line::parse("POP /products HTTP/1.1");
-  ASSERT_FALSE(parsed);
-  EXPECT_EQ(parsed.error(), protocol_error::method_invalid);
-}
-
-TEST(HttpRequestLine, ParseAcceptsTargetWithoutLeadingSlash) {
-  auto parsed = request_line::parse("GET products HTTP/1.1");
-  ASSERT_TRUE(parsed);
-  EXPECT_EQ(parsed->method, http::method::get);
-  EXPECT_EQ(parsed->target, "products");
-  EXPECT_EQ(parsed->version, http::version::http1_1);
-}
-
-TEST(HttpRequestLine, ParseAcceptsAsteriskTarget) {
-  auto parsed = request_line::parse("OPTIONS * HTTP/1.1");
-  ASSERT_TRUE(parsed);
-  EXPECT_EQ(parsed->method, http::method::options);
-  EXPECT_EQ(parsed->target, "*");
-  EXPECT_EQ(parsed->version, http::version::http1_1);
 }

@@ -1,12 +1,15 @@
-#include <gtest/gtest.h>
-
 #include "aero/http/method.hpp"
+#include <ut/ut.hpp>
 
-namespace {
-  using aero::http::method;
-}
+using namespace ut;
 
-TEST(HttpMethod, StdFormatFormatsMethodAsString) {
-  std::string method_str = std::format("Method {}", method::get);
-  EXPECT_EQ(method_str, "Method GET");
+using aero::http::method;
+
+int main() {
+  suite http_method = [] {
+    "std::format formats method as string"_test = [] {
+      std::string method_str = std::format("Method {}", method::get);
+      expect(method_str == "Method GET");
+    };
+  };
 }

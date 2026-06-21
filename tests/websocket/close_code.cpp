@@ -1,12 +1,15 @@
-#include <gtest/gtest.h>
-
 #include "aero/websocket/close_code.hpp"
+#include <ut/ut.hpp>
 
-namespace {
-  using aero::websocket::close_code;
-}
+using namespace ut;
 
-TEST(WebsocketCloseCode, StdFormatFormatsCloseCodeAsNumber) {
-  std::string close_code_str = std::format("Close code {}", close_code::normal);
-  EXPECT_EQ(close_code_str, "Close code 1000");
+using aero::websocket::close_code;
+
+int main() {
+  suite websocket_close_code = [] {
+    "std::format formats close code as number"_test = [] {
+      std::string close_code_str = std::format("Close code {}", close_code::normal);
+      expect(close_code_str == "Close code 1000");
+    };
+  };
 }

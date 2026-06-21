@@ -1,0 +1,1 @@
+aero_add_unit_test(aero_sha1_sha1_impl sha1_impl.cpp)
