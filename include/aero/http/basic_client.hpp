@@ -1049,9 +1049,8 @@ namespace aero::http {
       bool is_informational_status_code =
         (status_value >= informational_status_code_min && status_value < informational_status_code_max);
 
-      return request_method == http::method::head || is_informational_status_code ||
-             status_code == http::status::no_content || status_code == http::status::reset_content ||
-             status_code == http::status::not_modified;
+      return request_method == http::method::head || is_informational_status_code || status_code == http::status::no_content ||
+             status_code == http::status::reset_content || status_code == http::status::not_modified;
     }
 
     [[nodiscard]] static bool is_interim_response(http::status status_code) noexcept {
@@ -1060,8 +1059,7 @@ namespace aero::http {
              status_code != http::status::switching_protocols;
     }
 
-    [[nodiscard]] static bool is_successful_connect_response(http::method request_method,
-      http::status status_code) noexcept {
+    [[nodiscard]] static bool is_successful_connect_response(http::method request_method, http::status status_code) noexcept {
       auto status_value = std::to_underlying(status_code);
       bool is_succesfull_status_code =
         (status_value >= succesfull_status_code_min && status_value < succesfull_status_code_max);

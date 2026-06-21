@@ -462,9 +462,8 @@ namespace aero::http::detail {
       bool is_informational_status_code =
         (status_value >= informational_status_code_min && status_value < informational_status_code_max);
 
-      return request_method == http::method::head || is_informational_status_code ||
-             status_code == http::status::no_content || status_code == http::status::reset_content ||
-             status_code == http::status::not_modified;
+      return request_method == http::method::head || is_informational_status_code || status_code == http::status::no_content ||
+             status_code == http::status::reset_content || status_code == http::status::not_modified;
     }
 
     static void trim_http_whitespace(std::string_view& value) noexcept {
@@ -568,8 +567,7 @@ namespace aero::http::detail {
       return transfer_encoding_framing::close_delimited;
     }
 
-    [[nodiscard]] static bool is_successful_connect_response(http::method request_method,
-      http::status status_code) noexcept {
+    [[nodiscard]] static bool is_successful_connect_response(http::method request_method, http::status status_code) noexcept {
       auto status_value = std::to_underlying(status_code);
       bool is_succesfull_status_code =
         (status_value >= succesfull_status_code_min && status_value < succesfull_status_code_max);
