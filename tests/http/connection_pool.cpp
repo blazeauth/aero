@@ -23,7 +23,7 @@ http::request make_request(http::method method = http::method::get, http::versio
   };
 }
 
-http::response make_response(http::headers headers, http::status_code status_code = http::status_code::ok) {
+http::response make_response(http::headers headers, http::status status_code = http::status::ok) {
   return http::response{
     .body = {},
     .status_line = http::status_line{.protocol = "HTTP/1.1", .status_code = status_code, .reason_phrase = "OK"},

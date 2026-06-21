@@ -11,7 +11,7 @@
 #include "aero/http/error.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/http/response.hpp"
-#include "aero/http/status_code.hpp"
+#include "aero/http/status.hpp"
 #include "aero/http/status_line.hpp"
 #include "aero/websocket/client.hpp"
 #include "aero/websocket/detail/accept_challenge.hpp"
@@ -95,7 +95,7 @@ int main() {
       });
 
       expect[result.has_value()];
-      expect(result->status_code() == http::status_code::switching_protocols);
+      expect(result->status_code() == http::status::switching_protocols);
       expect(result->headers.contains_token("upgrade", "websocket"));
 
       auto test_header = result->headers.first_value("x-test");
@@ -141,7 +141,7 @@ int main() {
         });
 
       expect(connect_ec == websocket::handshake_error::accept_challenge_failed);
-      expect(server_response.status_code() == http::status_code::switching_protocols);
+      expect(server_response.status_code() == http::status::switching_protocols);
       expect(server_response.headers.contains_token("upgrade", "websocket"));
 
       auto trace = server_response.headers.first_value("x-trace");

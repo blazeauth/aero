@@ -5,7 +5,7 @@
 
 #include "aero/http/detail/common.hpp"
 #include "aero/http/error.hpp"
-#include "aero/http/status_code.hpp"
+#include "aero/http/status.hpp"
 #include "aero/http/status_line.hpp"
 #include "aero/http/version.hpp"
 
@@ -45,7 +45,7 @@ namespace aero::http {
       reason_phrase = buffer_reason_phrase;
     }
 
-    auto status_code = aero::http::to_status_code(status_code_str);
+    auto status_code = aero::http::parse_status(status_code_str);
     if (!status_code) {
       return std::unexpected(status_code.error());
     }

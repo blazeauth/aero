@@ -10,7 +10,7 @@
 #include "aero/http/request.hpp"
 #include "aero/http/request_line.hpp"
 #include "aero/http/response.hpp"
-#include "aero/http/status_code.hpp"
+#include "aero/http/status.hpp"
 #include "aero/http/status_line.hpp"
 #include "aero/http/uri.hpp"
 #include "aero/http/version.hpp"
