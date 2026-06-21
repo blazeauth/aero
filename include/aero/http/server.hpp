@@ -1,24 +1,23 @@
 #pragma once
 
 #include "aero/http/context.hpp"
-#include "aero/http/error.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/http/method.hpp"
 #include "aero/http/port.hpp"
 #include "aero/http/request.hpp"
 #include "aero/http/request_line.hpp"
 #include "aero/http/response.hpp"
-#include "aero/http/status_code.hpp"
+#include "aero/http/status.hpp"
 #include "aero/http/status_line.hpp"
 #include "aero/http/version.hpp"
 
 #include <asio.hpp>
-
-#include <algorithm>
 #include <asio/any_io_executor.hpp>
 #include <asio/error.hpp>
 #include <asio/ip/address.hpp>
 #include <asio/thread_pool.hpp>
+
+#include <algorithm>
 #include <iterator>
 #include <optional>
 #include <source_location>
@@ -330,7 +329,7 @@ namespace aero::http {
       http::response response;
       response.status_line = http::status_line{
         .protocol = std::string{http::to_string(http::version::http1_1)},
-        .status_code = http::status_code::ok,
+        .status_code = http::status::ok,
       };
 
       http::context context{&request, &response};

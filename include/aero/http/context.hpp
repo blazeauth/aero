@@ -2,7 +2,7 @@
 
 #include "aero/http/request.hpp"
 #include "aero/http/response.hpp"
-#include "aero/http/status_code.hpp"
+#include "aero/http/status.hpp"
 
 namespace aero::http {
 
@@ -18,7 +18,7 @@ namespace aero::http {
       return *response_;
     }
 
-    void status(http::status_code status) {
+    void status(http::status status) {
       response_->status_line.status_code = status;
       response_->status_line.reason_phrase = http::to_string(status);
     }
