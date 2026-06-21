@@ -14,7 +14,7 @@ namespace aero {
 
     ~final_action() noexcept {
       if (invoke_) {
-        f();
+        fn_();
       }
     }
 
