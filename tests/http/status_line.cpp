@@ -82,7 +82,7 @@ int main() {
         .reason_phrase = "OK",
       };
 
-      expect(status_line.serialize() == "HTTP/1.0 200 OK");
+      expect(status_line.serialize() == "HTTP/1.0 200 OK\r\n");
     };
 
     "serializes an empty status line as an empty string"_test = [] {
