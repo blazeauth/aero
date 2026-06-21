@@ -296,7 +296,7 @@ int main() {
 
       auto response = future.get();
 
-      expect(response.status_code() == http::status_code::ok);
+      expect(response.status_code() == http::status::ok);
       expect(response.text() == "ok");
 
       server.join();
@@ -336,7 +336,7 @@ int main() {
 
       auto response = future.get();
 
-      expect(response.status_code() == http::status_code::ok);
+      expect(response.status_code() == http::status::ok);
       expect(response.text() == "ok");
 
       server.join();

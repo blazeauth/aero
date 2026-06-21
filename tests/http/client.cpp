@@ -164,7 +164,7 @@ int main() {
         send_with_timeout(client, make_local_endpoint(server.port()), make_request("/hello"), local_request_timeout);
 
       expect[response.has_value()];
-      expect(response->status_code() == http::status_code::ok);
+      expect(response->status_code() == http::status::ok);
       expect(response->text() == "hello");
 
       server.join();
@@ -347,7 +347,7 @@ int main() {
         send_with_timeout(client, make_local_endpoint(server.port()), make_request("/chunked"), local_request_timeout);
 
       expect[response.has_value()];
-      expect(response->status_code() == http::status_code::ok);
+      expect(response->status_code() == http::status::ok);
       expect(response->text() == "hello world");
 
       server.join();
@@ -613,7 +613,7 @@ int main() {
 
       expect[first.has_value()];
       expect[second.has_value()];
-      expect(first->status_code() == http::status_code::no_content);
+      expect(first->status_code() == http::status::no_content);
       expect(first->body.empty());
       expect(second->text() == "ok");
 
@@ -725,9 +725,9 @@ int main() {
 
       expect[first.has_value()];
       expect[second.has_value()];
-      expect(first->status_code() == http::status_code::ok);
+      expect(first->status_code() == http::status::ok);
       expect(first->text() == "first");
-      expect(second->status_code() == http::status_code::ok);
+      expect(second->status_code() == http::status::ok);
       expect(second->text() == "second");
 
       server.join();
@@ -765,7 +765,7 @@ int main() {
       auto response = send_with_timeout(client, make_local_endpoint(server.port()), std::move(request), local_request_timeout);
 
       expect[response.has_value()];
-      expect(response->status_code() == http::status_code::ok);
+      expect(response->status_code() == http::status::ok);
       expect(response->text() == "ok");
 
       server.join();
@@ -916,7 +916,7 @@ int main() {
       auto response = send_with_timeout(client, make_local_endpoint(server.port()), std::move(request), local_request_timeout);
 
       expect[response.has_value()];
-      expect(response->status_code() == http::status_code::ok);
+      expect(response->status_code() == http::status::ok);
       expect(response->text() == "ok");
 
       server.join();
