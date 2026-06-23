@@ -3,7 +3,6 @@
 #include <string>
 #include <utility>
 
-#include "aero/detail/string.hpp"
 #include "aero/http/status.hpp"
 #include "aero/http/version.hpp"
 
