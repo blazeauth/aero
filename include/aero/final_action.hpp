@@ -9,29 +9,29 @@ namespace aero {
   template <class F>
   class final_action {
    public:
-    explicit final_action(const F& ff) noexcept: f(ff) {}
-    explicit final_action(F&& ff) noexcept: f(std::move(ff)) {}
+    explicit final_action(const F& fn) noexcept: fn_(fn) {}
+    explicit final_action(F&& fn) noexcept: fn_(std::move(fn)) {}
 
     ~final_action() noexcept {
       if (invoke_) {
-        f();
+        fn_();
       }
     }
 
-    final_action(final_action&& other) noexcept: f(std::move(other.f)), invoke_(std::exchange(other.invoke_, false)) {}
+    final_action(final_action&& other) noexcept: fn_(std::move(other.fn_)), invoke_(std::exchange(other.invoke_, false)) {}
 
     final_action(const final_action&) = delete;
     void operator=(const final_action&) = delete;
     void operator=(final_action&&) = delete;
 
    private:
-    F f;
+    F fn_;
     bool invoke_ = true;
   };
 
   template <class F>
-  [[nodiscard]] auto finally(F&& f) noexcept {
-    return final_action<std::decay_t<F>>{std::forward<F>(f)};
+  [[nodiscard]] auto finally(F&& fn) noexcept {
+    return final_action<std::decay_t<F>>{std::forward<F>(fn)};
   }
 
 } // namespace aero

@@ -12,7 +12,7 @@ using aero::http::status_line;
 
 std::string generate_status_line_buffer(status_line status_line) {
   std::string status_line_str = std::format("{} {}", status_line.protocol, std::to_underlying(status_line.status_code));
-  if (status_line.has_reason_phrase()) {
+  if (!status_line.reason_phrase.empty()) {
     status_line_str.append(" " + status_line.reason_phrase);
   }
   return status_line_str + "\r\n";
@@ -82,7 +82,7 @@ int main() {
         .reason_phrase = "OK",
       };
 
-      expect(status_line.serialize() == "HTTP/1.0 200 OK");
+      expect(status_line.serialize() == "HTTP/1.0 200 OK\r\n");
     };
 
     "serializes an empty status line as an empty string"_test = [] {
