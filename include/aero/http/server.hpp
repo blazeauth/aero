@@ -13,6 +13,7 @@
 
 #include <asio.hpp>
 #include <asio/any_io_executor.hpp>
+#include <asio/awaitable.hpp>
 #include <asio/error.hpp>
 #include <asio/ip/address.hpp>
 #include <asio/thread_pool.hpp>
@@ -22,6 +23,7 @@
 #include <optional>
 #include <source_location>
 #include <span>
+#include <system_error>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -88,9 +90,10 @@ namespace aero::http {
       if (!executor_) {
         io_context_ = std::make_unique<asio::io_context>();
         executor_ = io_context_->get_executor();
-        acceptor_ = std::make_unique<coro_acceptor>(executor_);
-        handlers_strand_ = std::make_unique<asio::strand<asio::any_io_executor>>(asio::make_strand(executor_));
       }
+
+      acceptor_ = std::make_unique<coro_acceptor>(executor_);
+      handlers_strand_ = std::make_unique<asio::strand<asio::any_io_executor>>(asio::make_strand(executor_));
     }
 
     // TODO: Add std::shared_ptr<asio::io_context> ctor
@@ -126,9 +129,12 @@ namespace aero::http {
     server& bind(std::string_view address, std::uint16_t port) {
       try {
         asio::ip::tcp::endpoint endpoint{asio::ip::make_address(address), port};
+        acceptor_->open(endpoint.protocol());
         acceptor_->bind(endpoint);
         address_ = address;
         port_ = port;
+      } catch (const std::system_error& e) {
+        handle_error(e.code(), std::source_location::current());
       } catch (...) {
         handle_error(make_error_code(asio::error::address_in_use), std::source_location::current());
       }
@@ -143,6 +149,7 @@ namespace aero::http {
         threads_count = (std::max)(1U, std::thread::hardware_concurrency());
       }
 
+      acceptor_->listen();
       asio::co_spawn(executor_, start_acceptor(), asio::detached);
 
       if (io_context_ && threads_count > 0) {
@@ -162,6 +169,49 @@ namespace aero::http {
     struct connection {
       explicit connection(socket_type&& sock, asio::strand<asio::any_io_executor> strand)
         : socket(std::move(sock)), strand(std::move(strand)) {}
+
+      asio::awaitable<std::error_code> async_send_response(const http::response& response) {
+        std::string serialized_response = response.serialize();
+
+        // TODO: We should synchronize write somehow, probably without mutex
+        std::error_code write_ec;
+        co_await asio::async_write(socket,
+          asio::const_buffer(serialized_response.data(), serialized_response.size()),
+          asio::redirect_error(asio::use_awaitable, write_ec));
+
+        if (write_ec) {
+          co_await detail::co_close_socket(socket);
+        }
+
+        co_return write_ec;
+      }
+
+      asio::awaitable<void> async_send_close_response(http::status status) {
+        // TODO: Should we hold those headers as a thread_local to avoid allocations?
+        http::response response{
+          .status_line =
+            http::status_line{
+              .protocol = "HTTP/1.1",
+              .status_code = status,
+              .reason_phrase = std::string{http::to_string(status)},
+            },
+          .headers = http::headers{{"Connection", "close"}, {"Content-Length", "0"}},
+        };
+
+        std::string serialized_response = response.serialize();
+
+        // TODO: We should synchronize write somehow, probably without mutex
+        std::error_code write_ec;
+        co_await asio::async_write(socket,
+          asio::const_buffer(serialized_response.data(), serialized_response.size()),
+          asio::redirect_error(asio::use_awaitable, write_ec));
+
+        // TODO: Maybe it's better to wait at least a couple milliseconds before
+        // closing to ensure that kernel puts 'serialized_response' to a buffer?
+        co_await detail::co_close_socket(socket);
+
+        // No further error handling is required, socket is closed
+      }
 
       socket_type socket;
       asio::strand<asio::any_io_executor> strand;
@@ -274,55 +324,11 @@ namespace aero::http {
       }
     }
 
-    asio::awaitable<void> handle_request(std::weak_ptr<connection> weak_conn, http::request request) {
-      request_handler handler;
-
-      switch (request.method) {
-      case http::method::get:
-        if (auto it = get_request_handlers_.find(request.url); it != get_request_handlers_.end()) {
-          handler = it->second;
-        }
-        break;
-      case http::method::post:
-        if (auto it = post_request_handlers_.find(request.url); it != post_request_handlers_.end()) {
-          handler = it->second;
-        }
-        break;
-      case http::method::put:
-        if (auto it = put_request_handlers_.find(request.url); it != put_request_handlers_.end()) {
-          handler = it->second;
-        }
-        break;
-      case http::method::patch:
-        if (auto it = patch_request_handlers_.find(request.url); it != patch_request_handlers_.end()) {
-          handler = it->second;
-        }
-        break;
-      case http::method::delete_:
-        if (auto it = delete_request_handlers_.find(request.url); it != delete_request_handlers_.end()) {
-          handler = it->second;
-        }
-        break;
-      case http::method::options:
-        if (auto it = options_request_handlers_.find(request.url); it != options_request_handlers_.end()) {
-          handler = it->second;
-        }
-        break;
-      default:
-        handle_error(asio::error::operation_not_supported,
-          std::source_location::current(),
-          "received request method is not supported");
-        if (auto conn = weak_conn.lock(); conn != nullptr) {
-          co_await detail::co_close_socket(conn->socket);
-        }
-        co_return;
-      }
-
-      if (!handler) {
+    asio::awaitable<void> handle_get_request(std::shared_ptr<connection> conn, http::request request) {
+      auto handler_it = get_request_handlers_.find(request.url);
+      if (handler_it == get_request_handlers_.end()) {
         handle_error(asio::error::service_not_found, std::source_location::current(), "received unknown request target");
-        if (auto conn = weak_conn.lock(); conn != nullptr) {
-          co_await detail::co_close_socket(conn->socket);
-        }
+        co_await detail::co_close_socket(conn->socket);
         co_return;
       }
 
@@ -333,23 +339,25 @@ namespace aero::http {
       };
 
       http::context context{&request, &response};
-      handler(context);
+      handler_it->second(context);
 
       response.headers.replace("Content-Length", std::to_string(response.body.size()));
       response.headers.replace("Connection", "close");
 
-      if (auto conn = weak_conn.lock(); conn != nullptr) {
-        std::string serialized_response = response.serialize();
+      co_await conn->async_send_response(response);
+    }
 
-        // TODO: We should synchronize write somehow, probably without mutex.
-        std::error_code write_ec;
-        co_await asio::async_write(conn->socket,
-          asio::const_buffer(serialized_response.data(), serialized_response.size()),
-          asio::redirect_error(asio::use_awaitable, write_ec));
-
-        if (write_ec) {
-          co_await detail::co_close_socket(conn->socket);
-        }
+    asio::awaitable<void> handle_request(std::shared_ptr<connection> conn, http::request request) {
+      switch (request.method) {
+      case http::method::get:
+        co_await handle_get_request(conn, std::move(request));
+        break;
+      default:
+        handle_error(asio::error::operation_not_supported,
+          std::source_location::current(),
+          "received request method is not supported");
+        co_await detail::co_close_socket(conn->socket);
+        co_return;
       }
     }
   };
