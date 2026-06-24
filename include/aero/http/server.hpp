@@ -145,8 +145,9 @@ namespace aero::http {
       try {
         acceptor_->open(endpoint.protocol());
         acceptor_->bind(endpoint);
-        address_ = endpoint.address();
-        port_ = endpoint.port();
+        auto local_endpoint = acceptor_->local_endpoint();
+        address_ = local_endpoint.address();
+        port_ = local_endpoint.port();
       } catch (const std::system_error& e) {
         return e.code();
       } catch (...) {
