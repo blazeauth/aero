@@ -35,5 +35,6 @@ if(AERO_USE_TLS)
   add_subdirectory(tls)
 endif()
 
-add_subdirectory(http)
+add_subdirectory(http_client)
+add_subdirectory(http_server)
 add_subdirectory(websocket)
