@@ -28,17 +28,11 @@ http::response send_request(http::server<>& server, std::string_view request_buf
 
   std::string status_line_str = response_buf.substr(0, status_line_end);
   auto status_line = http::status_line::parse(status_line_str);
-  if (not status_line) {
-    expect[false] << "failed to parse response status line: " << status_line.error().message();
-    return {};
-  }
+  expect[status_line.has_value()] << "failed to parse response status line: " << status_line_str;
 
   std::string headers_str = response_buf.substr(status_line_end + 2);
   auto headers = http::headers::parse(headers_str);
-  if (not headers) {
-    expect[false] << "failed to parse response headers: " << headers.error().message();
-    return {};
-  }
+  expect[headers.has_value()] << "failed to parse response headers: " << headers_str;
 
   return {.status_line = *status_line, .headers = *headers};
 }
