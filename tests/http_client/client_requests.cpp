@@ -19,7 +19,7 @@
 
 #include "aero/http/client.hpp"
 #include "aero/http/error.hpp"
-#include "http/tcp_acceptor.hpp"
+#include "http_client/tcp_acceptor.hpp"
 
 using namespace ut;
 
