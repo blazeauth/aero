@@ -24,10 +24,10 @@ int main() {
 
       // Won't be empty, but this is expected, since server sends close response
       std::error_code ignored_read_ec;
-      std::string response_buf(4096, '\0');
-      std::size_t bytes_read = asio::read(socket, asio::buffer(response_buf), asio::transfer_all(), ignored_read_ec);
 
-      response_buf.resize(bytes_read);
+      std::string response_buf;
+      asio::read(socket, asio::dynamic_buffer(response_buf), asio::transfer_all(), ignored_read_ec);
+
       expect[response_buf.ends_with("\r\n\r\n")];
 
       std::size_t status_line_end = response_buf.find("\r\n");
