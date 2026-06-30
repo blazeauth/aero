@@ -20,14 +20,8 @@ int main() {
   auto threadpool = std::make_shared<asio::thread_pool>(4);
 
   http::server server(threadpool->get_executor());
-  server.on_error([](std::error_code ec, std::source_location location, std::optional<std::string>) {
-    std::println("Error \"{}\" ({}) occured at {}", ec.message(), ec.value(), location.function_name());
-    std::exit(1); // NOLINT
-  });
-
   server.get("/aero", aero_handler);
-  server.bind("127.0.0.1", 8080);
-  server.start();
+  server.async_start("127.0.0.1", 8080);
 
   threadpool->wait();
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "aero/http/context.hpp"
+#include "aero/http/detail/header_validator.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/http/method.hpp"
 #include "aero/http/port.hpp"
@@ -15,6 +16,7 @@
 #include <asio/any_io_executor.hpp>
 #include <asio/awaitable.hpp>
 #include <asio/error.hpp>
+#include <asio/executor_work_guard.hpp>
 #include <asio/ip/address.hpp>
 #include <asio/thread_pool.hpp>
 
@@ -90,6 +92,7 @@ namespace aero::http {
       if (!executor_) {
         io_context_ = std::make_unique<asio::io_context>();
         executor_ = io_context_->get_executor();
+        work_guard_.emplace(executor_);
       }
 
       acceptor_ = std::make_unique<coro_acceptor>(executor_);
@@ -105,6 +108,7 @@ namespace aero::http {
 
     ~server() {
       if (io_context_) {
+        work_guard_.reset();
         io_context_->stop();
       }
 
@@ -121,48 +125,94 @@ namespace aero::http {
       }
     }
 
-    server& on_error(error_handler handler) {
+    void on_error(error_handler handler) {
       error_handler_ = std::move(handler);
-      return *this;
     }
 
-    server& bind(std::string_view address, std::uint16_t port) {
-      try {
-        asio::ip::tcp::endpoint endpoint{asio::ip::make_address(address), port};
-        acceptor_->open(endpoint.protocol());
-        acceptor_->bind(endpoint);
-        address_ = address;
-        port_ = port;
-      } catch (const std::system_error& e) {
-        handle_error(e.code(), std::source_location::current());
-      } catch (...) {
-        handle_error(make_error_code(asio::error::address_in_use), std::source_location::current());
-      }
-      return *this;
-    }
+    void set_workers(std::size_t num_threads) {
+      // hardware_concurrency can return 0 if the information is not available,
+      // so we clamp threads count to at least 1
+      num_threads = (std::max)(1ZU, num_threads);
 
-    void start(std::optional<std::size_t> num_threads = std::nullopt) {
-      std::size_t threads_count{};
-      if (num_threads.has_value()) {
-        threads_count = *num_threads;
-      } else {
-        threads_count = (std::max)(1U, std::thread::hardware_concurrency());
-      }
-
-      acceptor_->listen();
-      asio::co_spawn(executor_, start_acceptor(), asio::detached);
-
-      if (io_context_ && threads_count > 0) {
-        threads_.reserve(threads_count);
-        for (std::size_t i{}; i < threads_count; ++i) {
+      if (io_context_ && num_threads > 0) {
+        threads_.reserve(num_threads);
+        for (std::size_t i{}; i < num_threads; ++i) {
           threads_.emplace_back([this] { io_context_->run(); });
         }
       }
     }
 
-    server& get(std::string path, request_handler handler) {
+    std::error_code bind(asio::ip::tcp::endpoint endpoint) {
+      try {
+        acceptor_->open(endpoint.protocol());
+        acceptor_->bind(endpoint);
+        auto local_endpoint = acceptor_->local_endpoint();
+        address_ = local_endpoint.address();
+        port_ = local_endpoint.port();
+      } catch (const std::system_error& e) {
+        return e.code();
+      } catch (...) {
+        return make_error_code(asio::error::address_in_use);
+      }
+      return {};
+    }
+
+    std::error_code bind(std::string_view address, std::uint16_t port) {
+      return bind(asio::ip::tcp::endpoint{asio::ip::make_address(address), port});
+    }
+
+    std::error_code start() {
+      acceptor_->listen();
+      return start_acceptor();
+    }
+
+    std::error_code start(asio::ip::tcp::endpoint endpoint) {
+      if (auto bind_ec = bind(endpoint); bind_ec) {
+        return bind_ec;
+      }
+      return start();
+    }
+
+    std::error_code start(std::string_view address, std::uint16_t port) {
+      if (auto bind_ec = bind(address, port); bind_ec) {
+        return bind_ec;
+      }
+      return start();
+    }
+
+    void async_start() {
+      if (threads_.empty()) {
+        set_workers(std::thread::hardware_concurrency());
+      }
+
+      acceptor_->listen();
+      asio::co_spawn(executor_, start_async_acceptor(), asio::detached);
+    }
+
+    void async_start(asio::ip::tcp::endpoint endpoint) {
+      if (auto bind_ec = bind(endpoint); bind_ec) {
+        throw std::system_error(bind_ec);
+      }
+      async_start();
+    }
+
+    void async_start(std::string_view address, std::uint16_t port) {
+      if (auto bind_ec = bind(address, port); bind_ec) {
+        throw std::system_error(bind_ec);
+      }
+      async_start();
+    }
+
+    void get(std::string path, request_handler handler) {
       get_request_handlers_[path] = std::move(handler);
-      return *this;
+    }
+
+    [[nodiscard]] asio::ip::tcp::endpoint endpoint() const noexcept {
+      return {address_, port_};
+    }
+
+    [[nodiscard]] asio::any_io_executor get_executor() const noexcept {
+      return executor_;
     }
 
    private:
@@ -170,7 +220,7 @@ namespace aero::http {
       explicit connection(socket_type&& sock, asio::strand<asio::any_io_executor> strand)
         : socket(std::move(sock)), strand(std::move(strand)) {}
 
-      asio::awaitable<std::error_code> async_send_response(const http::response& response) {
+      asio::awaitable<std::error_code> co_send_response(const http::response& response) {
         std::string serialized_response = response.serialize();
 
         // TODO: We should synchronize write somehow, probably without mutex
@@ -186,7 +236,7 @@ namespace aero::http {
         co_return write_ec;
       }
 
-      asio::awaitable<void> async_send_close_response(http::status status) {
+      asio::awaitable<void> co_send_close_response(http::status status) {
         // TODO: Should we hold those headers as a thread_local to avoid allocations?
         http::response response{
           .status_line =
@@ -219,6 +269,7 @@ namespace aero::http {
     };
 
     std::shared_ptr<asio::io_context> io_context_;
+    std::optional<asio::executor_work_guard<asio::any_io_executor>> work_guard_;
     std::vector<std::thread> threads_;
     asio::any_io_executor executor_;
     std::unique_ptr<coro_acceptor> acceptor_;
@@ -237,7 +288,7 @@ namespace aero::http {
     std::unique_ptr<asio::strand<asio::any_io_executor>> handlers_strand_;
 
     // Only set once in .bind(), no synchronization needed
-    std::string address_;
+    asio::ip::address address_;
     std::uint16_t port_{0};
 
     void handle_error(std::error_code ec, std::source_location location, std::optional<std::string> context = std::nullopt) {
@@ -246,7 +297,24 @@ namespace aero::http {
       }
     }
 
-    asio::awaitable<void> start_acceptor() {
+    std::error_code start_acceptor() {
+      for (;;) {
+        std::error_code accept_ec;
+        auto socket = acceptor_->accept(accept_ec);
+        if (accept_ec) {
+          // TODO: Should we return an error or continue accepting?
+          // What will be better API for the user in this case?
+          return accept_ec;
+        }
+
+        auto strand = asio::make_strand(executor_);
+
+        // TODO: Is asio::detached good enough in this context?
+        asio::co_spawn(strand, start_session(std::move(socket), strand), asio::detached);
+      }
+    }
+
+    asio::awaitable<void> start_async_acceptor() {
       for (;;) {
         auto [ec, socket] = co_await acceptor_->async_accept();
         if (ec) {
@@ -264,9 +332,7 @@ namespace aero::http {
     asio::awaitable<void> start_session(socket_type socket, asio::strand<asio::any_io_executor> strand) {
       auto conn = std::make_shared<connection>(std::move(socket), strand);
 
-      std::vector<std::byte> buffer;
-
-      // TODO: Replace socket shutdown by sending response and close only after that
+      std::string buffer;
 
       for (;;) {
         auto [ec, headers_end] = co_await asio::async_read_until(conn->socket,
@@ -274,30 +340,38 @@ namespace aero::http {
           "\r\n\r\n",
           asio::as_tuple(asio::use_awaitable));
         if (ec) {
-          co_await detail::co_close_socket(socket);
+          co_await conn->co_send_close_response(http::status::bad_request);
           co_return;
         }
 
-        // asio::async_read_until guarantees that buffer contains "\r\n\r\n"
-        auto first_line_end_it = std::ranges::find(buffer, std::byte{'\n'});
+        std::string_view buffer_view{buffer};
 
-        std::span first_line_buf{buffer.data(), static_cast<std::size_t>(std::distance(buffer.begin(), first_line_end_it) + 1)};
-        std::span headers_buf{buffer.data() + first_line_buf.size(), headers_end - first_line_buf.size()};
-        std::span content_buf{buffer.data() + headers_end, buffer.size()};
+        // asio::async_read_until guarantees that buffer contains
+        // "\r\n\r\n", so we won't check for npos
+        std::size_t request_line_end = buffer_view.find('\n');
 
-        auto request_line = http::request_line::parse(first_line_buf);
+        std::string_view request_line_str = buffer_view.substr(0, request_line_end + 1);
+        std::string_view headers_str = buffer_view.substr(request_line_str.size(), headers_end);
+
+        auto request_line = http::request_line::parse(request_line_str);
         if (!request_line) {
-          handle_error(request_line.error(), std::source_location::current(), "received invalid request line");
-          co_await detail::co_close_socket(socket);
+          co_await conn->co_send_close_response(http::status::bad_request);
           co_return;
         }
 
-        // TODO: Headers may be empty, check that.
-        auto request_headers = http::headers::parse(headers_buf);
+        auto request_headers = http::headers::parse(headers_str);
         if (!request_headers) {
-          handle_error(request_headers.error(), std::source_location::current(), "received invalid header fields");
-          co_await detail::co_close_socket(socket);
+          co_await conn->co_send_close_response(http::status::bad_request);
           co_return;
+        }
+
+        bool is_http11 = request_line->version == http::version::http1_1;
+        if (is_http11) {
+          auto status = validate_http11_request_headers(*request_headers);
+          if (status != http::status::ok) {
+            co_await conn->co_send_close_response(status);
+            co_return;
+          }
         }
 
         http::request request{
@@ -306,14 +380,6 @@ namespace aero::http {
           .url = std::move(request_line->target),
           .headers = std::move(*request_headers),
         };
-
-        // TODO: Check if there is more than 1 Host header
-        auto host_header = request.headers.first_value("Host");
-        if (!host_header) {
-          handle_error(request_headers.error(), std::source_location::current(), "Host header missing");
-          co_await detail::co_close_socket(socket);
-          co_return;
-        }
 
         co_await handle_request(conn, std::move(request));
 
@@ -344,7 +410,7 @@ namespace aero::http {
       response.headers.replace("Content-Length", std::to_string(response.body.size()));
       response.headers.replace("Connection", "close");
 
-      co_await conn->async_send_response(response);
+      co_await conn->co_send_response(response);
     }
 
     asio::awaitable<void> handle_request(std::shared_ptr<connection> conn, http::request request) {
@@ -359,6 +425,40 @@ namespace aero::http {
         co_await detail::co_close_socket(conn->socket);
         co_return;
       }
+    }
+
+    http::status validate_http11_request_headers(const http::headers& headers) {
+      // RFC 9112 3.2:
+      // A client MUST send a Host header field in all HTTP/1.1 request messages.
+      if (headers.empty()) {
+        return http::status::bad_request;
+      }
+
+      // RFC 9112 3.2:
+      // A server MUST respond with a 400 (Bad Request) status code
+      // to any HTTP/1.1 request message that lacks a Host header
+      auto host_header = headers.first_value("Host");
+      if (!host_header) {
+        return http::status::bad_request;
+      }
+
+      // RFC 9112 3.2:
+      // A server MUST respond with a 400 (Bad Request) status code to any
+      // HTTP/1.1 request message that ... contains more than one Host header
+      if (headers.occurrences("Host") > 1) {
+        return http::status::bad_request;
+      }
+
+      // RFC 9112 3.2:
+      // A server MUST respond with a 400 (Bad Request) status code to any
+      // HTTP/1.1 request message that ... contains ... a Host header field
+      // with an invalid field value.
+      bool is_host_header_valid = http::detail::validate_host_header(host_header.value());
+      if (!is_host_header_valid) {
+        return http::status::bad_request;
+      }
+
+      return http::status::ok;
     }
   };
 

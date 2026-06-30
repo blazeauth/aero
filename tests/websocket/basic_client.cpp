@@ -16,7 +16,7 @@
 #include "aero/websocket/client.hpp"
 #include "aero/websocket/detail/accept_challenge.hpp"
 #include "aero/websocket/error.hpp"
-#include "http/tcp_acceptor.hpp"
+#include "http_client/tcp_acceptor.hpp"
 
 using namespace ut;
 
