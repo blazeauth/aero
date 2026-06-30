@@ -37,4 +37,5 @@ endif()
 
 add_subdirectory(http_client)
 add_subdirectory(http_server)
+add_subdirectory(ip_address_validator)
 add_subdirectory(websocket)
