@@ -52,7 +52,7 @@ namespace aero::http {
     return it->second;
   }
 
-  [[nodiscard]] inline std::string_view to_string(http::method method) {
+  [[nodiscard]] constexpr std::string_view to_string(http::method method) {
     switch (method) {
     case http::method::GET:
       return "GET";

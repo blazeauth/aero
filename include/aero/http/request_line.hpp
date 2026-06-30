@@ -16,9 +16,14 @@ namespace aero::http {
     std::string target;
     http::version version;
 
-    [[nodiscard]] static std::expected<request_line, std::error_code> parse(std::string_view line) {
+    [[nodiscard]] static std::expected<request_line, std::error_code> parse(std::string_view line,
+      std::size_t max_method_length = 0) {
       using http::protocol_error;
       constexpr auto npos = std::string_view::npos;
+
+      if (max_method_length == 0) {
+        max_method_length = line.size();
+      }
 
       if (line.ends_with(detail::crlf)) {
         line.remove_suffix(detail::crlf.size());
@@ -32,17 +37,28 @@ namespace aero::http {
         return std::unexpected(protocol_error::request_line_invalid);
       }
 
-      auto first_space = line.find(' ');
-      if (first_space == npos || first_space == 0) {
+      std::size_t first_space = line.find(' ');
+      if (first_space == npos) {
         return std::unexpected(protocol_error::request_line_invalid);
       }
 
-      auto second_space = line.find(' ', first_space + 1);
+      if (first_space == 0) {
+        return std::unexpected(protocol_error::request_line_invalid);
+      }
+
+      // RFC 9112, 3:
+      // A server that receives a method longer than any that it implements
+      // SHOULD respond with a 501 (Not Implemented) status code.
+      if (first_space > max_method_length) {
+        return std::unexpected(protocol_error::method_too_long);
+      }
+
+      std::size_t second_space = line.find(' ', first_space + 1);
       if (second_space == npos || second_space == first_space + 1) {
         return std::unexpected(protocol_error::request_line_invalid);
       }
 
-      auto has_third_space = line.find(' ', second_space + 1) != npos;
+      bool has_third_space = line.find(' ', second_space + 1) != npos;
       if (has_third_space) {
         return std::unexpected(protocol_error::request_line_invalid);
       }
@@ -72,8 +88,9 @@ namespace aero::http {
       };
     }
 
-    [[nodiscard]] static std::expected<request_line, std::error_code> parse(std::span<const std::byte> buffer) {
-      return parse(std::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()});
+    [[nodiscard]] static std::expected<request_line, std::error_code> parse(std::span<const std::byte> buffer,
+      std::size_t max_method_length = 0) {
+      return parse(std::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()}, max_method_length);
     }
 
     [[nodiscard]] std::string serialize() const {
