@@ -2,6 +2,7 @@
 
 #include "aero/http/context.hpp"
 #include "aero/http/detail/header_validator.hpp"
+#include "aero/http/error.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/http/method.hpp"
 #include "aero/http/port.hpp"
@@ -21,6 +22,7 @@
 #include <asio/thread_pool.hpp>
 
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <optional>
 #include <source_location>
@@ -79,6 +81,18 @@ namespace aero::http {
 
     using coro_acceptor = use_coro_token<asio::ip::tcp::acceptor>;
     using coro_socket = use_coro_token<socket_type>;
+
+    constexpr static std::array<http::method, 1> implemented_methods{
+      method::GET,
+    };
+
+    constexpr static std::size_t longest_implemented_method_length = [] {
+      std::size_t longest_method = 0;
+      for (http::method method : implemented_methods) {
+        longest_method = (std::max)(longest_method, http::to_string(method).length());
+      }
+      return longest_method;
+    }();
 
    public:
     using error_handler = std::function<void(std::error_code, std::source_location, std::optional<std::string>)>;
@@ -353,9 +367,18 @@ namespace aero::http {
         std::string_view request_line_str = buffer_view.substr(0, request_line_end + 1);
         std::string_view headers_str = buffer_view.substr(request_line_str.size(), headers_end);
 
-        auto request_line = http::request_line::parse(request_line_str);
+        auto request_line = http::request_line::parse(request_line_str, longest_implemented_method_length);
         if (!request_line) {
-          co_await conn->co_send_close_response(http::status::bad_request);
+          http::status status = status::bad_request;
+
+          // RFC 9112, 3:
+          // A server that receives a method longer than any that it implements
+          // SHOULD respond with a 501 (Not Implemented) status code.
+          if (request_line.error() == http::protocol_error::method_too_long) {
+            status = status::not_implemented;
+          }
+
+          co_await conn->co_send_close_response(status);
           co_return;
         }
 

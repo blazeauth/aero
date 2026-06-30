@@ -13,6 +13,7 @@ namespace aero::http {
     status_code_invalid,
     version_invalid,
     method_invalid,
+    method_too_long,
     reason_phrase_invalid,
   };
 
@@ -82,6 +83,8 @@ namespace aero::http {
           return "http version is invalid";
         case protocol_error::method_invalid:
           return "http method is invalid";
+        case protocol_error::method_too_long:
+          return "http method is too long";
         case protocol_error::reason_phrase_invalid:
           return "reason phrase is invalid";
         default:

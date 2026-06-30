@@ -1,2 +1,3 @@
 aero_add_unit_test(aero_http_server server.cpp)
 aero_add_unit_test(aero_http_server_headers_validation headers_validation.cpp)
+aero_add_unit_test(aero_http_server_request_line_validation request_line_validation.cpp)
