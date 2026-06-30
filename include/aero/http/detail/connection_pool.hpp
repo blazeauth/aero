@@ -462,7 +462,7 @@ namespace aero::http::detail {
       bool is_informational_status_code =
         (status_value >= informational_status_code_min && status_value < informational_status_code_max);
 
-      return request_method == http::method::head || is_informational_status_code || status_code == http::status::no_content ||
+      return request_method == http::method::HEAD || is_informational_status_code || status_code == http::status::no_content ||
              status_code == http::status::reset_content || status_code == http::status::not_modified;
     }
 
@@ -572,7 +572,7 @@ namespace aero::http::detail {
       bool is_succesfull_status_code =
         (status_value >= succesfull_status_code_min && status_value < succesfull_status_code_max);
 
-      return request_method == http::method::connect and is_succesfull_status_code;
+      return request_method == http::method::CONNECT and is_succesfull_status_code;
     }
 
     [[nodiscard]] static bool response_requires_eof(http::method request_method, const http::response& response) {

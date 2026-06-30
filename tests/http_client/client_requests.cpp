@@ -381,7 +381,7 @@ int main() {
       }};
 
       auto request = http::request{
-        .method = http::method::get,
+        .method = http::method::GET,
         .protocol = http::version::http1_1,
         .url = "http://example.com:8080/proxy/path?x=1",
         .body = {},

@@ -273,7 +273,7 @@ namespace aero::http {
 
     template <typename CompletionToken>
     auto async_get(std::string_view uri_text, http::version protocol, http::headers headers, CompletionToken&& token) {
-      return async_send_bodyless_request<http::method::get>(uri_text,
+      return async_send_bodyless_request<http::method::GET>(uri_text,
         protocol,
         std::move(headers),
         std::forward<CompletionToken>(token));
@@ -287,7 +287,7 @@ namespace aero::http {
     template <typename CompletionToken>
     auto async_get(client::endpoint endpoint, std::string target, http::version protocol, http::headers headers,
       CompletionToken&& token) {
-      return async_send_bodyless_request<http::method::get>(std::move(endpoint),
+      return async_send_bodyless_request<http::method::GET>(std::move(endpoint),
         std::move(target),
         protocol,
         std::move(headers),
@@ -301,7 +301,7 @@ namespace aero::http {
 
     template <typename CompletionToken>
     auto async_head(std::string_view uri_text, http::version protocol, http::headers headers, CompletionToken&& token) {
-      return async_send_bodyless_request<http::method::head>(uri_text,
+      return async_send_bodyless_request<http::method::HEAD>(uri_text,
         protocol,
         std::move(headers),
         std::forward<CompletionToken>(token));
@@ -315,7 +315,7 @@ namespace aero::http {
     template <typename CompletionToken>
     auto async_head(client::endpoint endpoint, std::string target, http::version protocol, http::headers headers,
       CompletionToken&& token) {
-      return async_send_bodyless_request<http::method::head>(std::move(endpoint),
+      return async_send_bodyless_request<http::method::HEAD>(std::move(endpoint),
         std::move(target),
         protocol,
         std::move(headers),
@@ -329,7 +329,7 @@ namespace aero::http {
 
     template <typename CompletionToken>
     auto async_delete_(std::string_view uri_text, http::version protocol, http::headers headers, CompletionToken&& token) {
-      return async_send_bodyless_request<http::method::delete_>(uri_text,
+      return async_send_bodyless_request<http::method::DELETE>(uri_text,
         protocol,
         std::move(headers),
         std::forward<CompletionToken>(token));
@@ -343,7 +343,7 @@ namespace aero::http {
     template <typename CompletionToken>
     auto async_delete_(client::endpoint endpoint, std::string target, http::version protocol, http::headers headers,
       CompletionToken&& token) {
-      return async_send_bodyless_request<http::method::delete_>(std::move(endpoint),
+      return async_send_bodyless_request<http::method::DELETE>(std::move(endpoint),
         std::move(target),
         protocol,
         std::move(headers),
@@ -357,7 +357,7 @@ namespace aero::http {
 
     template <typename CompletionToken>
     auto async_options(std::string_view uri_text, http::version protocol, http::headers headers, CompletionToken&& token) {
-      return async_send_bodyless_request<http::method::options>(uri_text,
+      return async_send_bodyless_request<http::method::OPTIONS>(uri_text,
         protocol,
         std::move(headers),
         std::forward<CompletionToken>(token));
@@ -371,7 +371,7 @@ namespace aero::http {
     template <typename CompletionToken>
     auto async_options(client::endpoint endpoint, std::string target, http::version protocol, http::headers headers,
       CompletionToken&& token) {
-      return async_send_bodyless_request<http::method::options>(std::move(endpoint),
+      return async_send_bodyless_request<http::method::OPTIONS>(std::move(endpoint),
         std::move(target),
         protocol,
         std::move(headers),
@@ -397,7 +397,7 @@ namespace aero::http {
     template <typename CompletionToken>
     auto async_post(std::string_view uri_text, std::span<const std::byte> body, http::version protocol, http::headers headers,
       CompletionToken&& token) {
-      return async_send_request_with_body<http::method::post>(uri_text,
+      return async_send_request_with_body<http::method::POST>(uri_text,
         body,
         protocol,
         std::move(headers),
@@ -428,7 +428,7 @@ namespace aero::http {
     template <typename CompletionToken>
     auto async_post(client::endpoint endpoint, std::string target, std::span<const std::byte> body, http::version protocol,
       http::headers headers, CompletionToken&& token) {
-      return async_send_request_with_body<http::method::post>(std::move(endpoint),
+      return async_send_request_with_body<http::method::POST>(std::move(endpoint),
         std::move(target),
         body,
         protocol,
@@ -455,7 +455,7 @@ namespace aero::http {
     template <typename CompletionToken>
     auto async_put(std::string_view uri_text, std::span<const std::byte> body, http::version protocol, http::headers headers,
       CompletionToken&& token) {
-      return async_send_request_with_body<http::method::put>(uri_text,
+      return async_send_request_with_body<http::method::PUT>(uri_text,
         body,
         protocol,
         std::move(headers),
@@ -486,7 +486,7 @@ namespace aero::http {
     template <typename CompletionToken>
     auto async_put(client::endpoint endpoint, std::string target, std::span<const std::byte> body, http::version protocol,
       http::headers headers, CompletionToken&& token) {
-      return async_send_request_with_body<http::method::put>(std::move(endpoint),
+      return async_send_request_with_body<http::method::PUT>(std::move(endpoint),
         std::move(target),
         body,
         protocol,
@@ -513,7 +513,7 @@ namespace aero::http {
     template <typename CompletionToken>
     auto async_patch(std::string_view uri_text, std::span<const std::byte> body, http::version protocol, http::headers headers,
       CompletionToken&& token) {
-      return async_send_request_with_body<http::method::patch>(uri_text,
+      return async_send_request_with_body<http::method::PATCH>(uri_text,
         body,
         protocol,
         std::move(headers),
@@ -544,7 +544,7 @@ namespace aero::http {
     template <typename CompletionToken>
     auto async_patch(client::endpoint endpoint, std::string target, std::span<const std::byte> body, http::version protocol,
       http::headers headers, CompletionToken&& token) {
-      return async_send_request_with_body<http::method::patch>(std::move(endpoint),
+      return async_send_request_with_body<http::method::PATCH>(std::move(endpoint),
         std::move(target),
         body,
         protocol,
@@ -559,42 +559,42 @@ namespace aero::http {
 
     [[nodiscard]] std::expected<http::response, std::error_code> get(std::string_view uri_text,
       http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_bodyless_request<http::method::get>(uri_text, protocol, std::move(headers));
+      return send_bodyless_request<http::method::GET>(uri_text, protocol, std::move(headers));
     }
 
     [[nodiscard]] std::expected<http::response, std::error_code> get(client::endpoint endpoint, std::string target = "/",
       http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_bodyless_request<http::method::get>(std::move(endpoint), std::move(target), protocol, std::move(headers));
+      return send_bodyless_request<http::method::GET>(std::move(endpoint), std::move(target), protocol, std::move(headers));
     }
 
     [[nodiscard]] std::expected<http::response, std::error_code> head(std::string_view uri_text,
       http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_bodyless_request<http::method::head>(uri_text, protocol, std::move(headers));
+      return send_bodyless_request<http::method::HEAD>(uri_text, protocol, std::move(headers));
     }
 
     [[nodiscard]] std::expected<http::response, std::error_code> head(client::endpoint endpoint, std::string target = "/",
       http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_bodyless_request<http::method::head>(std::move(endpoint), std::move(target), protocol, std::move(headers));
+      return send_bodyless_request<http::method::HEAD>(std::move(endpoint), std::move(target), protocol, std::move(headers));
     }
 
     [[nodiscard]] std::expected<http::response, std::error_code> delete_(std::string_view uri_text,
       http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_bodyless_request<http::method::delete_>(uri_text, protocol, std::move(headers));
+      return send_bodyless_request<http::method::DELETE>(uri_text, protocol, std::move(headers));
     }
 
     [[nodiscard]] std::expected<http::response, std::error_code> delete_(client::endpoint endpoint, std::string target = "/",
       http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_bodyless_request<http::method::delete_>(std::move(endpoint), std::move(target), protocol, std::move(headers));
+      return send_bodyless_request<http::method::DELETE>(std::move(endpoint), std::move(target), protocol, std::move(headers));
     }
 
     [[nodiscard]] std::expected<http::response, std::error_code> options(std::string_view uri_text,
       http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_bodyless_request<http::method::options>(uri_text, protocol, std::move(headers));
+      return send_bodyless_request<http::method::OPTIONS>(uri_text, protocol, std::move(headers));
     }
 
     [[nodiscard]] std::expected<http::response, std::error_code> options(client::endpoint endpoint, std::string target = "*",
       http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_bodyless_request<http::method::options>(std::move(endpoint), std::move(target), protocol, std::move(headers));
+      return send_bodyless_request<http::method::OPTIONS>(std::move(endpoint), std::move(target), protocol, std::move(headers));
     }
 
     [[nodiscard]] std::expected<http::response, std::error_code> post(std::string_view uri_text, std::string_view body_text,
@@ -604,7 +604,7 @@ namespace aero::http {
 
     [[nodiscard]] std::expected<http::response, std::error_code> post(std::string_view uri_text,
       std::span<const std::byte> body, http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_request_with_body<http::method::post>(uri_text, body, protocol, std::move(headers));
+      return send_request_with_body<http::method::POST>(uri_text, body, protocol, std::move(headers));
     }
 
     [[nodiscard]] std::expected<http::response, std::error_code> post(client::endpoint endpoint, std::string target,
@@ -614,7 +614,7 @@ namespace aero::http {
 
     [[nodiscard]] std::expected<http::response, std::error_code> post(client::endpoint endpoint, std::string target,
       std::span<const std::byte> body, http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_request_with_body<http::method::post>(std::move(endpoint),
+      return send_request_with_body<http::method::POST>(std::move(endpoint),
         std::move(target),
         body,
         protocol,
@@ -628,7 +628,7 @@ namespace aero::http {
 
     [[nodiscard]] std::expected<http::response, std::error_code> put(std::string_view uri_text, std::span<const std::byte> body,
       http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_request_with_body<http::method::put>(uri_text, body, protocol, std::move(headers));
+      return send_request_with_body<http::method::PUT>(uri_text, body, protocol, std::move(headers));
     }
 
     [[nodiscard]] std::expected<http::response, std::error_code> put(client::endpoint endpoint, std::string target,
@@ -638,7 +638,7 @@ namespace aero::http {
 
     [[nodiscard]] std::expected<http::response, std::error_code> put(client::endpoint endpoint, std::string target,
       std::span<const std::byte> body, http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_request_with_body<http::method::put>(std::move(endpoint),
+      return send_request_with_body<http::method::PUT>(std::move(endpoint),
         std::move(target),
         body,
         protocol,
@@ -652,7 +652,7 @@ namespace aero::http {
 
     [[nodiscard]] std::expected<http::response, std::error_code> patch(std::string_view uri_text,
       std::span<const std::byte> body, http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_request_with_body<http::method::patch>(uri_text, body, protocol, std::move(headers));
+      return send_request_with_body<http::method::PATCH>(uri_text, body, protocol, std::move(headers));
     }
 
     [[nodiscard]] std::expected<http::response, std::error_code> patch(client::endpoint endpoint, std::string target,
@@ -662,7 +662,7 @@ namespace aero::http {
 
     [[nodiscard]] std::expected<http::response, std::error_code> patch(client::endpoint endpoint, std::string target,
       std::span<const std::byte> body, http::version protocol = http::version::http1_1, http::headers headers = {}) {
-      return send_request_with_body<http::method::patch>(std::move(endpoint),
+      return send_request_with_body<http::method::PATCH>(std::move(endpoint),
         std::move(target),
         body,
         protocol,

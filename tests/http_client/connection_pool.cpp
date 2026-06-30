@@ -12,7 +12,7 @@ namespace http = aero::http;
 
 using connection_pool = http::detail::connection_pool<aero::net::tcp_transport<>>;
 
-http::request make_request(http::method method = http::method::get, http::version version = http::version::http1_1) {
+http::request make_request(http::method method = http::method::GET, http::version version = http::version::http1_1) {
   return http::request{
     .method = method,
     .protocol = version,
@@ -151,8 +151,8 @@ int main() {
     };
 
     "can reuse matches http/1.1 body delimitation rules"_test = [] {
-      auto head_request = make_request(http::method::head);
-      auto get_request = make_request(http::method::get);
+      auto head_request = make_request(http::method::HEAD);
+      auto get_request = make_request(http::method::GET);
 
       auto head_response = make_response({});
       auto close_delimited_response = make_response({});
