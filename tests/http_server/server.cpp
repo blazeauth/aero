@@ -1,5 +1,6 @@
 #include "aero/http/server.hpp"
 
+#include <asio/ip/address_v4.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/read.hpp>
 #include <asio/read_until.hpp>
@@ -25,12 +26,10 @@ int main() {
       std::future future = promise.get_future();
 
       server.get("/aero", [&](http::context&) { promise.set_value(true); });
-
       server.set_workers(1);
-      expect[server.bind("127.0.0.1", 5839) == std::error_code{}];
-      server.async_start();
+      server.async_start("127.0.0.1", 0);
 
-      std::string multiple_host_headers_buf = "GET /aero HTTP/1.1\r\nHost: first\r\n\r\n";
+      std::string multiple_host_headers_buf = "GET /aero HTTP/1.1\r\nHost: example.com\r\n\r\n";
 
       asio::ip::tcp::socket socket(server.get_executor());
       socket.connect(server.endpoint());
@@ -47,10 +46,8 @@ int main() {
 
       // Copy the request out because context only exposes it during the handler call
       server.get("/aero?x=1", [&](http::context& ctx) { promise.set_value(ctx.request()); });
-
       server.set_workers(1);
-      expect[server.bind("127.0.0.1", 5840) == std::error_code{}];
-      server.async_start();
+      server.async_start("127.0.0.1", 0);
 
       std::string request_buf = "GET /aero?x=1 HTTP/1.1\r\nHost: example.test\r\nX-Trace-Id: request-42\r\n\r\n";
 
@@ -74,10 +71,11 @@ int main() {
 
       std::atomic first_handler_calls{0};
       std::atomic second_handler_calls{0};
+
+      // The promise records which route ran
       std::promise<std::string> promise;
       std::future future = promise.get_future();
 
-      // The promise records which route ran
       server.get("/first", [&](http::context&) {
         ++first_handler_calls;
         promise.set_value("first");
@@ -88,8 +86,7 @@ int main() {
       });
 
       server.set_workers(1);
-      expect[server.bind("127.0.0.1", 5841) == std::error_code{}];
-      server.async_start();
+      server.async_start("127.0.0.1", 0);
 
       std::string request_buf = "GET /second HTTP/1.1\r\nHost: example.test\r\n\r\n";
 
@@ -116,8 +113,7 @@ int main() {
       });
 
       server.set_workers(1);
-      expect[server.bind("127.0.0.1", 5842) == std::error_code{}];
-      server.async_start();
+      server.async_start("127.0.0.1", 0);
 
       std::string request_buf = "GET /hello HTTP/1.1\r\nHost: example.test\r\n\r\n";
       std::string response_buf;

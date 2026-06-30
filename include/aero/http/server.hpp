@@ -1,6 +1,7 @@
 #pragma once
 
 #include "aero/http/context.hpp"
+#include "aero/http/detail/header_validator.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/http/method.hpp"
 #include "aero/http/port.hpp"
@@ -331,9 +332,7 @@ namespace aero::http {
     asio::awaitable<void> start_session(socket_type socket, asio::strand<asio::any_io_executor> strand) {
       auto conn = std::make_shared<connection>(std::move(socket), strand);
 
-      std::vector<std::byte> buffer;
-
-      // TODO: Replace socket shutdown by sending response and close only after that
+      std::string buffer;
 
       for (;;) {
         auto [ec, headers_end] = co_await asio::async_read_until(conn->socket,
@@ -345,41 +344,34 @@ namespace aero::http {
           co_return;
         }
 
-        // asio::async_read_until guarantees that buffer contains "\r\n\r\n"
-        auto first_line_end_it = std::ranges::find(buffer, std::byte{'\n'});
+        std::string_view buffer_view{buffer};
 
-        std::span first_line_buf{buffer.data(), static_cast<std::size_t>(std::distance(buffer.begin(), first_line_end_it) + 1)};
-        std::span headers_buf{buffer.data() + first_line_buf.size(), headers_end - first_line_buf.size()};
-        std::span content_buf{buffer.data() + headers_end, buffer.size()};
+        // asio::async_read_until guarantees that buffer contains
+        // "\r\n\r\n", so we won't check for npos
+        std::size_t request_line_end = buffer_view.find('\n');
 
-        auto request_line = http::request_line::parse(first_line_buf);
+        std::string_view request_line_str = buffer_view.substr(0, request_line_end + 1);
+        std::string_view headers_str = buffer_view.substr(request_line_str.size(), headers_end);
+
+        auto request_line = http::request_line::parse(request_line_str);
         if (!request_line) {
           co_await conn->co_send_close_response(http::status::bad_request);
           co_return;
         }
 
-        // TODO: Headers may be empty, check that
-        auto request_headers = http::headers::parse(headers_buf);
+        auto request_headers = http::headers::parse(headers_str);
         if (!request_headers) {
           co_await conn->co_send_close_response(http::status::bad_request);
           co_return;
         }
 
-        // RFC 9122, Section 3.2:
-        // A server MUST respond with a 400 (Bad Request) status code
-        // to any HTTP/1.1 request message that lacks a Host header
-        auto host_header = request_headers->first_value("Host");
-        if (!host_header) {
-          co_await conn->co_send_close_response(http::status::bad_request);
-          co_return;
-        }
-
-        // RFC 9122, Section 3.2:
-        // A server MUST respond with a 400 (Bad Request) status code to any
-        // HTTP/1.1 request message that ... contains more than one Host header
-        if (request_headers->occurrences("Host") > 1) {
-          co_await conn->co_send_close_response(http::status::bad_request);
-          co_return;
+        bool is_http11 = request_line->version == http::version::http1_1;
+        if (is_http11) {
+          auto status = validate_http11_request_headers(*request_headers);
+          if (status != http::status::ok) {
+            co_await conn->co_send_close_response(status);
+            co_return;
+          }
         }
 
         http::request request{
@@ -433,6 +425,40 @@ namespace aero::http {
         co_await detail::co_close_socket(conn->socket);
         co_return;
       }
+    }
+
+    http::status validate_http11_request_headers(const http::headers& headers) {
+      // RFC 9112 3.2:
+      // A client MUST send a Host header field in all HTTP/1.1 request messages.
+      if (headers.empty()) {
+        return http::status::bad_request;
+      }
+
+      // RFC 9112 3.2:
+      // A server MUST respond with a 400 (Bad Request) status code
+      // to any HTTP/1.1 request message that lacks a Host header
+      auto host_header = headers.first_value("Host");
+      if (!host_header) {
+        return http::status::bad_request;
+      }
+
+      // RFC 9112 3.2:
+      // A server MUST respond with a 400 (Bad Request) status code to any
+      // HTTP/1.1 request message that ... contains more than one Host header
+      if (headers.occurrences("Host") > 1) {
+        return http::status::bad_request;
+      }
+
+      // RFC 9112 3.2:
+      // A server MUST respond with a 400 (Bad Request) status code to any
+      // HTTP/1.1 request message that ... contains ... a Host header field
+      // with an invalid field value.
+      bool is_host_header_valid = http::detail::validate_host_header(host_header.value());
+      if (!is_host_header_valid) {
+        return http::status::bad_request;
+      }
+
+      return http::status::ok;
     }
   };
 
