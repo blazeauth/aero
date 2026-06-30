@@ -32,7 +32,7 @@ constexpr inline auto coordination_timeout = 5s;
 
 http::request make_request(std::string target) {
   return http::request{
-    .method = http::method::get,
+    .method = http::method::GET,
     .protocol = http::version::http1_1,
     .url = std::move(target),
     .body = {},
@@ -284,7 +284,7 @@ int main() {
       http::client client;
       auto response = send_with_timeout(client,
         make_local_endpoint(server.port()),
-        make_request(http::method::post, "/submit", "hello=world"),
+        make_request(http::method::POST, "/submit", "hello=world"),
         local_request_timeout);
 
       expect[response.has_value()];
@@ -758,7 +758,7 @@ int main() {
         http_test::write_http_response(socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
       }};
 
-      auto request = make_request(http::method::post, "/upload", "payload");
+      auto request = make_request(http::method::POST, "/upload", "payload");
       request.headers.add("Expect", "100-continue");
 
       http::client client;
@@ -797,7 +797,7 @@ int main() {
         body_arrived_after_final = http_test::receives_bytes_within(socket, read_buffer, 100ms);
       }};
 
-      auto request = make_request(http::method::post, "/reject", "payload");
+      auto request = make_request(http::method::POST, "/reject", "payload");
       request.headers.add("Expect", "100-continue");
 
       http::client client;
@@ -908,7 +908,7 @@ int main() {
           "ok");
       }};
 
-      auto request = make_request(http::method::post, "/upload", "payload");
+      auto request = make_request(http::method::POST, "/upload", "payload");
       request.protocol = http::version::http1_0;
       request.headers.add("Expect", "100-continue");
 
@@ -939,7 +939,7 @@ int main() {
           "\r\n");
       }};
 
-      auto request = make_request(http::method::connect, "example.com:443");
+      auto request = make_request(http::method::CONNECT, "example.com:443");
 
       http::client client;
       auto response = send_with_timeout(client, make_local_endpoint(server.port()), std::move(request), local_request_timeout);

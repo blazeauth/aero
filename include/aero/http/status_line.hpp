@@ -8,7 +8,6 @@
 
 namespace aero::http {
 
-  // https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Messages#http_responses
   struct status_line {
     std::string protocol;
     http::status status_code{};

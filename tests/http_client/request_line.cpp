@@ -41,7 +41,7 @@ int main() {
 
     "returns an empty string for an unknown version"_test = [] {
       request_line line{
-        .method = http::method::get,
+        .method = http::method::GET,
         .target = "/products",
         .version = static_cast<http::version>(0xFF),
       };
@@ -69,7 +69,7 @@ int main() {
 
     "parses a request line with a crlf suffix"_test = [] {
       request_line expected{
-        .method = http::method::get,
+        .method = http::method::GET,
         .target = "/products",
         .version = http::version::http1_1,
       };
@@ -158,7 +158,7 @@ int main() {
     "accepts target without leading slash"_test = [] {
       auto parsed = request_line::parse("GET products HTTP/1.1");
       expect[parsed.has_value()];
-      expect(parsed->method == http::method::get);
+      expect(parsed->method == http::method::GET);
       expect(parsed->target == "products");
       expect(parsed->version == http::version::http1_1);
     };
@@ -166,7 +166,7 @@ int main() {
     "accepts asterisk target"_test = [] {
       auto parsed = request_line::parse("OPTIONS * HTTP/1.1");
       expect[parsed.has_value()];
-      expect(parsed->method == http::method::options);
+      expect(parsed->method == http::method::OPTIONS);
       expect(parsed->target == "*");
       expect(parsed->version == http::version::http1_1);
     };

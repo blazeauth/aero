@@ -59,7 +59,7 @@ int main() {
 
       auto request = future.get();
 
-      expect(request.method == http::method::get);
+      expect(request.method == http::method::GET);
       expect(request.protocol == http::version::http1_1);
       expect(request.url == "/aero?x=1");
       expect(request.headers.first_value("Host") == "example.test");

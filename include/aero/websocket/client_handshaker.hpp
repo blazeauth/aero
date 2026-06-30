@@ -63,7 +63,7 @@ namespace aero::websocket {
       std::string host_header_value = build_request_host(uri);
 
       auto request_line = http::request_line{
-        .method = http::method::get,
+        .method = http::method::GET,
         .target = request_target,
         .version = http::version::http1_1,
       };

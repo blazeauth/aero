@@ -415,7 +415,7 @@ namespace aero::http {
 
     asio::awaitable<void> handle_request(std::shared_ptr<connection> conn, http::request request) {
       switch (request.method) {
-      case http::method::get:
+      case http::method::GET:
         co_await handle_get_request(conn, std::move(request));
         break;
       default:

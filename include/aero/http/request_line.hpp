@@ -16,34 +16,6 @@ namespace aero::http {
     std::string target;
     http::version version;
 
-    [[nodiscard]] bool is_get() const noexcept {
-      return method == http::method::get;
-    }
-
-    [[nodiscard]] bool is_post() const noexcept {
-      return method == http::method::post;
-    }
-
-    [[nodiscard]] bool is_put() const noexcept {
-      return method == http::method::put;
-    }
-
-    [[nodiscard]] bool is_patch() const noexcept {
-      return method == http::method::patch;
-    }
-
-    [[nodiscard]] bool is_delete() const noexcept {
-      return method == http::method::delete_;
-    }
-
-    [[nodiscard]] bool is_head() const noexcept {
-      return method == http::method::head;
-    }
-
-    [[nodiscard]] bool is_options() const noexcept {
-      return method == http::method::options;
-    }
-
     [[nodiscard]] static std::expected<request_line, std::error_code> parse(std::string_view line) {
       using http::protocol_error;
       constexpr auto npos = std::string_view::npos;

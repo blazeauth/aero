@@ -172,7 +172,7 @@ namespace aero::http {
               co_return {unsupported_scheme_error(parsed_uri->is_https()), http::response{}};
             }
 
-            if (request.url.empty() && request.method != http::method::connect) {
+            if (request.url.empty() && request.method != http::method::CONNECT) {
               request.url = parsed_uri->target();
             }
 
@@ -800,7 +800,7 @@ namespace aero::http {
         return std::unexpected(client_error::request_encoding_unsupported);
       }
 
-      if (request.method == http::method::connect && request.url.empty()) {
+      if (request.method == http::method::CONNECT && request.url.empty()) {
         request.url = format_authority_target(endpoint);
       }
 
@@ -942,12 +942,12 @@ namespace aero::http {
     }
 
     [[nodiscard]] static bool request_method_expects_content_length(http::method method) noexcept {
-      return method == http::method::post || method == http::method::put || method == http::method::patch;
+      return method == http::method::POST || method == http::method::PUT || method == http::method::PATCH;
     }
 
     [[nodiscard]] static std::expected<std::string, std::error_code> normalize_request_target(http::method method,
       std::string target) {
-      if (method == http::method::connect) {
+      if (method == http::method::CONNECT) {
         if (!is_valid_authority_form(target)) {
           return std::unexpected(protocol_error::request_line_invalid);
         }
@@ -960,7 +960,7 @@ namespace aero::http {
       }
 
       if (target == "*") {
-        if (method != http::method::options) {
+        if (method != http::method::OPTIONS) {
           return std::unexpected(protocol_error::request_line_invalid);
         }
 
@@ -990,7 +990,7 @@ namespace aero::http {
 
     [[nodiscard]] static std::expected<std::string, std::error_code> derive_host_header_value(
       const basic_client::endpoint& endpoint, http::method method, const std::string& request_target) {
-      if (method == http::method::connect) {
+      if (method == http::method::CONNECT) {
         return request_target;
       }
 
@@ -1049,7 +1049,7 @@ namespace aero::http {
       bool is_informational_status_code =
         (status_value >= informational_status_code_min && status_value < informational_status_code_max);
 
-      return request_method == http::method::head || is_informational_status_code || status_code == http::status::no_content ||
+      return request_method == http::method::HEAD || is_informational_status_code || status_code == http::status::no_content ||
              status_code == http::status::reset_content || status_code == http::status::not_modified;
     }
 
@@ -1064,7 +1064,7 @@ namespace aero::http {
       bool is_succesfull_status_code =
         (status_value >= succesfull_status_code_min && status_value < succesfull_status_code_max);
 
-      return request_method == http::method::connect && is_succesfull_status_code;
+      return request_method == http::method::CONNECT && is_succesfull_status_code;
     }
 
     [[nodiscard]] static bool should_wait_for_continue(const http::request& request) {
