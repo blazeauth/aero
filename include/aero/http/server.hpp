@@ -371,11 +371,18 @@ namespace aero::http {
         if (!request_line) {
           http::status status = status::bad_request;
 
-          // RFC 9112, 3:
+          // RFC 9112, Section 3:
           // A server that receives a method longer than any that it implements
           // SHOULD respond with a 501 (Not Implemented) status code.
           if (request_line.error() == http::protocol_error::method_too_long) {
             status = status::not_implemented;
+          }
+
+          // RFC 9110, Section 6.2:
+          // A server can send a 505 (HTTP Version Not Supported) response if it wishes,
+          // for any reason, to refuse service of the client's major protocol version.
+          if (request_line.error() == http::protocol_error::version_unsupported) {
+            status = status::http_version_not_supported;
           }
 
           co_await conn->co_send_close_response(status);
