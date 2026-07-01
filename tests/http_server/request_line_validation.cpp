@@ -47,23 +47,57 @@ void expect_status(const http::response& response, http::status expected) {
     << "expected reason phrase '" << http::to_string(expected) << "', got '" << response.status_line.reason_phrase << "'";
 }
 
+void send_request_and_expect_status(http::server<>& server, std::string payload, http::status expected_status) {
+  std::future<http::response> f = std::async(std::launch::async, [&] { return send_request(server, payload); });
+
+  http::response response;
+  if (f.wait_for(5s) == std::future_status::ready) {
+    response = f.get();
+  }
+
+  expect(response.status_line.status_code == expected_status) << "expected status " << static_cast<int>(expected_status)
+                                                              << ", got " << static_cast<int>(response.status_line.status_code);
+
+  expect(response.status_line.reason_phrase == http::to_string(expected_status))
+    << "expected reason phrase '" << http::to_string(expected_status) << "', got '" << response.status_line.reason_phrase
+    << "'";
+}
+
 int main() {
   http::server server;
   server.set_workers(1);
   server.async_start("127.0.0.1", 0);
 
-  suite http_server_request_line_protocol_validation = [&] {
+  suite http_server_request_line_method_suite = [&] {
     "method longer than any implemented is rejected with 501 not implemented"_test = [&] {
       std::string payload = "VERYLONGMETHOD / HTTP/1.1\r\nHost: Hello\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::not_implemented);
+    };
+  };
 
-      std::future<http::response> f = std::async(std::launch::async, [&] { return send_request(server, payload); });
+  suite http_server_request_line_request_target_suite = [&] {
+  };
 
-      http::response response;
-      if (f.wait_for(5s) == std::future_status::ready) {
-        response = f.get();
-      }
+  suite http_server_request_line_protocol_version_suite = [&] {
+    "unsupported HTTP version is rejected with 505 not supported"_test = [&] {
+      std::string payload = "GET / HTTP/9.4\r\nHost: Hello\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::http_version_not_supported);
+    };
 
-      expect_status(response, http::status::not_implemented);
+    "non-numeric HTTP version is rejected with 400 bad request"_test = [&] {
+      std::string payload = "GET / HTTP/hello.0\r\nHost: Hello\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::bad_request);
+    };
+
+    "invalid HTTP version format is rejected with 400 bad request"_test = [&] {
+      std::string payload = "GET / HTTP1.0\r\nHost: Hello\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::bad_request);
+
+      payload = "GET / HTTP/10\r\nHost: Hello\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::bad_request);
+
+      payload = "GET / HTTP10\r\nHost: Hello\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::bad_request);
     };
   };
 }
