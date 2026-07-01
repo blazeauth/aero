@@ -39,10 +39,10 @@ int main() {
     };
 
     "rejects unsupported minor or major"_test = [] {
-      for (std::string_view text : {"HTTP/0.9", "HTTP/1.2", "HTTP/2.0", "HTTP/1.01"}) {
+      for (std::string_view text : {"HTTP/0.9", "HTTP/1.2", "HTTP/5.0", "HTTP/9.8"}) {
         auto parsed = http::parse_version(text);
         expect[not parsed.has_value()];
-        expect(parsed.error() == protocol_error::version_invalid);
+        expect(parsed.error() == protocol_error::version_unsupported);
       }
     };
 
