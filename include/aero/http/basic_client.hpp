@@ -1275,7 +1275,7 @@ namespace aero::http {
         return aero::basic_error::tls_support_unavailable;
       }
 
-      return http::uri_error::invalid_scheme;
+      return http::uri_error::scheme_invalid;
     }
 
     [[nodiscard]] static executor_type select_transport_executor(transport_type& transport) {

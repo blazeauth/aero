@@ -31,20 +31,20 @@ namespace aero::http {
   };
 
   enum class uri_error : std::uint8_t {
-    missing_scheme_delimiter = 1,
-    invalid_scheme,
-    empty_authority,
-    empty_host,
+    scheme_delimiter_missing = 1,
+    scheme_invalid,
+    authority_empty,
+    host_empty,
     userinfo_not_allowed,
     fragment_not_allowed,
-    invalid_authority,
-    invalid_host,
-    invalid_ipv6_literal,
-    empty_port,
-    invalid_port,
+    authority_invalid,
+    host_invalid,
+    ipv6_literal_invalid,
+    port_empty,
+    port_invalid,
     port_out_of_range,
-    invalid_path,
-    invalid_character,
+    path_invalid,
+    character_invalid,
   };
 
   enum class connection_error : std::uint8_t {
@@ -136,33 +136,33 @@ namespace aero::http {
 
       [[nodiscard]] std::string message(int value) const override {
         switch (static_cast<uri_error>(value)) {
-        case uri_error::missing_scheme_delimiter:
+        case uri_error::scheme_delimiter_missing:
           return "uri scheme delimiter is missing";
-        case uri_error::invalid_scheme:
+        case uri_error::scheme_invalid:
           return "uri scheme is invalid";
-        case uri_error::empty_authority:
+        case uri_error::authority_empty:
           return "uri authority is empty";
-        case uri_error::empty_host:
+        case uri_error::host_empty:
           return "uri host is empty";
         case uri_error::userinfo_not_allowed:
           return "uri userinfo is not allowed";
         case uri_error::fragment_not_allowed:
           return "uri fragment is not allowed";
-        case uri_error::invalid_authority:
+        case uri_error::authority_invalid:
           return "uri authority is invalid";
-        case uri_error::invalid_host:
+        case uri_error::host_invalid:
           return "uri host is invalid";
-        case uri_error::invalid_ipv6_literal:
+        case uri_error::ipv6_literal_invalid:
           return "uri ipv6 literal is invalid";
-        case uri_error::empty_port:
+        case uri_error::port_empty:
           return "uri port is empty";
-        case uri_error::invalid_port:
+        case uri_error::port_invalid:
           return "uri port is invalid";
         case uri_error::port_out_of_range:
           return "uri port is out of range";
-        case uri_error::invalid_path:
+        case uri_error::path_invalid:
           return "uri path is invalid";
-        case uri_error::invalid_character:
+        case uri_error::character_invalid:
           return "uri contains invalid character";
         default:
           return "unknown http uri error";
