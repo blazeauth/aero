@@ -57,20 +57,20 @@ int main() {
     };
 
     "requires scheme delimiter"_test = [] {
-      expect_parse_error("http//example.com", uri_error::missing_scheme_delimiter);
-      expect_parse_error("http:example.com", uri_error::missing_scheme_delimiter);
-      expect_parse_error("://example.com", uri_error::missing_scheme_delimiter);
+      expect_parse_error("http//example.com", uri_error::scheme_delimiter_missing);
+      expect_parse_error("http:example.com", uri_error::scheme_delimiter_missing);
+      expect_parse_error("://example.com", uri_error::scheme_delimiter_missing);
     };
 
     "rejects non-http schemes"_test = [] {
-      expect_parse_error("ws://example.com/", uri_error::invalid_scheme);
-      expect_parse_error("wss://example.com/", uri_error::invalid_scheme);
-      expect_parse_error("ftp://example.com/", uri_error::invalid_scheme);
+      expect_parse_error("ws://example.com/", uri_error::scheme_invalid);
+      expect_parse_error("wss://example.com/", uri_error::scheme_invalid);
+      expect_parse_error("ftp://example.com/", uri_error::scheme_invalid);
     };
 
     "requires non-empty authority"_test = [] {
-      expect_parse_error("http:///api", uri_error::empty_authority);
-      expect_parse_error("https://", uri_error::empty_authority);
+      expect_parse_error("http:///api", uri_error::authority_empty);
+      expect_parse_error("https://", uri_error::authority_empty);
     };
 
     "rejects userinfo in authority"_test = [] {
@@ -114,19 +114,19 @@ int main() {
     };
 
     "rejects ipv6 literal without closing bracket"_test = [] {
-      expect_parse_error("http://[2001:db8::1/api", uri_error::invalid_ipv6_literal);
-      expect_parse_error("http://[2001:db8::1", uri_error::invalid_ipv6_literal);
+      expect_parse_error("http://[2001:db8::1/api", uri_error::ipv6_literal_invalid);
+      expect_parse_error("http://[2001:db8::1", uri_error::ipv6_literal_invalid);
     };
 
     "rejects empty ipv6 literal"_test = [] {
-      expect_parse_error("http://[]/api", uri_error::invalid_ipv6_literal);
-      expect_parse_error("http://[/api", uri_error::invalid_ipv6_literal);
+      expect_parse_error("http://[]/api", uri_error::ipv6_literal_invalid);
+      expect_parse_error("http://[/api", uri_error::ipv6_literal_invalid);
     };
 
     "rejects empty non-numeric zero or out of range ports"_test = [] {
-      expect_parse_error("http://example.com:/api", uri_error::empty_port);
-      expect_parse_error("http://example.com:abc/api", uri_error::invalid_port);
-      expect_parse_error("http://example.com:0/api", uri_error::invalid_port);
+      expect_parse_error("http://example.com:/api", uri_error::port_empty);
+      expect_parse_error("http://example.com:abc/api", uri_error::port_invalid);
+      expect_parse_error("http://example.com:0/api", uri_error::port_invalid);
       expect_parse_error("http://example.com:70000/api", uri_error::port_out_of_range);
     };
 
@@ -147,7 +147,7 @@ int main() {
         .query = {},
         .has_query = false,
       });
-      expect(invalid_scheme_uri.validate() == uri_error::invalid_scheme);
+      expect(invalid_scheme_uri.validate() == uri_error::scheme_invalid);
 
       http::uri fragment_in_query_uri(http::uri_parts{
         .scheme = "http",
@@ -177,7 +177,7 @@ int main() {
         .query = {},
         .has_query = false,
       });
-      expect(invalid_port_uri.validate() == uri_error::invalid_port);
+      expect(invalid_port_uri.validate() == uri_error::port_invalid);
 
       http::uri invalid_path_uri(http::uri_parts{
         .scheme = "http",
@@ -187,7 +187,7 @@ int main() {
         .query = {},
         .has_query = false,
       });
-      expect(invalid_path_uri.validate() == uri_error::invalid_path);
+      expect(invalid_path_uri.validate() == uri_error::path_invalid);
     };
   };
 }

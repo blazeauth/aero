@@ -154,15 +154,15 @@ namespace aero::http {
       std::string_view query{parts_.query};
 
       if (scheme != "http" && scheme != "https") {
-        return uri_error::invalid_scheme;
+        return uri_error::scheme_invalid;
       }
 
       if (host.empty()) {
-        return uri_error::empty_host;
+        return uri_error::host_empty;
       }
 
       if (has_forbidden_character(host)) {
-        return uri_error::invalid_character;
+        return uri_error::character_invalid;
       }
 
       if (host.contains('@')) {
@@ -175,33 +175,33 @@ namespace aero::http {
 
       if (host.front() == '[' || host.back() == ']') {
         if (!(host.starts_with('[') && host.ends_with(']'))) {
-          return uri_error::invalid_host;
+          return uri_error::host_invalid;
         }
 
         auto inside_brackets = host.substr(1, host.size() - 2);
         if (inside_brackets.empty()) {
-          return uri_error::invalid_ipv6_literal;
+          return uri_error::ipv6_literal_invalid;
         }
 
         if (contains_invalid_ipv6_token(inside_brackets)) {
-          return uri_error::invalid_ipv6_literal;
+          return uri_error::ipv6_literal_invalid;
         }
       } else {
         if (host.contains('[') || host.contains(']') || host.contains(':')) {
-          return uri_error::invalid_host;
+          return uri_error::host_invalid;
         }
       }
 
       if (port_value.has_value() && *port_value == 0) {
-        return uri_error::invalid_port;
+        return uri_error::port_invalid;
       }
 
       if (has_forbidden_character(path)) {
-        return uri_error::invalid_character;
+        return uri_error::character_invalid;
       }
 
       if (path.contains('?')) {
-        return uri_error::invalid_path;
+        return uri_error::path_invalid;
       }
 
       if (path.contains('#')) {
@@ -209,7 +209,7 @@ namespace aero::http {
       }
 
       if (has_forbidden_character(query)) {
-        return uri_error::invalid_character;
+        return uri_error::character_invalid;
       }
 
       if (query.contains('#')) {
@@ -221,7 +221,7 @@ namespace aero::http {
 
     [[nodiscard]] static std::expected<uri, std::error_code> parse(std::string_view uri_text) {
       if (uri_text.empty()) {
-        return std::unexpected(uri_error::missing_scheme_delimiter);
+        return std::unexpected(uri_error::scheme_delimiter_missing);
       }
 
       auto is_forbidden_character = [](unsigned char character) {
@@ -231,13 +231,13 @@ namespace aero::http {
       };
 
       if (std::ranges::any_of(uri_text, is_forbidden_character)) {
-        return std::unexpected(uri_error::invalid_character);
+        return std::unexpected(uri_error::character_invalid);
       }
 
       constexpr std::string_view scheme_delimiter = "://";
       std::size_t scheme_delimiter_position = uri_text.find(scheme_delimiter);
       if (scheme_delimiter_position == std::string_view::npos || scheme_delimiter_position == 0) {
-        return std::unexpected(uri_error::missing_scheme_delimiter);
+        return std::unexpected(uri_error::scheme_delimiter_missing);
       }
 
       std::string_view scheme_view = uri_text.substr(0, scheme_delimiter_position);
@@ -248,7 +248,7 @@ namespace aero::http {
       }
 
       if (normalized_scheme != "http" && normalized_scheme != "https") {
-        return std::unexpected(uri_error::invalid_scheme);
+        return std::unexpected(uri_error::scheme_invalid);
       }
 
       std::size_t after_scheme = scheme_delimiter_position + scheme_delimiter.size();
@@ -264,7 +264,7 @@ namespace aero::http {
 
       std::string_view authority_view = uri_text.substr(after_scheme, authority_end - after_scheme);
       if (authority_view.empty()) {
-        return std::unexpected(uri_error::empty_authority);
+        return std::unexpected(uri_error::authority_empty);
       }
 
       if (authority_view.contains('@')) {
@@ -277,7 +277,7 @@ namespace aero::http {
 
       if (std::ranges::any_of(authority_view,
             [&](unsigned char character) { return is_forbidden_in_authority(static_cast<char>(character)); })) {
-        return std::unexpected(uri_error::invalid_authority);
+        return std::unexpected(uri_error::authority_invalid);
       }
 
       std::string_view host_view;
@@ -286,20 +286,20 @@ namespace aero::http {
       if (!authority_view.empty() && authority_view.front() == '[') {
         std::size_t closing_bracket_position = authority_view.find(']');
         if (closing_bracket_position == std::string_view::npos || closing_bracket_position == 1) {
-          return std::unexpected(uri_error::invalid_ipv6_literal);
+          return std::unexpected(uri_error::ipv6_literal_invalid);
         }
 
         host_view = authority_view.substr(0, closing_bracket_position + 1);
 
         std::string_view inside_brackets = authority_view.substr(1, closing_bracket_position - 1);
         if (contains_invalid_ipv6_token(inside_brackets)) {
-          return std::unexpected(uri_error::invalid_ipv6_literal);
+          return std::unexpected(uri_error::ipv6_literal_invalid);
         }
 
         std::string_view remainder = authority_view.substr(closing_bracket_position + 1);
         if (!remainder.empty()) {
           if (remainder.front() != ':') {
-            return std::unexpected(uri_error::invalid_authority);
+            return std::unexpected(uri_error::authority_invalid);
           }
 
           auto parsed_port_result = parse_port(remainder.substr(1));
@@ -313,7 +313,7 @@ namespace aero::http {
         std::size_t first_colon_position = authority_view.find(':');
         if (first_colon_position != std::string_view::npos) {
           if (authority_view.find(':', first_colon_position + 1) != std::string_view::npos) {
-            return std::unexpected(uri_error::invalid_authority);
+            return std::unexpected(uri_error::authority_invalid);
           }
 
           host_view = authority_view.substr(0, first_colon_position);
@@ -329,7 +329,7 @@ namespace aero::http {
         }
 
         if (host_view.empty()) {
-          return std::unexpected(uri_error::empty_host);
+          return std::unexpected(uri_error::host_empty);
         }
 
         auto is_forbidden_in_host = [](unsigned char character) {
@@ -338,11 +338,11 @@ namespace aero::http {
         };
 
         if (std::ranges::any_of(host_view, [&](unsigned char character) { return is_forbidden_in_host(character); })) {
-          return std::unexpected(uri_error::invalid_host);
+          return std::unexpected(uri_error::host_invalid);
         }
 
         if (host_view.contains('[') || host_view.contains(']')) {
-          return std::unexpected(uri_error::invalid_host);
+          return std::unexpected(uri_error::host_invalid);
         }
       }
 
@@ -354,7 +354,7 @@ namespace aero::http {
 
       if (!path_view.empty()) {
         if (path_view.front() != '/') {
-          return std::unexpected(uri_error::invalid_path);
+          return std::unexpected(uri_error::path_invalid);
         }
         if (path_view.size() > 1) {
           parsed_path.assign(path_view.substr(1));
@@ -368,7 +368,7 @@ namespace aero::http {
         has_query = true;
 
         if (std::ranges::any_of(parsed_query, is_forbidden_character)) {
-          return std::unexpected(uri_error::invalid_character);
+          return std::unexpected(uri_error::character_invalid);
         }
       }
 
@@ -391,16 +391,16 @@ namespace aero::http {
    private:
     [[nodiscard]] static std::expected<std::uint16_t, std::error_code> parse_port(std::string_view port_view) {
       if (port_view.empty()) {
-        return std::unexpected(uri_error::empty_port);
+        return std::unexpected(uri_error::port_empty);
       }
 
       std::uint32_t port_number = 0;
       auto parse_result = std::from_chars(port_view.data(), port_view.data() + port_view.size(), port_number);
       if (parse_result.ec != std::errc{} || parse_result.ptr != port_view.data() + port_view.size()) {
-        return std::unexpected(uri_error::invalid_port);
+        return std::unexpected(uri_error::port_invalid);
       }
       if (port_number == 0) {
-        return std::unexpected(uri_error::invalid_port);
+        return std::unexpected(uri_error::port_invalid);
       }
       if (port_number > (std::numeric_limits<std::uint16_t>::max)()) {
         return std::unexpected(uri_error::port_out_of_range);

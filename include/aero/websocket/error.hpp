@@ -43,20 +43,20 @@ namespace aero::websocket {
   };
 
   enum class uri_error : std::uint8_t {
-    invalid_scheme = 1,
-    missing_scheme_delimiter,
-    invalid_character,
+    scheme_invalid = 1,
+    scheme_delimiter_missing,
+    character_invalid,
     fragment_not_allowed,
-    empty_authority,
+    authority_empty,
     userinfo_not_allowed,
-    invalid_authority,
-    empty_host,
-    invalid_host,
-    invalid_ipv6_literal,
-    empty_port,
-    invalid_port,
+    authority_invalid,
+    host_empty,
+    host_invalid,
+    ipv6_literal_invalid,
+    port_empty,
+    port_invalid,
     port_out_of_range,
-    invalid_path
+    path_invalid
   };
 
   enum class message_reader_error : std::uint8_t {
@@ -166,33 +166,33 @@ namespace aero::websocket {
       [[nodiscard]] std::string message(int value) const override {
         using aero::websocket::uri_error;
         switch (static_cast<uri_error>(value)) {
-        case uri_error::invalid_scheme:
+        case uri_error::scheme_invalid:
           return "invalid scheme (only ws and wss are allowed)";
-        case uri_error::missing_scheme_delimiter:
+        case uri_error::scheme_delimiter_missing:
           return "missing scheme delimiter (expected ://)";
-        case uri_error::invalid_character:
+        case uri_error::character_invalid:
           return "URI contains forbidden characters (control characters or spaces are not allowed)";
         case uri_error::fragment_not_allowed:
           return "fragment is not allowed in WebSocket URI";
-        case uri_error::empty_authority:
+        case uri_error::authority_empty:
           return "authority is missing or empty";
         case uri_error::userinfo_not_allowed:
           return "userinfo is not allowed in WebSocket URI";
-        case uri_error::invalid_authority:
+        case uri_error::authority_invalid:
           return "authority is invalid";
-        case uri_error::empty_host:
+        case uri_error::host_empty:
           return "host is missing or empty";
-        case uri_error::invalid_host:
+        case uri_error::host_invalid:
           return "host is invalid";
-        case uri_error::invalid_ipv6_literal:
+        case uri_error::ipv6_literal_invalid:
           return "IPv6 literal is invalid (expected [IPv6-address])";
-        case uri_error::empty_port:
+        case uri_error::port_empty:
           return "port delimiter is present but port is empty";
-        case uri_error::invalid_port:
+        case uri_error::port_invalid:
           return "port is invalid (must be a decimal number from 1 to 65535)";
         case uri_error::port_out_of_range:
           return "port is out of range (must be from 1 to 65535)";
-        case uri_error::invalid_path:
+        case uri_error::path_invalid:
           return "path is invalid (must be empty or start with /)";
         default:
           return "unknown websocket URI error";

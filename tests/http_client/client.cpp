@@ -680,7 +680,7 @@ int main() {
       auto response = client.send("ftp://127.0.0.1/resource", make_request({}));
 
       expect[not response.has_value()];
-      expect(response.error() == http::uri_error::invalid_scheme);
+      expect(response.error() == http::uri_error::scheme_invalid);
     };
 
     "reads final response after interim response and reuses connection"_test = [] {
