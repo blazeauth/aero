@@ -23,10 +23,8 @@
 
 #include <algorithm>
 #include <array>
-#include <iterator>
 #include <optional>
 #include <source_location>
-#include <span>
 #include <system_error>
 #include <thread>
 #include <utility>
@@ -98,7 +96,8 @@ namespace aero::http {
     using error_handler = std::function<void(std::error_code, std::source_location, std::optional<std::string>)>;
     using request_handler = std::function<void(http::context&)>;
 
-    constexpr static std::size_t max_headers_size = 8ZU * 1024ZU;
+    constexpr static std::size_t max_request_line_size = 8ZU * 1024;
+    constexpr static std::size_t max_headers_size = 32ZU * 1024;
     constexpr static std::uint16_t default_port = UseTLS ? http::default_secure_port : http::default_port;
 
     explicit server(asio::any_io_executor executor = asio::any_io_executor{}) // NOLINT(modernize-pass-by-value)
@@ -354,7 +353,7 @@ namespace aero::http {
           "\r\n\r\n",
           asio::as_tuple(asio::use_awaitable));
         if (ec) {
-          co_await conn->co_send_close_response(http::status::bad_request);
+          co_await detail::co_close_socket(conn->socket);
           co_return;
         }
 
@@ -363,6 +362,14 @@ namespace aero::http {
         // asio::async_read_until guarantees that buffer contains
         // "\r\n\r\n", so we won't check for npos
         std::size_t request_line_end = buffer_view.find('\n');
+
+        // RFC 9112, Section 3:
+        // A server that receives a request-target longer than any URI it wishes
+        // to parse MUST respond with a 414 (URI Too Long) status code.
+        if (request_line_end > max_request_line_size) {
+          co_await conn->co_send_close_response(http::status::uri_too_long);
+          co_return;
+        }
 
         std::string_view request_line_str = buffer_view.substr(0, request_line_end + 1);
         std::string_view headers_str = buffer_view.substr(request_line_str.size(), headers_end);

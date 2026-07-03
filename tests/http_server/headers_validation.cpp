@@ -26,27 +26,47 @@ http::response send_request(http::server<>& server, std::string_view request_buf
   std::string response_buf;
   asio::read_until(socket, asio::dynamic_buffer(response_buf), "\r\n\r\n", read_ec);
   expect(not read_ec) << "failed to read response headers: " << read_ec.message();
+  if (read_ec) {
+    return {};
+  }
 
   std::size_t status_line_end = response_buf.find("\r\n");
   expect(status_line_end != std::string::npos) << "response has no status line delimiter: " << response_buf;
+  if (status_line_end == std::string::npos) {
+    return {};
+  }
 
   std::string status_line_str = response_buf.substr(0, status_line_end);
   auto status_line = http::status_line::parse(status_line_str);
   expect(status_line.has_value()) << "failed to parse response status line: " << status_line_str;
+  if (not status_line.has_value()) {
+    return {};
+  }
 
   std::string headers_str = response_buf.substr(status_line_end + 2);
   auto headers = http::headers::parse(headers_str);
   expect(headers.has_value()) << "failed to parse response headers: " << headers_str;
+  if (not headers.has_value()) {
+    return {};
+  }
 
   return {.status_line = *status_line, .headers = *headers};
 }
 
-void expect_status(const http::response& response, http::status expected) {
-  expect(response.status_line.status_code == expected)
-    << "expected status " << static_cast<int>(expected) << ", got " << static_cast<int>(response.status_line.status_code);
+void send_request_and_expect_status(http::server<>& server, std::string payload, http::status expected_status) {
+  std::future<http::response> f = std::async(std::launch::async, [&] { return send_request(server, payload); });
 
-  expect(response.status_line.reason_phrase == http::to_string(expected))
-    << "expected reason phrase '" << http::to_string(expected) << "', got '" << response.status_line.reason_phrase << "'";
+  http::response response;
+  if (f.wait_for(5s) == std::future_status::ready) {
+    response = f.get();
+  }
+
+  expect(response.status_line.status_code == expected_status) << "expected status " << static_cast<int>(expected_status)
+                                                              << ", got " << static_cast<int>(response.status_line.status_code);
+
+  expect(response.status_line.reason_phrase == http::to_string(expected_status))
+    << "expected reason phrase '" << http::to_string(expected_status) << "', got '" << response.status_line.reason_phrase
+    << "'";
 }
 
 int main() {
@@ -57,67 +77,27 @@ int main() {
   suite http_server_host_header_protocol_validation = [&] {
     "missing Host header is rejected with 400 bad request"_test = [&] {
       std::string payload = "GET / HTTP/1.1\r\nAero: Hello\r\n\r\n";
-
-      std::future<http::response> f = std::async(std::launch::async, [&] { return send_request(server, payload); });
-
-      http::response response;
-      if (f.wait_for(5s) == std::future_status::ready) {
-        response = f.get();
-      }
-
-      expect_status(response, http::status::bad_request);
+      send_request_and_expect_status(server, payload, http::status::bad_request);
     };
 
     "empty Host header is rejected with 400 bad request"_test = [&] {
       std::string payload = "GET / HTTP/1.1\r\nHost:\r\n\r\n";
-
-      std::future<http::response> f = std::async(std::launch::async, [&] { return send_request(server, payload); });
-
-      http::response response;
-      if (f.wait_for(5s) == std::future_status::ready) {
-        response = f.get();
-      }
-
-      expect_status(response, http::status::bad_request);
+      send_request_and_expect_status(server, payload, http::status::bad_request);
     };
 
     "multiple Host headers are rejected with 400 bad request"_test = [&] {
       std::string payload = "GET / HTTP/1.1\r\nHost: example.com\r\nHost: example.com\r\n\r\n";
-
-      std::future<http::response> f = std::async(std::launch::async, [&] { return send_request(server, payload); });
-
-      http::response response;
-      if (f.wait_for(5s) == std::future_status::ready) {
-        response = f.get();
-      }
-
-      expect_status(response, http::status::bad_request);
+      send_request_and_expect_status(server, payload, http::status::bad_request);
     };
 
     "multiple case-insensitive Host headers are rejected with 400 bad request"_test = [&] {
       std::string payload = "GET / HTTP/1.1\r\nHost: example.com\r\nhost: example.com\r\n\r\n";
-
-      std::future<http::response> f = std::async(std::launch::async, [&] { return send_request(server, payload); });
-
-      http::response response;
-      if (f.wait_for(5s) == std::future_status::ready) {
-        response = f.get();
-      }
-
-      expect_status(response, http::status::bad_request);
+      send_request_and_expect_status(server, payload, http::status::bad_request);
     };
 
     "empty Host header is rejected with 400 bad request"_test = [&] {
       std::string payload = "GET / HTTP/1.1\r\nHost:\r\n\r\n";
-
-      std::future<http::response> f = std::async(std::launch::async, [&] { return send_request(server, payload); });
-
-      http::response response;
-      if (f.wait_for(5s) == std::future_status::ready) {
-        response = f.get();
-      }
-
-      expect_status(response, http::status::bad_request);
+      send_request_and_expect_status(server, payload, http::status::bad_request);
     };
   };
 
