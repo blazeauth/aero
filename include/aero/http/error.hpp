@@ -16,6 +16,8 @@ namespace aero::http {
     method_invalid,
     method_too_long,
     reason_phrase_invalid,
+    request_target_invalid,
+    method_unsupported,
   };
 
   enum class header_error : std::uint8_t {
@@ -84,12 +86,16 @@ namespace aero::http {
           return "http version is invalid";
         case protocol_error::version_unsupported:
           return "http version is not supported";
+        case protocol_error::method_unsupported:
+          return "http method is not supported";
         case protocol_error::method_invalid:
           return "http method is invalid";
         case protocol_error::method_too_long:
           return "http method is too long";
         case protocol_error::reason_phrase_invalid:
           return "reason phrase is invalid";
+        case protocol_error::request_target_invalid:
+          return "request target is invalid";
         default:
           return "unknown http protocol error";
         }
