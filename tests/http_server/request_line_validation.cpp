@@ -86,6 +86,19 @@ int main() {
       std::string payload = "VERYLONGMETHOD / HTTP/1.1\r\nHost: Hello\r\n\r\n";
       send_request_and_expect_status(server, payload, http::status::not_implemented);
     };
+
+    "valid but unrecognized method token is rejected with 501 not implemented"_test = [&] {
+      std::string payload = "POP / HTTP/1.1\r\nHost: Hello\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::not_implemented);
+
+      payload = "get / HTTP/1.1\r\nHost: Hello\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::not_implemented);
+    };
+
+    "method that is not a valid token is rejected with 400 bad request"_test = [&] {
+      std::string payload = "G(T / HTTP/1.1\r\nHost: Hello\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::bad_request);
+    };
   };
 
   suite http_server_request_line_request_target_suite = [&] {

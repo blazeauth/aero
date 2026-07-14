@@ -8,6 +8,7 @@
 #include <string_view>
 #include <system_error>
 
+#include "aero/detail/rfc_grammar.hpp"
 #include "aero/http/error.hpp"
 
 // To deconflict Windows.h
@@ -46,7 +47,14 @@ namespace aero::http {
     // NOLINTNEXTLINE(readability-qualified-auto)
     const auto it = std::ranges::find(methods, method_str, &method_entry::first);
     if (it == methods.end()) {
-      return std::unexpected(http::protocol_error::method_invalid);
+      // RFC 9112:
+      // method = token
+      // token = 1*tchar
+      if (!std::ranges::all_of(method_str, detail::is_tchar)) {
+        return std::unexpected(protocol_error::method_invalid);
+      }
+
+      return std::unexpected(http::protocol_error::method_unsupported);
     }
 
     return it->second;

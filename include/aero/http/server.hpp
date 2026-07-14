@@ -1,7 +1,7 @@
 #pragma once
 
 #include "aero/http/context.hpp"
-#include "aero/http/detail/header_validator.hpp"
+#include "aero/http/detail/request_target_validator.hpp"
 #include "aero/http/error.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/http/method.hpp"
@@ -63,7 +63,6 @@ namespace aero::http {
 
   } // namespace detail
 
-  // TODO: Stop closing connections on every error, send error responses
   template <bool UseTLS = false>
   class server {
     using socket_type = std::conditional_t<UseTLS,
@@ -316,7 +315,7 @@ namespace aero::http {
         auto socket = acceptor_->accept(accept_ec);
         if (accept_ec) {
           // TODO: Should we return an error or continue accepting?
-          // What will be better API for the user in this case?
+          // What would be better API for the user in this case?
           return accept_ec;
         }
 
@@ -361,7 +360,7 @@ namespace aero::http {
 
         // asio::async_read_until guarantees that buffer contains
         // "\r\n\r\n", so we won't check for npos
-        std::size_t request_line_end = buffer_view.find('\n');
+        std::size_t request_line_end = buffer_view.find("\r\n");
 
         // RFC 9112, Section 3:
         // A server that receives a request-target longer than any URI it wishes
@@ -371,17 +370,23 @@ namespace aero::http {
           co_return;
         }
 
-        std::string_view request_line_str = buffer_view.substr(0, request_line_end + 1);
-        std::string_view headers_str = buffer_view.substr(request_line_str.size(), headers_end);
+        std::string_view request_line_str = buffer_view.substr(0, request_line_end);
+        std::string_view headers_str = buffer_view.substr(request_line_end + 2, headers_end - (request_line_end + 2));
 
-        auto request_line = http::request_line::parse(request_line_str, longest_implemented_method_length);
+        auto request_line = request_line::parse(request_line_str, longest_implemented_method_length);
         if (!request_line) {
           http::status status = status::bad_request;
 
           // RFC 9112, Section 3:
           // A server that receives a method longer than any that it implements
           // SHOULD respond with a 501 (Not Implemented) status code.
-          if (request_line.error() == http::protocol_error::method_too_long) {
+          //
+          // RFC 9110, Section 9:
+          // An origin server that receives a request method that is
+          // unrecognized or not implemented SHOULD respond with the 501 (Not
+          // Implemented) status code.
+          if (request_line.error() == http::protocol_error::method_too_long ||
+              request_line.error() == http::protocol_error::method_unsupported) {
             status = status::not_implemented;
           }
 
@@ -490,7 +495,7 @@ namespace aero::http {
       // A server MUST respond with a 400 (Bad Request) status code to any
       // HTTP/1.1 request message that ... contains ... a Host header field
       // with an invalid field value.
-      bool is_host_header_valid = http::detail::validate_host_header(host_header.value());
+      bool is_host_header_valid = http::detail::is_valid_authority(host_header.value());
       if (!is_host_header_valid) {
         return http::status::bad_request;
       }

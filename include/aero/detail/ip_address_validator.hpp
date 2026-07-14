@@ -1,10 +1,12 @@
+#pragma once
+
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
 
 namespace aero::detail {
 
-  inline bool validate_ipv4_address(std::string_view address) noexcept {
+  inline bool is_valid_ipv4_address(std::string_view address) noexcept {
     // RFC 3986 3.2.2:
     // A host identified by an IPv4 literal address is represented in
     // dotted-decimal notation (a sequence of four decimal numbers in
@@ -147,7 +149,7 @@ namespace aero::detail {
     return true;
   }
 
-  inline bool validate_ipv6_address(std::string_view address) noexcept {
+  inline bool is_valid_ipv6_address(std::string_view address) noexcept {
     constexpr std::size_t min_ipv6_length = 2;  // "::"
     constexpr std::size_t max_ipv6_length = 45; // "xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:255.255.255.255"
 
@@ -171,7 +173,7 @@ namespace aero::detail {
       // Assume that everything after the last IPv6 separator is the
       // IPv4 tail, the IPv4 validator will catch any issues
       std::string_view ipv4_tail = address.substr(tail_separator_pos + 1); // +1 to skip ':'
-      if (!validate_ipv4_address(ipv4_tail)) {
+      if (!is_valid_ipv4_address(ipv4_tail)) {
         return false;
       }
 
