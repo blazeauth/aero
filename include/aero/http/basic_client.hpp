@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <charconv>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -60,8 +59,6 @@ namespace aero::http {
     constexpr static std::size_t default_runtime_threads = 1;
     constexpr static int informational_status_code_min = std::to_underlying(http::status::continue_);
     constexpr static int informational_status_code_max = std::to_underlying(http::status::ok);
-    constexpr static int succesfull_status_code_min = std::to_underlying(http::status::ok);
-    constexpr static int succesfull_status_code_max = std::to_underlying(http::status::multiple_choices);
 
    public:
     using transport_type = Transport;
@@ -172,7 +169,7 @@ namespace aero::http {
               co_return {unsupported_scheme_error(parsed_uri->is_https()), http::response{}};
             }
 
-            if (request.url.empty() && request.method != http::method::CONNECT) {
+            if (request.url.empty()) {
               request.url = parsed_uri->target();
             }
 
@@ -533,10 +530,6 @@ namespace aero::http {
         asio::co_composed<void(std::error_code, http::response)>(
           [this, &transport](auto, http::method request_method, http::response response, std::vector<std::byte> response_buffer)
             -> void {
-            if (is_successful_connect_response(request_method, response.status_code())) {
-              co_return {client_error::connect_tunnel_unsupported, http::response{}};
-            }
-
             if (is_bodyless_response(request_method, response.status_code())) {
               co_return {std::error_code{}, std::move(response)};
             }
@@ -800,10 +793,6 @@ namespace aero::http {
         return std::unexpected(client_error::request_encoding_unsupported);
       }
 
-      if (request.method == http::method::CONNECT && request.url.empty()) {
-        request.url = format_authority_target(endpoint);
-      }
-
       auto normalized_target = normalize_request_target(request.method, std::move(request.url));
       if (!normalized_target.has_value()) {
         return std::unexpected(normalized_target.error());
@@ -813,7 +802,7 @@ namespace aero::http {
       request.content_length = static_cast<std::int64_t>(request.body.size());
 
       if (!request.headers.contains("host")) {
-        auto host_header = derive_host_header_value(endpoint, request.method, request.url);
+        auto host_header = derive_host_header_value(endpoint, request.url);
         if (!host_header.has_value()) {
           return std::unexpected(host_header.error());
         }
@@ -947,14 +936,6 @@ namespace aero::http {
 
     [[nodiscard]] static std::expected<std::string, std::error_code> normalize_request_target(http::method method,
       std::string target) {
-      if (method == http::method::CONNECT) {
-        if (!is_valid_authority_form(target)) {
-          return std::unexpected(protocol_error::request_line_invalid);
-        }
-
-        return target;
-      }
-
       if (target.empty()) {
         return std::string{"/"};
       }
@@ -989,11 +970,7 @@ namespace aero::http {
     }
 
     [[nodiscard]] static std::expected<std::string, std::error_code> derive_host_header_value(
-      const basic_client::endpoint& endpoint, http::method method, const std::string& request_target) {
-      if (method == http::method::CONNECT) {
-        return request_target;
-      }
-
+      const basic_client::endpoint& endpoint, const std::string& request_target) {
       if (looks_like_absolute_form(request_target)) {
         auto parsed_uri = http::uri::parse(request_target);
         if (!parsed_uri.has_value()) {
@@ -1006,20 +983,6 @@ namespace aero::http {
       }
 
       return format_host_header(endpoint);
-    }
-
-    [[nodiscard]] static std::string format_authority_target(const basic_client::endpoint& endpoint) {
-      std::string host = endpoint.host;
-      bool is_host_in_brackets = host.starts_with('[') && host.ends_with(']');
-
-      if (host.contains(':') && !is_host_in_brackets) {
-        host.insert(host.begin(), '[');
-        host.push_back(']');
-      }
-
-      host.push_back(':');
-      host.append(std::to_string(endpoint.port));
-      return host;
     }
 
     [[nodiscard]] static std::string format_host_header(std::string host, std::uint16_t port,
@@ -1057,14 +1020,6 @@ namespace aero::http {
       auto status_value = std::to_underlying(status_code);
       return status_value >= informational_status_code_min && status_value < informational_status_code_max &&
              status_code != http::status::switching_protocols;
-    }
-
-    [[nodiscard]] static bool is_successful_connect_response(http::method request_method, http::status status_code) noexcept {
-      auto status_value = std::to_underlying(status_code);
-      bool is_succesfull_status_code =
-        (status_value >= succesfull_status_code_min && status_value < succesfull_status_code_max);
-
-      return request_method == http::method::CONNECT && is_succesfull_status_code;
     }
 
     [[nodiscard]] static bool should_wait_for_continue(const http::request& request) {
@@ -1123,55 +1078,6 @@ namespace aero::http {
 
     [[nodiscard]] static bool looks_like_absolute_form(std::string_view target) noexcept {
       return target.find("://") != std::string_view::npos;
-    }
-
-    [[nodiscard]] static bool is_valid_port_number(std::string_view value) noexcept {
-      if (value.empty()) {
-        return false;
-      }
-
-      unsigned int port{};
-      auto parse_result = std::from_chars(value.data(), value.data() + value.size(), port);
-
-      const auto is_in_uint16_range = port > 0U && port <= 65535U;
-
-      return parse_result.ec == std::errc{} && parse_result.ptr == value.data() + value.size() && is_in_uint16_range;
-    }
-
-    [[nodiscard]] static bool is_valid_authority_form(std::string_view target) {
-      if (target.empty()) {
-        return false;
-      }
-
-      if (target.find('/') != std::string_view::npos || target.find('?') != std::string_view::npos ||
-          target.find('#') != std::string_view::npos) {
-        return false;
-      }
-
-      if (target.front() == '[') {
-        auto bracket_end = target.find(']');
-        if (bracket_end == std::string_view::npos || bracket_end == 1U) {
-          return false;
-        }
-
-        if (bracket_end + 1U >= target.size() || target[bracket_end + 1U] != ':') {
-          return false;
-        }
-
-        return is_valid_port_number(target.substr(bracket_end + 2U));
-      }
-
-      auto port_separator = target.rfind(':');
-      if (port_separator == std::string_view::npos || port_separator == 0U || port_separator + 1U >= target.size()) {
-        return false;
-      }
-
-      auto host = target.substr(0, port_separator);
-      if (host.empty() || host.find(':') != std::string_view::npos) {
-        return false;
-      }
-
-      return is_valid_port_number(target.substr(port_separator + 1U));
     }
 
     [[nodiscard]] static transfer_encoding_info inspect_transfer_encoding(const http::headers& headers) {

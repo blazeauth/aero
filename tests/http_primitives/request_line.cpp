@@ -159,6 +159,13 @@ int main() {
       expect_rejected("!#$%&'*+-.^_`|~ /products HTTP/1.1", protocol_error::method_unsupported);
     };
 
+    "rejects CONNECT method as unsupported"_test = [] {
+      // aero does not implement the CONNECT method, so its authority-form
+      // request-target is rejected at the method parser stage
+      expect_rejected("CONNECT example.com:443 HTTP/1.1", protocol_error::method_unsupported);
+      expect_rejected("CONNECT [2001:db8::1]:443 HTTP/1.1", protocol_error::method_unsupported);
+    };
+
     "rejects unsupported method tokens before request-target validation"_test = [] {
       expect_rejected("POP * HTTP/1.1", protocol_error::method_unsupported);
       expect_rejected("POP products HTTP/1.1", protocol_error::method_unsupported);

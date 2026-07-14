@@ -65,8 +65,6 @@ namespace aero::http::detail {
 
     constexpr static int informational_status_code_min = std::to_underlying(http::status::continue_);
     constexpr static int informational_status_code_max = std::to_underlying(http::status::ok);
-    constexpr static int succesfull_status_code_min = std::to_underlying(http::status::ok);
-    constexpr static int succesfull_status_code_max = std::to_underlying(http::status::multiple_choices);
 
     [[nodiscard]] constexpr static bool is_secure_transport() noexcept {
       return secure_transport_trait<transport_type>::value;
@@ -567,19 +565,7 @@ namespace aero::http::detail {
       return transfer_encoding_framing::close_delimited;
     }
 
-    [[nodiscard]] static bool is_successful_connect_response(http::method request_method, http::status status_code) noexcept {
-      auto status_value = std::to_underlying(status_code);
-      bool is_succesfull_status_code =
-        (status_value >= succesfull_status_code_min && status_value < succesfull_status_code_max);
-
-      return request_method == http::method::CONNECT and is_succesfull_status_code;
-    }
-
     [[nodiscard]] static bool response_requires_eof(http::method request_method, const http::response& response) {
-      if (is_successful_connect_response(request_method, response.status_code())) {
-        return true;
-      }
-
       if (is_bodyless_response(request_method, response.status_code())) {
         return false;
       }

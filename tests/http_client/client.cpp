@@ -926,34 +926,6 @@ int main() {
       expect(received_body == "payload");
     };
 
-    "connect uses authority form and rejects successful tunnel response"_test = [] {
-      std::string raw_request_head;
-
-      http_test::tcp_acceptor server{[&](http_test::tcp_acceptor& server) {
-        auto socket = server.accept();
-        std::string read_buffer;
-        raw_request_head = http_test::read_http_request_head(socket, read_buffer);
-
-        http_test::write_http_response(socket,
-          "HTTP/1.1 200 Connection Established\r\n"
-          "\r\n");
-      }};
-
-      auto request = make_request(http::method::CONNECT, "example.com:443");
-
-      http::client client;
-      auto response = send_with_timeout(client, make_local_endpoint(server.port()), std::move(request), local_request_timeout);
-
-      expect[not response.has_value()];
-      expect(response.error() == http::client_error::connect_tunnel_unsupported);
-
-      server.join();
-
-      expect[server.exception() == nullptr];
-      expect(raw_request_head.starts_with("CONNECT example.com:443 HTTP/1.1\r\n"));
-      expect(raw_request_head.find("Host: example.com:443\r\n") != std::string::npos);
-    };
-
     "preserves absolute form request target for proxy style request"_test = [] {
       std::string raw_request_head;
 
