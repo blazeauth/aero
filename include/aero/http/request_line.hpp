@@ -6,6 +6,8 @@
 
 #include "aero/detail/string.hpp"
 #include "aero/http/detail/common.hpp"
+#include "aero/http/detail/request_target_validator.hpp"
+#include "aero/http/error.hpp"
 #include "aero/http/method.hpp"
 #include "aero/http/version.hpp"
 
@@ -16,33 +18,37 @@ namespace aero::http {
     std::string target;
     http::version version;
 
-    [[nodiscard]] static std::expected<request_line, std::error_code> parse(std::string_view line,
+    // The request-line string passed in must not end with CRLF
+    [[nodiscard]] static std::expected<request_line, std::error_code> parse(std::string_view request_line,
       std::size_t max_method_length = 0) {
-      using http::protocol_error;
-      constexpr auto npos = std::string_view::npos;
+      // RFC 9112, Section 3:
+      // request-line = method SP request-target SP HTTP-version
+
+      // Rules for the error returned during parsing:
+      //  - If the received string violates the format
+      //    `request-line = method SP request-target SP HTTP-version`,
+      //    the error returned is `request_line_invalid`.
+      //  - If the string follows the request-line format but the `method`,
+      //    `request-target`, or `HTTP-version` component does not conform to
+      //    the RFC syntax, we return a specific error pointing at that
+      //    component.
+      //  - The one deliberate exception is `method_too_long`. It is decided by
+      //    looking at the first token alone, so it wins even on a line whose
+      //    overall format is broken. RFC 9112, Section 3 recommends a 501 for a
+      //    method longer than any implemented one, and an oversized first token
+      //    tells us enough on its own - there is no point in inspecting the
+      //    rest of the line just to report a nicer error.
 
       if (max_method_length == 0) {
-        max_method_length = line.size();
+        max_method_length = request_line.size();
       }
 
-      if (line.ends_with(detail::crlf)) {
-        line.remove_suffix(detail::crlf.size());
-      }
-
-      if (line.empty()) {
+      if (request_line.empty() || request_line.ends_with('\r') || request_line.ends_with('\n') || request_line.ends_with(' ')) {
         return std::unexpected(protocol_error::request_line_invalid);
       }
 
-      if (line.find('\r') != npos || line.find('\n') != npos) {
-        return std::unexpected(protocol_error::request_line_invalid);
-      }
-
-      std::size_t first_space = line.find(' ');
-      if (first_space == npos) {
-        return std::unexpected(protocol_error::request_line_invalid);
-      }
-
-      if (first_space == 0) {
+      std::size_t first_space = request_line.find(' ');
+      if (first_space == std::string_view::npos || first_space == 0) {
         return std::unexpected(protocol_error::request_line_invalid);
       }
 
@@ -53,38 +59,46 @@ namespace aero::http {
         return std::unexpected(protocol_error::method_too_long);
       }
 
-      std::size_t second_space = line.find(' ', first_space + 1);
-      if (second_space == npos || second_space == first_space + 1) {
+      std::size_t second_space = request_line.find(' ', first_space + 1);
+      if (second_space == std::string_view::npos) {
         return std::unexpected(protocol_error::request_line_invalid);
       }
 
-      bool has_third_space = line.find(' ', second_space + 1) != npos;
+      // The RFC 9112, Section 3 grammar prohibits two consecutive spaces
+      bool has_extra_space_after_method = second_space == first_space + 1;
+      if (has_extra_space_after_method) {
+        return std::unexpected(protocol_error::request_line_invalid);
+      }
+
+      // RFC 9112 clearly states that the request-line may contain exactly 2 SP characters
+      bool has_third_space = request_line.find(' ', second_space + 1) != std::string_view::npos;
       if (has_third_space) {
         return std::unexpected(protocol_error::request_line_invalid);
       }
 
-      auto method_token = line.substr(0, first_space);
-      auto target_token = line.substr(first_space + 1, second_space - (first_space + 1));
-      auto version_token = line.substr(second_space + 1);
+      std::string_view method_str = request_line.substr(0, first_space);
 
-      if (target_token.empty() || version_token.empty()) {
-        return std::unexpected(protocol_error::request_line_invalid);
+      auto method = http::parse_method(method_str);
+      if (!method.has_value()) {
+        return std::unexpected(method.error());
       }
 
-      auto parsed_method = http::parse_method(method_token);
-      if (!parsed_method.has_value()) {
-        return std::unexpected(parsed_method.error());
+      std::string_view request_target = request_line.substr(first_space + 1, second_space - first_space - 1);
+      if (!detail::is_valid_request_target(*method, request_target)) {
+        return std::unexpected(protocol_error::request_target_invalid);
       }
 
-      auto parsed_version = http::parse_version(version_token);
-      if (!parsed_version.has_value()) {
-        return std::unexpected(parsed_version.error());
+      std::string_view version_str = request_line.substr(second_space + 1);
+
+      auto version = http::parse_version(version_str);
+      if (!version.has_value()) {
+        return std::unexpected(version.error());
       }
 
-      return request_line{
-        .method = *parsed_method,
-        .target = std::string{target_token},
-        .version = *parsed_version,
+      return http::request_line{
+        .method = *method,
+        .target = std::string{request_target},
+        .version = *version,
       };
     }
 

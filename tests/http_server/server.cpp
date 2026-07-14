@@ -29,11 +29,11 @@ int main() {
       server.set_workers(1);
       server.async_start("127.0.0.1", 0);
 
-      std::string multiple_host_headers_buf = "GET /aero HTTP/1.1\r\nHost: example.com\r\n\r\n";
+      std::string buf = "GET /aero HTTP/1.1\r\nHost: example.com\r\n\r\n";
 
       asio::ip::tcp::socket socket(server.get_executor());
       socket.connect(server.endpoint());
-      asio::write(socket, asio::buffer(multiple_host_headers_buf));
+      asio::write(socket, asio::buffer(buf));
 
       expect(future.wait_for(5s) == std::future_status::ready);
     };
