@@ -95,7 +95,10 @@ namespace aero::http {
     using error_handler = std::function<void(std::error_code, std::source_location, std::optional<std::string>)>;
     using request_handler = std::function<void(http::context&)>;
 
-    constexpr static std::size_t max_request_line_size = 8ZU * 1024;
+    // RFC 9112, Section 3:
+    // It is RECOMMENDED that all HTTP senders and recipients support, at a
+    // minimum, request-line lengths of 8000 octets.
+    constexpr static std::size_t max_request_line_size = 12ZU * 1024;
     constexpr static std::size_t max_headers_size = 32ZU * 1024;
     constexpr static std::uint16_t default_port = UseTLS ? http::default_secure_port : http::default_port;
 
