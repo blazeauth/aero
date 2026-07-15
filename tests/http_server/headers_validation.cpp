@@ -73,6 +73,7 @@ void send_request_and_expect_status(http::server<>& server, std::string payload,
 int main() {
   http::server server;
   server.set_workers(1);
+  server.get("/", [](http::context&) {});
   server.async_start("127.0.0.1", 0);
 
   suite http_server_host_header_protocol_validation = [&] {
@@ -95,9 +96,36 @@ int main() {
       std::string payload = "GET / HTTP/1.1\r\nHost: example.com\r\nhost: example.com\r\n\r\n";
       send_request_and_expect_status(server, payload, http::status::bad_request);
     };
+  };
 
-    "empty Host header is rejected with 400 bad request"_test = [&] {
-      std::string payload = "GET / HTTP/1.1\r\nHost:\r\n\r\n";
+  suite http_server_host_header_http10_validation = [&] {
+    "HTTP/1.0 request without any headers is accepted"_test = [&] {
+      std::string payload = "GET / HTTP/1.0\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::ok);
+    };
+
+    "HTTP/1.0 request with headers but no Host is accepted"_test = [&] {
+      std::string payload = "GET / HTTP/1.0\r\nAero: Hello\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::ok);
+    };
+
+    "HTTP/1.0 request with valid Host header is accepted"_test = [&] {
+      std::string payload = "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::ok);
+    };
+
+    "multiple Host headers in HTTP/1.0 request are rejected with 400 bad request"_test = [&] {
+      std::string payload = "GET / HTTP/1.0\r\nHost: example.com\r\nHost: example.com\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::bad_request);
+    };
+
+    "invalid Host header value in HTTP/1.0 request is rejected with 400 bad request"_test = [&] {
+      std::string payload = "GET / HTTP/1.0\r\nHost: exa mple.com\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::bad_request);
+    };
+
+    "empty Host header in HTTP/1.0 request is rejected with 400 bad request"_test = [&] {
+      std::string payload = "GET / HTTP/1.0\r\nHost:\r\n\r\n";
       send_request_and_expect_status(server, payload, http::status::bad_request);
     };
   };

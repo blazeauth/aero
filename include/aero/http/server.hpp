@@ -413,13 +413,10 @@ namespace aero::http {
           co_return;
         }
 
-        bool is_http11 = request_line->version == http::version::http1_1;
-        if (is_http11) {
-          auto status = validate_http11_request_headers(*request_headers);
-          if (status != http::status::ok) {
-            co_await conn->co_send_close_response(status);
-            co_return;
-          }
+        auto host_validation_status = validate_host_header(request_line->version, *request_headers);
+        if (host_validation_status != http::status::ok) {
+          co_await conn->co_send_close_response(host_validation_status);
+          co_return;
         }
 
         http::request request{
@@ -479,38 +476,52 @@ namespace aero::http {
       }
     }
 
-    http::status validate_http11_request_headers(const http::headers& headers) {
-      // RFC 9112 3.2:
-      // A client MUST send a Host header field in all HTTP/1.1 request messages.
+    http::status validate_host_header(http::version version, const http::headers& headers) noexcept {
+      using enum http::status;
+      using enum http::version;
+
+      // RFC 9112, Section 3.2:
+      // A server MUST respond with a 400 (Bad Request) status code to any
+      // HTTP/1.1 request message that lacks a Host header field and to any
+      // request message that contains more than one Host header field line
+      // or a Host header field with an invalid field value.
+      //
+      // The "HTTP/1.1" qualifier applies only to a missing Host field. The
+      // words "any request message" make the duplicate and invalid Host
+      // rules independent of the request's HTTP version. This means that we
+      // MUST also enforce those rules for HTTP/1.0 requests.
+
+      // RFC 9112, Section 3.2:
+      // A client MUST send a Host header field in all HTTP/1.1 request messages
       if (headers.empty()) {
-        return http::status::bad_request;
+        return version == http1_0 ? ok : bad_request;
       }
 
-      // RFC 9112 3.2:
+      // RFC 9112, Section 3.2:
       // A server MUST respond with a 400 (Bad Request) status code
       // to any HTTP/1.1 request message that lacks a Host header
       auto host_header = headers.first_value("Host");
       if (!host_header) {
-        return http::status::bad_request;
+        return version == http1_0 ? ok : bad_request;
       }
 
-      // RFC 9112 3.2:
-      // A server MUST respond with a 400 (Bad Request) status code to any
-      // HTTP/1.1 request message that ... contains more than one Host header
+      // RFC 9112, Section 3.2:
+      // A server MUST respond with a 400 (Bad Request) status code to ... any
+      // request message that contains more than one Host header field line ...
       if (headers.occurrences("Host") > 1) {
-        return http::status::bad_request;
+        return bad_request;
       }
 
-      // RFC 9112 3.2:
+      // RFC 9112, Section 3.2:
       // A server MUST respond with a 400 (Bad Request) status code to any
       // HTTP/1.1 request message that ... contains ... a Host header field
       // with an invalid field value.
       bool is_host_header_valid = http::detail::is_valid_authority(host_header.value());
       if (!is_host_header_valid) {
-        return http::status::bad_request;
+        return bad_request;
       }
 
-      return http::status::ok;
+      return ok;
     }
   };
 
