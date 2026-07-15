@@ -95,7 +95,10 @@ namespace aero::http {
     using error_handler = std::function<void(std::error_code, std::source_location, std::optional<std::string>)>;
     using request_handler = std::function<void(http::context&)>;
 
-    constexpr static std::size_t max_request_line_size = 8ZU * 1024;
+    // RFC 9112, Section 3:
+    // It is RECOMMENDED that all HTTP senders and recipients support, at a
+    // minimum, request-line lengths of 8000 octets.
+    constexpr static std::size_t max_request_line_size = 12ZU * 1024;
     constexpr static std::size_t max_headers_size = 32ZU * 1024;
     constexpr static std::uint16_t default_port = UseTLS ? http::default_secure_port : http::default_port;
 
@@ -356,22 +359,28 @@ namespace aero::http {
           co_return;
         }
 
-        std::string_view buffer_view{buffer};
+        std::string_view request_head{buffer.data(), headers_end};
 
         // asio::async_read_until guarantees that buffer contains
         // "\r\n\r\n", so we won't check for npos
-        std::size_t request_line_end = buffer_view.find("\r\n");
+        std::size_t request_line_end = request_head.find("\r\n");
 
         // RFC 9112, Section 3:
-        // A server that receives a request-target longer than any URI it wishes
-        // to parse MUST respond with a 414 (URI Too Long) status code.
+        // A server that receives a request-target longer than any URI it
+        // wishes to parse MUST respond with a 414 (URI Too Long) status code.
+        //
+        // The check is on the whole request-line, not just the target, since we
+        // can't tell where the target is before reading the entire line, so
+        // this is the only way to bound memory (nginx and Apache do the same).
+        // Method and version are tiny, so an oversized line pretty much always
+        // means an oversized target, which is why the answer is 414
         if (request_line_end > max_request_line_size) {
           co_await conn->co_send_close_response(http::status::uri_too_long);
           co_return;
         }
 
-        std::string_view request_line_str = buffer_view.substr(0, request_line_end);
-        std::string_view headers_str = buffer_view.substr(request_line_end + 2, headers_end - (request_line_end + 2));
+        std::string_view request_line_str = request_head.substr(0, request_line_end);
+        std::string_view headers_str = request_head.substr(request_line_end + 2);
 
         auto request_line = request_line::parse(request_line_str, longest_implemented_method_length);
         if (!request_line) {
@@ -407,13 +416,10 @@ namespace aero::http {
           co_return;
         }
 
-        bool is_http11 = request_line->version == http::version::http1_1;
-        if (is_http11) {
-          auto status = validate_http11_request_headers(*request_headers);
-          if (status != http::status::ok) {
-            co_await conn->co_send_close_response(status);
-            co_return;
-          }
+        auto host_validation_status = validate_host_header(request_line->version, *request_headers);
+        if (host_validation_status != http::status::ok) {
+          co_await conn->co_send_close_response(host_validation_status);
+          co_return;
         }
 
         http::request request{
@@ -449,6 +455,10 @@ namespace aero::http {
       http::context context{&request, &response};
       handler_it->second(context);
 
+      if (response.status_line.reason_phrase.empty()) {
+        response.status_line.reason_phrase = std::string{http::to_string(response.status_line.status_code)};
+      }
+
       response.headers.replace("Content-Length", std::to_string(response.body.size()));
       response.headers.replace("Connection", "close");
 
@@ -469,38 +479,52 @@ namespace aero::http {
       }
     }
 
-    http::status validate_http11_request_headers(const http::headers& headers) {
-      // RFC 9112 3.2:
-      // A client MUST send a Host header field in all HTTP/1.1 request messages.
+    http::status validate_host_header(http::version version, const http::headers& headers) noexcept {
+      using enum http::status;
+      using enum http::version;
+
+      // RFC 9112, Section 3.2:
+      // A server MUST respond with a 400 (Bad Request) status code to any
+      // HTTP/1.1 request message that lacks a Host header field and to any
+      // request message that contains more than one Host header field line
+      // or a Host header field with an invalid field value.
+      //
+      // The "HTTP/1.1" qualifier applies only to a missing Host field. The
+      // words "any request message" make the duplicate and invalid Host
+      // rules independent of the request's HTTP version. This means that we
+      // MUST also enforce those rules for HTTP/1.0 requests.
+
+      // RFC 9112, Section 3.2:
+      // A client MUST send a Host header field in all HTTP/1.1 request messages
       if (headers.empty()) {
-        return http::status::bad_request;
+        return version == http1_0 ? ok : bad_request;
       }
 
-      // RFC 9112 3.2:
+      // RFC 9112, Section 3.2:
       // A server MUST respond with a 400 (Bad Request) status code
       // to any HTTP/1.1 request message that lacks a Host header
       auto host_header = headers.first_value("Host");
       if (!host_header) {
-        return http::status::bad_request;
+        return version == http1_0 ? ok : bad_request;
       }
 
-      // RFC 9112 3.2:
-      // A server MUST respond with a 400 (Bad Request) status code to any
-      // HTTP/1.1 request message that ... contains more than one Host header
+      // RFC 9112, Section 3.2:
+      // A server MUST respond with a 400 (Bad Request) status code to ... any
+      // request message that contains more than one Host header field line ...
       if (headers.occurrences("Host") > 1) {
-        return http::status::bad_request;
+        return bad_request;
       }
 
-      // RFC 9112 3.2:
+      // RFC 9112, Section 3.2:
       // A server MUST respond with a 400 (Bad Request) status code to any
       // HTTP/1.1 request message that ... contains ... a Host header field
       // with an invalid field value.
       bool is_host_header_valid = http::detail::is_valid_authority(host_header.value());
       if (!is_host_header_valid) {
-        return http::status::bad_request;
+        return bad_request;
       }
 
-      return http::status::ok;
+      return ok;
     }
   };
 
