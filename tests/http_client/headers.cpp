@@ -350,19 +350,19 @@ int main() {
       expect(*parsed_headers.first_value("connection") == "Upgrade");
     };
 
-    "replace updates all occurrences"_test = [] {
+    "set updates all occurrences"_test = [] {
       http::headers fields{};
       fields.add("Set-Cookie", "a=1");
       expect(fields.occurrences("Set-Cookie") == 1U);
 
-      fields.replace("Set-Cookie", "c=3");
+      fields.set("Set-Cookie", "c=3");
       expect(fields.occurrences("Set-Cookie") == 1U);
 
       expect[fields.first_value("Set-Cookie").has_value()];
       expect(*fields.first_value("Set-Cookie") == "c=3");
     };
 
-    "add keeps duplicates until replace is called"_test = [] {
+    "add keeps duplicates until set is called"_test = [] {
       http::headers fields{
         {"Set-Cookie", "a"},
         {"Set-Cookie", "b=2"},
@@ -370,7 +370,7 @@ int main() {
 
       expect(fields.occurrences("Set-Cookie") == 2U);
 
-      fields.replace("Set-Cookie", "c=3");
+      fields.set("Set-Cookie", "c=3");
       expect(fields.occurrences("Set-Cookie") == 1U);
 
       expect[fields.first_value("Set-Cookie").has_value()];
