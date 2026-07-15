@@ -63,7 +63,6 @@ namespace aero::http {
     content_length_mismatch,
     chunked_encoding_invalid,
     response_body_too_large,
-    connect_tunnel_unsupported,
     unexpected_failure,
   };
 
@@ -218,8 +217,6 @@ namespace aero::http {
           return "response chunked encoding is invalid";
         case client_error::response_body_too_large:
           return "response body is too large";
-        case client_error::connect_tunnel_unsupported:
-          return "CONNECT tunnel mode is unsupported";
         case client_error::unexpected_failure:
           return "http client failed unexpectedly";
         default:

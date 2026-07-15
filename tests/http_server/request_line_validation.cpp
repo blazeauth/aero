@@ -95,6 +95,11 @@ int main() {
       send_request_and_expect_status(server, payload, http::status::not_implemented);
     };
 
+    "CONNECT method is not implemented and rejected with 501 not implemented"_test = [&] {
+      std::string payload = "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n";
+      send_request_and_expect_status(server, payload, http::status::not_implemented);
+    };
+
     "method that is not a valid token is rejected with 400 bad request"_test = [&] {
       std::string payload = "G(T / HTTP/1.1\r\nHost: Hello\r\n\r\n";
       send_request_and_expect_status(server, payload, http::status::bad_request);

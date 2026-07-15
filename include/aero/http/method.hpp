@@ -24,7 +24,6 @@ namespace aero::http {
     PUT,
     PATCH,
     DELETE,
-    CONNECT,
     TRACE,
     HEAD,
     OPTIONS,
@@ -38,7 +37,6 @@ namespace aero::http {
       {"PUT", method::PUT},
       {"PATCH", method::PATCH},
       {"DELETE", method::DELETE},
-      {"CONNECT", method::CONNECT},
       {"TRACE", method::TRACE},
       {"HEAD", method::HEAD},
       {"OPTIONS", method::OPTIONS},
@@ -72,8 +70,6 @@ namespace aero::http {
       return "PATCH";
     case http::method::DELETE:
       return "DELETE";
-    case http::method::CONNECT:
-      return "CONNECT";
     case http::method::TRACE:
       return "TRACE";
     case http::method::HEAD:
@@ -90,7 +86,6 @@ namespace aero::http {
     http::method::PUT,
     http::method::PATCH,
     http::method::DELETE,
-    http::method::CONNECT,
     http::method::TRACE,
     http::method::HEAD,
     http::method::OPTIONS,
