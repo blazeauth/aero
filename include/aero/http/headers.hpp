@@ -269,9 +269,9 @@ namespace aero::http {
       return result;
     }
 
-    void replace(std::string name, std::string value) {
+    iterator set(std::string name, std::string value) & {
       erase(name);
-      add(std::move(name), std::move(value));
+      return add(std::move(name), std::move(value));
     }
 
     iterator add(std::string name, std::string value) & {
@@ -343,6 +343,7 @@ namespace aero::http {
     std::optional<std::string_view> first_value(std::string_view name) const&& = delete;
     bool contains_token(std::string_view name, std::string_view value) const&& = delete;
     iterator add(std::string name, std::string value) && = delete;
+    iterator set(std::string name, std::string value) && = delete;
     template <std::integral T>
     std::expected<T, std::error_code> content_length() const&& = delete;
     std::expected<std::string_view, std::error_code> content_type() const&& = delete;

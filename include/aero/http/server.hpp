@@ -459,8 +459,8 @@ namespace aero::http {
         response.status_line.reason_phrase = std::string{http::to_string(response.status_line.status_code)};
       }
 
-      response.headers.replace("Content-Length", std::to_string(response.body.size()));
-      response.headers.replace("Connection", "close");
+      response.headers.set("Content-Length", std::to_string(response.body.size()));
+      response.headers.set("Connection", "close");
 
       co_await conn->co_send_response(response);
     }

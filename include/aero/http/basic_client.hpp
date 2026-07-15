@@ -915,7 +915,7 @@ namespace aero::http {
 
     static void apply_connection_policy(http::headers& headers, http::version version, bool reuse_connections) {
       if (!reuse_connections) {
-        headers.replace("Connection", "close");
+        headers.set("Connection", "close");
         return;
       }
 
@@ -926,7 +926,7 @@ namespace aero::http {
 
     static void apply_content_length_policy(http::request& request) {
       if (!request.body.empty() || request_method_expects_content_length(request.method)) {
-        request.headers.replace("Content-Length", std::to_string(request.body.size()));
+        request.headers.set("Content-Length", std::to_string(request.body.size()));
       }
     }
 
