@@ -455,6 +455,10 @@ namespace aero::http {
       http::context context{&request, &response};
       handler_it->second(context);
 
+      if (response.status_line.reason_phrase.empty()) {
+        response.status_line.reason_phrase = std::string{http::to_string(response.status_line.status_code)};
+      }
+
       response.headers.replace("Content-Length", std::to_string(response.body.size()));
       response.headers.replace("Connection", "close");
 
