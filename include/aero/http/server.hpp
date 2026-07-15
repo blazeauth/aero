@@ -356,22 +356,28 @@ namespace aero::http {
           co_return;
         }
 
-        std::string_view buffer_view{buffer};
+        std::string_view request_head{buffer.data(), headers_end};
 
         // asio::async_read_until guarantees that buffer contains
         // "\r\n\r\n", so we won't check for npos
-        std::size_t request_line_end = buffer_view.find("\r\n");
+        std::size_t request_line_end = request_head.find("\r\n");
 
         // RFC 9112, Section 3:
-        // A server that receives a request-target longer than any URI it wishes
-        // to parse MUST respond with a 414 (URI Too Long) status code.
+        // A server that receives a request-target longer than any URI it
+        // wishes to parse MUST respond with a 414 (URI Too Long) status code.
+        //
+        // The check is on the whole request-line, not just the target, since we
+        // can't tell where the target is before reading the entire line, so
+        // this is the only way to bound memory (nginx and Apache do the same).
+        // Method and version are tiny, so an oversized line pretty much always
+        // means an oversized target, which is why the answer is 414
         if (request_line_end > max_request_line_size) {
           co_await conn->co_send_close_response(http::status::uri_too_long);
           co_return;
         }
 
-        std::string_view request_line_str = buffer_view.substr(0, request_line_end);
-        std::string_view headers_str = buffer_view.substr(request_line_end + 2, headers_end - (request_line_end + 2));
+        std::string_view request_line_str = request_head.substr(0, request_line_end);
+        std::string_view headers_str = request_head.substr(request_line_end + 2);
 
         auto request_line = request_line::parse(request_line_str, longest_implemented_method_length);
         if (!request_line) {
