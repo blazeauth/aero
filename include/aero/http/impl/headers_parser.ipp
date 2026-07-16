@@ -44,15 +44,6 @@ namespace aero::http {
       return std::ranges::all_of(value, is_valid_byte, to_byte);
     }
 
-    [[nodiscard]] inline std::string_view trim_optional_whitespace(std::string_view text) {
-      std::size_t first_non_whitespace_pos = text.find_first_not_of(optional_whitespace_chars);
-      if (first_non_whitespace_pos == std::string_view::npos) {
-        return {};
-      }
-      std::size_t last_non_whitespace_pos = text.find_last_not_of(optional_whitespace_chars);
-      return text.substr(first_non_whitespace_pos, last_non_whitespace_pos - first_non_whitespace_pos + 1);
-    }
-
     [[nodiscard]] inline std::expected<field_view, std::error_code> parse_header_field(std::string_view last_header_name,
       std::string_view line) {
       bool is_obs_fold_continuation = optional_whitespace_chars.contains(line.front());
@@ -66,13 +57,13 @@ namespace aero::http {
       }
 
       std::string_view raw_name = line.substr(0, colon_position);
-      std::string_view name = trim_optional_whitespace(raw_name);
+      std::string_view name = detail::trim_optional_whitespace(raw_name);
 
       if (name.empty() || name.size() != raw_name.size() || !is_header_field_name_token(name)) {
         return std::unexpected(header_error::name_invalid);
       }
 
-      std::string_view value = trim_optional_whitespace(line.substr(colon_position + 1));
+      std::string_view value = detail::trim_optional_whitespace(line.substr(colon_position + 1));
       if (!is_valid_field_value(value)) {
         return std::unexpected(header_error::field_invalid);
       }
@@ -122,10 +113,6 @@ namespace aero::http {
     }
 
   } // namespace
-
-  inline std::string_view headers::trim_optional_whitespace(std::string_view text) {
-    return aero::http::trim_optional_whitespace(text);
-  }
 
   inline std::expected<headers, std::error_code> headers::parse(std::string_view buffer) {
     return parse_headers(buffer);
