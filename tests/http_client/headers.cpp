@@ -26,7 +26,7 @@ std::vector<std::string> values_of(const http::headers& fields, std::string_view
 
 bool contains_case_insensitive_value(const http::headers& fields, std::string_view name, std::string_view expected_value) {
   return std::ranges::any_of(fields.values(name),
-    [expected_value](std::string_view value) { return aero::detail::ascii_iequal(value, expected_value); });
+    [expected_value](std::string_view value) { return aero::detail::striequal(value, expected_value); });
 }
 
 int main() {

@@ -64,23 +64,6 @@ namespace aero::detail {
     return byte;
   }
 
-  [[nodiscard]] constexpr bool ascii_iequal(std::string_view left, std::string_view right) noexcept {
-    if (left.size() != right.size()) {
-      return false;
-    }
-
-    for (std::size_t i{}; i < left.size(); ++i) {
-      auto left_char = to_ascii_lower(static_cast<unsigned char>(left[i]));
-      auto right_char = to_ascii_lower(static_cast<unsigned char>(right[i]));
-
-      if (left_char != right_char) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
   [[nodiscard]] constexpr std::string to_lowercase(std::string_view str) {
     std::string result(str.size(), '\0');
     for (std::size_t i{}; i < str.size(); i++) {
