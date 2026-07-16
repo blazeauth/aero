@@ -35,6 +35,7 @@ Checks: >
     -misc-header-include-cycle,
     -modernize-use-trailing-return-type,
     -modernize-avoid-c-arrays,
+    -modernize-use-designated-initializers,
     -readability-convert-member-functions-to-static,
     -readability-function-cognitive-complexity,
     -readability-identifier-length,

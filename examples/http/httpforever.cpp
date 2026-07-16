@@ -13,8 +13,8 @@ int main() {
 
   std::println("Received response from example.com:");
   std::println("Response Headers:");
-  for (const auto& [name, value] : response->headers) {
-    std::println("{}: {}", name, value);
+  for (const http::header& header : response->headers) {
+    std::println("{}: {}", header.name, header.value);
   }
   std::println("Status: {} ({})", response->status_line.reason_phrase, response->status_code());
   if (response->content_type() == "text/html") {

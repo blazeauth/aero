@@ -15,31 +15,43 @@
 
 namespace aero::http {
 
+  namespace detail {
+
+    [[nodiscard]] inline std::string_view trim_optional_whitespace(std::string_view text) {
+      std::size_t first_non_whitespace = text.find_first_not_of(" \t");
+      if (first_non_whitespace == std::string_view::npos) {
+        return {};
+      }
+      std::size_t last_non_whitespace = text.find_last_not_of(" \t");
+      return text.substr(first_non_whitespace, last_non_whitespace - first_non_whitespace + 1);
+    }
+
+  } // namespace detail
+
+  struct header {
+    std::string name;
+    std::string value;
+
+    [[nodiscard]] bool contains_token(std::string_view token) const& {
+      if (token.empty()) {
+        return false;
+      }
+
+      for (auto&& split_value : value | std::views::split(',')) {
+        std::string_view candidate{split_value};
+
+        if (aero::detail::striequal(detail::trim_optional_whitespace(candidate), token)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+  };
+
   class headers {
    public:
-    struct field_type {
-      std::string name;
-      std::string value;
-
-      field_type() = default;
-
-      field_type(std::string field_name, std::string field_value): name(std::move(field_name)), value(std::move(field_value)) {}
-
-      template <std::size_t N1, std::size_t N2>
-      field_type(const char (&field_name)[N1], const char (&field_value)[N2])
-        : name(std::begin(field_name), std::begin(field_name) + (N1 - 1)),
-          value(std::begin(field_value), std::begin(field_value) + (N2 - 1)) {}
-
-      template <std::size_t N>
-      field_type(const char (&field_name)[N], std::string field_value)
-        : name(std::begin(field_name), std::begin(field_name) + (N - 1)), value(std::move(field_value)) {}
-
-      template <std::size_t N>
-      field_type(std::string field_name, const char (&field_value)[N])
-        : name(std::move(field_name)), value(std::begin(field_value), std::begin(field_value) + (N - 1)) {}
-    };
-
-    using value_type = field_type;
+    using value_type = http::header;
     using iterator = std::vector<value_type>::iterator;
     using const_iterator = std::vector<value_type>::const_iterator;
     using size_type = std::vector<value_type>::size_type;
@@ -70,14 +82,14 @@ namespace aero::http {
       }
 
       [[nodiscard]] reference operator*() const noexcept {
-        return owner_->items_[index_];
+        return owner_->headers_[index_];
       }
       [[nodiscard]] pointer operator->() const noexcept {
-        return std::addressof(owner_->items[index_]);
+        return std::addressof(owner_->headers_[index_]);
       }
 
       matching_iterator& operator++() noexcept {
-        if (index_ < owner_->items_.size()) {
+        if (index_ < owner_->headers_.size()) {
           ++index_;
           seek_forward();
         }
@@ -91,14 +103,14 @@ namespace aero::http {
       }
 
       [[nodiscard]] friend bool operator==(const matching_iterator& left, const matching_iterator& right) noexcept {
-        return left.owner_ == right.owner_ && left.index_ == right.index_ && aero::detail::ascii_iequal(left.key_, right.key_);
+        return left.owner_ == right.owner_ && left.index_ == right.index_ && aero::detail::striequal(left.key_, right.key_);
       }
 
      private:
       void seek_forward() noexcept {
-        while (index_ < owner_->items_.size()) {
-          const auto& current = owner_->items_[index_].name;
-          if (aero::detail::ascii_iequal(current, key_)) {
+        while (index_ < owner_->headers_.size()) {
+          const auto& current = owner_->headers_[index_].name;
+          if (aero::detail::striequal(current, key_)) {
             return;
           }
           ++index_;
@@ -115,92 +127,94 @@ namespace aero::http {
     using const_range_iterator = matching_iterator<true>;
 
     headers() = default;
-    headers(std::initializer_list<value_type> fields): items_(fields) {}
+    headers(std::initializer_list<http::header> fields): headers_(fields) {}
 
     static std::expected<headers, std::error_code> parse(std::string_view buffer);
     static std::expected<headers, std::error_code> parse(std::span<const std::byte> buffer);
 
     [[nodiscard]] bool empty() const& noexcept {
-      return items_.empty();
+      return headers_.empty();
     }
     [[nodiscard]] size_type size() const& noexcept {
-      return items_.size();
+      return headers_.size();
     }
     [[nodiscard]] iterator begin() & noexcept {
-      return items_.begin();
+      return headers_.begin();
     }
     [[nodiscard]] iterator end() & noexcept {
-      return items_.end();
+      return headers_.end();
     }
     [[nodiscard]] const_iterator begin() const& noexcept {
-      return items_.begin();
+      return headers_.begin();
     }
     [[nodiscard]] const_iterator end() const& noexcept {
-      return items_.end();
+      return headers_.end();
     }
     [[nodiscard]] const_iterator cbegin() const& noexcept {
-      return items_.cbegin();
+      return headers_.cbegin();
     }
     [[nodiscard]] const_iterator cend() const& noexcept {
-      return items_.cend();
+      return headers_.cend();
     }
-    [[nodiscard]] value_type& front() & noexcept {
-      return items_.front();
+    [[nodiscard]] http::header& front() & noexcept {
+      return headers_.front();
     }
-    [[nodiscard]] const value_type& front() const& noexcept {
-      return items_.front();
+    [[nodiscard]] const http::header& front() const& noexcept {
+      return headers_.front();
     }
-    [[nodiscard]] value_type& back() & noexcept {
-      return items_.back();
+    [[nodiscard]] http::header& back() & noexcept {
+      return headers_.back();
     }
-    [[nodiscard]] const value_type& back() const& noexcept {
-      return items_.back();
+    [[nodiscard]] const http::header& back() const& noexcept {
+      return headers_.back();
     }
 
     void clear() noexcept {
-      items_.clear();
+      headers_.clear();
     }
 
     [[nodiscard]] iterator find(std::string_view name) & noexcept {
-      return std::ranges::find_if(items_,
-        [&](const value_type& field) noexcept { return aero::detail::ascii_iequal(field.name, name); });
+      return std::ranges::find_if(headers_,
+        [&](const http::header& field) noexcept { return aero::detail::striequal(field.name, name); });
     }
 
     [[nodiscard]] const_iterator find(std::string_view name) const& noexcept {
-      return std::ranges::find_if(items_,
-        [&](const value_type& field) noexcept { return aero::detail::ascii_iequal(field.name, name); });
+      return std::ranges::find_if(headers_,
+        [&](const http::header& field) noexcept { return aero::detail::striequal(field.name, name); });
     }
 
     [[nodiscard]] auto fields(std::string_view name) & {
       auto key_copy = std::string{name};
       auto first = range_iterator{this, 0, key_copy};
-      auto last = range_iterator{this, items_.size(), std::move(key_copy)};
+      auto last = range_iterator{this, headers_.size(), std::move(key_copy)};
       return std::ranges::subrange{first, last};
     }
 
     [[nodiscard]] auto fields(std::string_view name) const& {
       auto key_copy = std::string{name};
       auto first = const_range_iterator{this, 0, key_copy};
-      auto last = const_range_iterator{this, items_.size(), std::move(key_copy)};
+      auto last = const_range_iterator{this, headers_.size(), std::move(key_copy)};
       return std::ranges::subrange{first, last};
     }
 
     [[nodiscard]] auto names() const& {
-      return items_ | std::views::transform([](const field_type& field) noexcept -> std::string_view { return field.name; });
+      return headers_ |
+             std::views::transform([](const http::header& field) noexcept -> std::string_view { return field.name; });
     }
 
     [[nodiscard]] auto values() const& {
-      return items_ | std::views::transform([](const field_type& field) noexcept -> std::string_view { return field.value; });
+      return headers_ |
+             std::views::transform([](const http::header& field) noexcept -> std::string_view { return field.value; });
     }
 
     [[nodiscard]] auto values(std::string_view name) const& {
       return fields(name) |
-             std::views::transform([](const field_type& field) noexcept -> std::string_view { return field.value; });
+             std::views::transform([](const http::header& field) noexcept -> std::string_view { return field.value; });
     }
 
     [[nodiscard]] size_t occurrences(std::string_view name) const& noexcept {
-      return std::ranges::count_if(items_,
-        [name](const field_type& field) noexcept { return aero::detail::ascii_iequal(field.name, name); });
+      return std::ranges::count_if(headers_,
+        [name](const http::header& field) noexcept { return aero::detail::striequal(field.name, name); });
     }
 
     [[nodiscard]] std::optional<std::string_view> first_value(std::string_view name) const& noexcept {
@@ -216,21 +230,7 @@ namespace aero::http {
     }
 
     [[nodiscard]] bool contains_token(std::string_view name, std::string_view token) const& {
-      if (token.empty()) {
-        return false;
-      }
-
-      for (std::string_view value : values(name)) {
-        for (auto&& split_value : value | std::views::split(',')) {
-          std::string_view candidate{split_value};
-
-          if (aero::detail::ascii_iequal(trim_optional_whitespace(candidate), token)) {
-            return true;
-          }
-        }
-      }
-
-      return false;
+      return std::ranges::any_of(fields(name), [token](const http::header& field) { return field.contains_token(token); });
     }
 
     [[nodiscard]] std::string serialize() const {
@@ -245,14 +245,14 @@ namespace aero::http {
       constexpr size_t crlf_length = crlf.length();
 
       std::size_t expected_length{};
-      for (const auto& [name, value] : items_) {
+      for (const auto& [name, value] : headers_) {
         expected_length += name.length() + value.length() + value_separator_length + crlf_length;
       }
 
       std::string result;
       result.reserve(expected_length + crlf_length);
 
-      for (const auto& [name, value] : items_) {
+      for (const auto& [name, value] : headers_) {
         // Skip empty field names. Empty field values are still valid under RFC9112
         if (name.empty()) {
           continue;
@@ -275,31 +275,31 @@ namespace aero::http {
     }
 
     iterator add(std::string name, std::string value) & {
-      items_.emplace_back(std::move(name), std::move(value));
-      return std::prev(items_.end());
+      headers_.emplace_back(std::move(name), std::move(value));
+      return std::prev(headers_.end());
     }
 
     void append(const headers& other) {
       if (std::addressof(other) == this || other.empty()) {
         return;
       }
-      items_.reserve(items_.size() + other.items_.size());
-      std::ranges::copy(other.items_, std::back_inserter(items_));
+      headers_.reserve(headers_.size() + other.headers_.size());
+      std::ranges::copy(other.headers_, std::back_inserter(headers_));
     }
 
     void append(headers&& other) { // NOLINT(*-rvalue-reference-param-not-moved)
       if (std::addressof(other) == this || other.empty()) {
         return;
       }
-      items_.reserve(items_.size() + other.items_.size());
-      std::ranges::move(other.items_, std::back_inserter(items_));
+      headers_.reserve(headers_.size() + other.headers_.size());
+      std::ranges::move(other.headers_, std::back_inserter(headers_));
       other.clear();
     }
 
     void erase(std::string_view name) {
-      auto to_remove = std::ranges::remove_if(items_,
-        [&](const value_type& field) noexcept { return aero::detail::ascii_iequal(field.name, name); });
-      items_.erase(to_remove.begin(), to_remove.end());
+      auto to_remove = std::ranges::remove_if(headers_,
+        [&](const http::header& field) noexcept { return aero::detail::striequal(field.name, name); });
+      headers_.erase(to_remove.begin(), to_remove.end());
     }
 
     template <std::integral T = std::uint32_t>
@@ -329,10 +329,10 @@ namespace aero::http {
     const_iterator end() const&& = delete;
     const_iterator cbegin() const&& = delete;
     const_iterator cend() const&& = delete;
-    value_type& front() && = delete;
-    const value_type& front() const&& = delete;
-    value_type& back() && = delete;
-    const value_type& back() const&& = delete;
+    http::header& front() && = delete;
+    const http::header& front() const&& = delete;
+    http::header& back() && = delete;
+    const http::header& back() const&& = delete;
     iterator find(std::string_view name) && = delete;
     const_iterator find(std::string_view name) const&& = delete;
     auto fields(std::string_view name) && = delete;
@@ -350,9 +350,7 @@ namespace aero::http {
     // NOLINTEND(*-use-nodiscard)
 
    private:
-    [[nodiscard]] static std::string_view trim_optional_whitespace(std::string_view text);
-
-    std::vector<value_type> items_;
+    std::vector<http::header> headers_;
   };
 
 } // namespace aero::http

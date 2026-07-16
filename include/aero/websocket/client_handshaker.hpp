@@ -177,7 +177,7 @@ namespace aero::websocket {
 
     [[nodiscard]] bool is_reserved_header(std::string_view name) const noexcept {
       return std::ranges::any_of(protocol_reserved_headers,
-        [name](std::string_view header) { return aero::detail::ascii_iequal(name, header); });
+        [name](std::string_view header) { return aero::detail::striequal(name, header); });
     }
 
     [[nodiscard]] std::string build_request_target(const aero::websocket::uri& uri) const {
