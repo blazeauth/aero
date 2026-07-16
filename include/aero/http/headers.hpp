@@ -15,15 +15,38 @@
 
 namespace aero::http {
 
+  namespace detail {
 
+    [[nodiscard]] inline std::string_view trim_optional_whitespace(std::string_view text) {
+      std::size_t first_non_whitespace = text.find_first_not_of(" \t");
+      if (first_non_whitespace == std::string_view::npos) {
+        return {};
+      }
+      std::size_t last_non_whitespace = text.find_last_not_of(" \t");
+      return text.substr(first_non_whitespace, last_non_whitespace - first_non_whitespace + 1);
+    }
 
+  } // namespace detail
 
   struct header {
     std::string name;
     std::string value;
 
+    [[nodiscard]] bool contains_token(std::string_view token) const& {
+      if (token.empty()) {
+        return false;
+      }
 
+      for (auto&& split_value : value | std::views::split(',')) {
+        std::string_view candidate{split_value};
 
+        if (aero::detail::striequal(detail::trim_optional_whitespace(candidate), token)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
   };
 
   class headers {
