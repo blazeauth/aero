@@ -243,6 +243,9 @@ namespace aero::http {
       constexpr std::size_t value_separator_length = header_name_value_separator.length();
       constexpr std::size_t crlf_length = crlf.length();
 
+      // A single range loop on the headers to reserve space, and a second one
+      // for appending, will be much faster than potentially frequent
+      // reallocations within a single append-loop.
       std::size_t expected_length{};
       for (const auto& [name, value] : headers_) {
         expected_length += name.length() + value.length() + value_separator_length + crlf_length;
