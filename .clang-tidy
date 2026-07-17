@@ -1,3 +1,5 @@
+HeaderFileExtensions: ['', 'h', 'hh', 'hpp', 'hxx', 'ipp']
+ImplementationFileExtensions: ['c', 'cc', 'cpp', 'cxx']
 Checks: >
     modernize-*,
     bugprone-*,

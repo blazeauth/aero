@@ -6,7 +6,7 @@
 
 namespace aero::http {
 
-  namespace {
+  namespace detail {
 
     using http::header_error;
 
@@ -112,14 +112,14 @@ namespace aero::http {
       return headers;
     }
 
-  } // namespace
+  } // namespace detail
 
   inline std::expected<headers, std::error_code> headers::parse(std::string_view buffer) {
-    return parse_headers(buffer);
+    return detail::parse_headers(buffer);
   }
 
   inline std::expected<headers, std::error_code> headers::parse(std::span<const std::byte> buffer) {
-    return parse_headers(std::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()});
+    return detail::parse_headers(std::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()});
   }
 
 } // namespace aero::http
