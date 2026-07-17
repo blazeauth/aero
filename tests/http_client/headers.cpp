@@ -4,29 +4,17 @@
 #include <ut/ut.hpp>
 #include <vector>
 
-#include "aero/detail/string.hpp"
-#include "aero/http/detail/common.hpp"
 #include "aero/http/error.hpp"
 #include "aero/http/headers.hpp"
 
 using namespace ut;
+using namespace std::string_view_literals;
 
 namespace http = aero::http;
 using http::header_error;
-using http::detail::crlf;
-using http::detail::double_crlf;
 
-std::vector<std::string> values_of(const http::headers& fields, std::string_view name) {
-  std::vector<std::string> values{};
-  for (std::string_view value : fields.values(name)) {
-    values.emplace_back(value);
-  }
-  return values;
-}
-
-bool contains_case_insensitive_value(const http::headers& fields, std::string_view name, std::string_view expected_value) {
-  return std::ranges::any_of(fields.values(name),
-    [expected_value](std::string_view value) { return aero::detail::striequal(value, expected_value); });
+bool contains_value(const http::headers& fields, std::string_view name, std::string_view expected_value) {
+  return std::ranges::contains(fields.values(name), expected_value);
 }
 
 int main() {
@@ -35,7 +23,7 @@ int main() {
       http::headers fields{};
 
       expect(fields.empty());
-      expect(fields.empty());
+      expect(fields.size() == 0);
       expect(fields.begin() == fields.end());
     };
 
@@ -56,18 +44,6 @@ int main() {
       expect(*fields.first_value("B") == "2");
       expect(*fields.first_value("C") == "3");
       expect(*fields.first_value("D") == "4");
-    };
-
-    "case-insensitive value match returns true"_test = [] {
-      http::headers fields{
-        {"Connection", "UpGrAde"},
-        {"CoNteNt-TYpe", "application/JSON"},
-        {"Sec-Websocket-Accept", "aaabbb"},
-      };
-
-      expect(contains_case_insensitive_value(fields, "Connection", "upgrade"));
-      expect(contains_case_insensitive_value(fields, "content-type", "application/json"));
-      expect(contains_case_insensitive_value(fields, "Sec-Websocket-Accept", "aaabbb"));
     };
 
     "adding a field preserves insertion order for iteration"_test = [] {
@@ -108,6 +84,96 @@ int main() {
       expect(it->value == "123");
     };
 
+    "contains_token matches a single token case-insensitively"_test = [] {
+      http::headers fields{{"Connection", "UpGrAde"}};
+
+      expect(fields.contains_token("Connection", "upgrade"));
+      expect(fields.contains_token("CONNECTION", "UPGRADE"));
+      expect(not fields.contains_token("Connection", "close"));
+    };
+
+    "contains_token finds tokens anywhere in a comma-separated list"_test = [] {
+      http::headers fields{
+        {"Accept-Encoding", "gzip, deflate, br, zstd"},
+      };
+
+      expect(fields.contains_token("Accept-Encoding", "gzip"));
+      expect(fields.contains_token("Accept-Encoding", "deflate"));
+      expect(fields.contains_token("Accept-Encoding", "zstd"));
+      expect(not fields.contains_token("Accept-Encoding", "identity"));
+    };
+
+    "contains_token ignores optional whitespace around tokens"_test = [] {
+      http::headers fields{{"Connection", "  keep-alive  ,\tupgrade\t"}};
+
+      expect(fields.contains_token("Connection", "keep-alive"));
+      expect(fields.contains_token("Connection", "upgrade"));
+    };
+
+    "contains_token does not match a substring of a token"_test = [] {
+      http::headers fields{
+        {"Accept-Encoding", "gzipped, deflated"},
+      };
+
+      expect(not fields.contains_token("Accept-Encoding", "gzip"));
+      expect(not fields.contains_token("Accept-Encoding", "deflate"));
+      expect(fields.contains_token("Accept-Encoding", "gzipped"));
+    };
+
+    "contains_token returns false for an empty token"_test = [] {
+      http::headers fields{
+        {"Connection", "keep-alive"},
+      };
+
+      expect(not fields.contains_token("Connection", ""));
+    };
+
+    "contains_token returns false when the field is missing"_test = [] {
+      http::headers fields{
+        {"Connection", "keep-alive"},
+      };
+
+      expect(not fields.contains_token("Upgrade", "websocket"));
+    };
+
+    "contains_token searches every occurrence of a repeated field"_test = [] {
+      http::headers fields{};
+
+      fields.add("Connection", "keep-alive");
+      fields.add("X", "x");
+      fields.add("connection", "upgrade");
+
+      expect(fields.contains_token("Connection", "keep-alive"));
+      expect(fields.contains_token("Connection", "upgrade"));
+      expect(not fields.contains_token("Connection", "close"));
+    };
+
+    "contains_token skips empty list elements"_test = [] {
+      http::headers fields{
+        {"Accept-Encoding", "gzip,,br,"},
+      };
+
+      expect(fields.contains_token("Accept-Encoding", "gzip"));
+      expect(fields.contains_token("Accept-Encoding", "br"));
+    };
+
+    "contains_token returns false on an empty field value"_test = [] {
+      http::headers fields{
+        {"Connection", ""},
+      };
+
+      expect(not fields.contains_token("Connection", "keep-alive"));
+    };
+
+    "header contains_token matches tokens in its own value"_test = [] {
+      const http::header field{"Accept-Encoding", "gzip, br"};
+
+      expect(field.contains_token("gzip"));
+      expect(field.contains_token("BR"));
+      expect(not field.contains_token("zstd"));
+      expect(not field.contains_token(""));
+    };
+
     "fields iterates all occurrences in original order"_test = [] {
       http::headers fields{};
 
@@ -117,7 +183,7 @@ int main() {
       fields.add("Y", "y");
       fields.add("SET-COOKIE", "c=3");
 
-      const auto cookies = fields.values("set-cookie") | std::ranges::to<std::vector<std::string>>();
+      auto cookies = fields.values("set-cookie") | std::ranges::to<std::vector<std::string>>();
 
       expect[cookies.size() == 3U];
       expect(cookies[0] == "a=1");
@@ -132,8 +198,10 @@ int main() {
       fields.add("Set-Cookie", "b=2");
       fields.add("X", "x");
 
+      auto cookies = fields.values("SET-COOKIE") | std::ranges::to<std::vector<std::string>>();
+
       expect[fields.contains("set-cookie")];
-      expect[values_of(fields, "SET-COOKIE").size() == 2U];
+      expect[cookies.size() == 2U];
 
       fields.erase("set-cookie");
 
@@ -152,8 +220,8 @@ int main() {
 
       auto range = fields.fields("set-cookie");
 
-      auto collected_names = std::vector<std::string>{};
-      auto collected_values = std::vector<std::string>{};
+      std::vector<std::string> collected_names;
+      std::vector<std::string> collected_values;
 
       for (auto&& [name, value] : range) {
         collected_names.emplace_back(name);
@@ -180,7 +248,7 @@ int main() {
       const auto& fields = mutable_fields;
       auto range = fields.fields("SET-COOKIE");
 
-      std::vector<std::string> collected_values{};
+      std::vector<std::string> collected_values;
       for (auto&& field : range) {
         collected_values.emplace_back(field.value);
       }
@@ -230,19 +298,6 @@ int main() {
       expect(values[1] == "b=2");
     };
 
-    "value views return string views for values"_test = [] {
-      http::headers fields{};
-      fields.add("Set-Cookie", "a=1");
-      fields.add("X", "x");
-      fields.add("set-cookie", "b=2");
-
-      auto values = fields.values("SET-COOKIE") | std::ranges::to<std::vector<std::string_view>>();
-
-      expect[values.size() == 2U];
-      expect(values[0] == "a=1");
-      expect(values[1] == "b=2");
-    };
-
     "value views on const are compatible with ranges algorithms"_test = [] {
       http::headers mutable_fields{};
       mutable_fields.add("Set-Cookie", "a=1");
@@ -273,9 +328,9 @@ int main() {
         auto fields_str = growing_fields.serialize();
 
         std::string_view clean_str = fields_str;
-        clean_str.remove_suffix(double_crlf.size());
+        clean_str.remove_suffix("\r\n\r\n"sv.size());
 
-        auto split_headers = std::views::split(clean_str, crlf);
+        auto split_headers = std::views::split(clean_str, "\r\n"sv);
         auto str_headers_count = std::ranges::distance(split_headers);
 
         expect(growing_fields.size() == static_cast<http::headers::size_type>(str_headers_count));
@@ -294,7 +349,7 @@ int main() {
 
       for (const auto& [header_name, header_value] : fields) {
         growing_fields.add(header_name, header_value);
-        expect(growing_fields.serialize().ends_with(double_crlf));
+        expect(growing_fields.serialize().ends_with("\r\n\r\n"));
       }
     };
 
@@ -441,11 +496,11 @@ int main() {
 
       fields.append(other_fields);
 
-      expect(contains_case_insensitive_value(fields, "Host", "example.com"));
-      expect(contains_case_insensitive_value(fields, "Hello-World", "aero"));
+      expect(contains_value(fields, "Host", "example.com"));
+      expect(contains_value(fields, "Hello-World", "aero"));
       expect(fields.size() == 2U);
 
-      expect(contains_case_insensitive_value(other_fields, "Hello-World", "aero"));
+      expect(contains_value(other_fields, "Hello-World", "aero"));
     };
 
     "append moves fields and clears source"_test = [] {
@@ -459,8 +514,8 @@ int main() {
 
       fields.append(std::move(other_fields));
 
-      expect(contains_case_insensitive_value(fields, "Host", "example.com"));
-      expect(contains_case_insensitive_value(fields, "Hello-World", "aero"));
+      expect(contains_value(fields, "Host", "example.com"));
+      expect(contains_value(fields, "Hello-World", "aero"));
       expect(fields.size() == 2U);
 
       expect(other_fields.empty());
@@ -477,7 +532,7 @@ int main() {
       auto fields_size_before_append = fields.size();
       fields.append(other_fields);
 
-      expect(contains_case_insensitive_value(fields, "Host", "example.com"));
+      expect(contains_value(fields, "Host", "example.com"));
       expect(fields_size_before_append == fields.size());
     };
 
@@ -491,7 +546,7 @@ int main() {
       auto fields_size_before_append = fields.size();
       other_fields.append(fields);
 
-      expect(contains_case_insensitive_value(other_fields, "Host", "example.com"));
+      expect(contains_value(other_fields, "Host", "example.com"));
       expect(other_fields.size() == fields_size_before_append);
     };
 
@@ -506,8 +561,8 @@ int main() {
       auto other_fields_size_before_append = other_fields.size();
       fields.append(std::move(other_fields));
 
-      expect(contains_case_insensitive_value(fields, "Host", "example.com"));
-      expect(contains_case_insensitive_value(fields, "Hello-World", "aero"));
+      expect(contains_value(fields, "Host", "example.com"));
+      expect(contains_value(fields, "Hello-World", "aero"));
       expect(fields.size() == other_fields_size_before_append);
 
       expect(other_fields.empty());
@@ -534,8 +589,8 @@ int main() {
 
       fields.append(other_fields);
 
-      expect(contains_case_insensitive_value(fields, "Set-Cookie", "a=1"));
-      expect(contains_case_insensitive_value(fields, "Set-Cookie", "b=2"));
+      expect(contains_value(fields, "Set-Cookie", "a=1"));
+      expect(contains_value(fields, "Set-Cookie", "b=2"));
       expect(fields.size() == 2U);
 
       auto cookie_values = fields.values("Set-Cookie") | std::ranges::to<std::vector<std::string>>();
@@ -544,7 +599,7 @@ int main() {
       expect(cookie_values[0] == "a=1");
       expect(cookie_values[1] == "b=2");
 
-      expect(contains_case_insensitive_value(other_fields, "Set-Cookie", "b=2"));
+      expect(contains_value(other_fields, "Set-Cookie", "b=2"));
       expect(other_fields.size() == 1U);
     };
 
@@ -559,8 +614,8 @@ int main() {
 
       fields.append(std::move(other_fields));
 
-      expect(contains_case_insensitive_value(fields, "Set-Cookie", "a=1"));
-      expect(contains_case_insensitive_value(fields, "Set-Cookie", "b=2"));
+      expect(contains_value(fields, "Set-Cookie", "a=1"));
+      expect(contains_value(fields, "Set-Cookie", "b=2"));
       expect(fields.size() == 2U);
 
       auto cookie_values = fields.values("Set-Cookie") | std::ranges::to<std::vector<std::string>>();
@@ -583,8 +638,8 @@ int main() {
 
       fields.append(other_fields);
 
-      expect(contains_case_insensitive_value(fields, "Host", "example.com"));
-      expect(contains_case_insensitive_value(fields, "HOST", "example.org"));
+      expect(contains_value(fields, "Host", "example.com"));
+      expect(contains_value(fields, "HOST", "example.org"));
 
       auto host_values = fields.values("HOST") | std::ranges::to<std::vector<std::string>>();
 
@@ -606,8 +661,8 @@ int main() {
 
       expect[fields.first_value("X-Test").has_value()];
       expect(*fields.first_value("X-Test") == "first");
-      expect(contains_case_insensitive_value(fields, "X-Test", "first"));
-      expect(contains_case_insensitive_value(fields, "X-Test", "second"));
+      expect(contains_value(fields, "X-Test", "first"));
+      expect(contains_value(fields, "X-Test", "second"));
     };
 
     "append preserves insertion order when appending"_test = [] {
@@ -649,14 +704,14 @@ int main() {
       fields.append(other_fields);
 
       expect(fields.size() == 1001U);
-      expect(contains_case_insensitive_value(fields, "Host", "example.com"));
-      expect(contains_case_insensitive_value(fields, "X-Header-0", "Value-0"));
-      expect(contains_case_insensitive_value(fields, "X-Header-999", "Value-999"));
+      expect(contains_value(fields, "Host", "example.com"));
+      expect(contains_value(fields, "X-Header-0", "Value-0"));
+      expect(contains_value(fields, "X-Header-999", "Value-999"));
 
       expect(not other_fields.empty());
       expect(other_fields.size() == 1000U);
-      expect(contains_case_insensitive_value(other_fields, "X-Header-0", "Value-0"));
-      expect(contains_case_insensitive_value(other_fields, "X-Header-999", "Value-999"));
+      expect(contains_value(other_fields, "X-Header-0", "Value-0"));
+      expect(contains_value(other_fields, "X-Header-999", "Value-999"));
     };
 
     "append moves large number of fields and clears source"_test = [] {
@@ -672,9 +727,9 @@ int main() {
       fields.append(std::move(other_fields));
 
       expect(fields.size() == 1001U);
-      expect(contains_case_insensitive_value(fields, "Host", "example.com"));
-      expect(contains_case_insensitive_value(fields, "X-Header-0", "Value-0"));
-      expect(contains_case_insensitive_value(fields, "X-Header-999", "Value-999"));
+      expect(contains_value(fields, "Host", "example.com"));
+      expect(contains_value(fields, "X-Header-0", "Value-0"));
+      expect(contains_value(fields, "X-Header-999", "Value-999"));
 
       expect(other_fields.empty());
     };
@@ -689,8 +744,8 @@ int main() {
       fields.append(fields);
 
       expect(fields.size() == fields_size_before_append);
-      expect(contains_case_insensitive_value(fields, "Host", "example.com"));
-      expect(contains_case_insensitive_value(fields, "Hello-World", "aero"));
+      expect(contains_value(fields, "Host", "example.com"));
+      expect(contains_value(fields, "Hello-World", "aero"));
     };
 
     "content-length returns parsed integer"_test = [] {

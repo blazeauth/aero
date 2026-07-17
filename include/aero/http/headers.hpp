@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "aero/detail/attributes.hpp"
 #include "aero/detail/string.hpp"
 #include "aero/http/detail/common.hpp"
 #include "aero/http/error.hpp"
@@ -76,8 +77,8 @@ namespace aero::http {
       matching_iterator& operator=(matching_iterator&&) = default;
       ~matching_iterator() = default;
 
-      matching_iterator(owner_type owner, size_t start_index, std::string key)
-        : owner_(owner), index_(start_index), key_(std::move(key)) {
+      matching_iterator(owner_type owner, std::size_t start_index, std::string_view key)
+        : owner_(owner), index_(start_index), key_(key) {
         seek_forward();
       }
 
@@ -118,8 +119,8 @@ namespace aero::http {
       }
 
       owner_type owner_{};
-      size_t index_{0};
-      std::string key_;
+      std::size_t index_{0};
+      std::string_view key_;
     };
 
    public:
@@ -183,17 +184,15 @@ namespace aero::http {
         [&](const http::header& field) noexcept { return aero::detail::striequal(field.name, name); });
     }
 
-    [[nodiscard]] auto fields(std::string_view name) & {
-      auto key_copy = std::string{name};
-      auto first = range_iterator{this, 0, key_copy};
-      auto last = range_iterator{this, headers_.size(), std::move(key_copy)};
+    [[nodiscard]] auto fields(std::string_view name AERO_LIFETIMEBOUND) & {
+      auto first = range_iterator{this, 0, name};
+      auto last = range_iterator{this, headers_.size(), name};
       return std::ranges::subrange{first, last};
     }
 
-    [[nodiscard]] auto fields(std::string_view name) const& {
-      auto key_copy = std::string{name};
-      auto first = const_range_iterator{this, 0, key_copy};
-      auto last = const_range_iterator{this, headers_.size(), std::move(key_copy)};
+    [[nodiscard]] auto fields(std::string_view name AERO_LIFETIMEBOUND) const& {
+      auto first = const_range_iterator{this, 0, name};
+      auto last = const_range_iterator{this, headers_.size(), name};
       return std::ranges::subrange{first, last};
     }
 
@@ -207,12 +206,12 @@ namespace aero::http {
              std::views::transform([](const http::header& field) noexcept -> std::string_view { return field.value; });
     }
 
-    [[nodiscard]] auto values(std::string_view name) const& {
+    [[nodiscard]] auto values(std::string_view name AERO_LIFETIMEBOUND) const& {
       return fields(name) |
              std::views::transform([](const http::header& field) noexcept -> std::string_view { return field.value; });
     }
 
-    [[nodiscard]] size_t occurrences(std::string_view name) const& noexcept {
+    [[nodiscard]] std::size_t occurrences(std::string_view name) const& noexcept {
       return std::ranges::count_if(headers_,
         [name](const http::header& field) noexcept { return aero::detail::striequal(field.name, name); });
     }
@@ -237,13 +236,16 @@ namespace aero::http {
       using http::detail::crlf;
       using http::detail::header_name_value_separator;
 
-      if (empty()) {
+      if (headers_.empty()) {
         return {};
       }
 
-      constexpr size_t value_separator_length = header_name_value_separator.length();
-      constexpr size_t crlf_length = crlf.length();
+      constexpr std::size_t value_separator_length = header_name_value_separator.length();
+      constexpr std::size_t crlf_length = crlf.length();
 
+      // A single range loop on the headers to reserve space, and a second one
+      // for appending, will be much faster than potentially frequent
+      // reallocations within a single append-loop.
       std::size_t expected_length{};
       for (const auto& [name, value] : headers_) {
         expected_length += name.length() + value.length() + value_separator_length + crlf_length;
