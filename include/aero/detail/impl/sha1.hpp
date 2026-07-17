@@ -12,8 +12,6 @@
 
 namespace aero::detail {
 
-  // NOLINTBEGIN(*-magic-numbers, *-signed-bitwise)
-
   class sha1 {
    public:
     constexpr static std::size_t digest_size = 20;
@@ -36,16 +34,16 @@ namespace aero::detail {
 
     sha1& update(std::span<const std::byte> data) {
       size_t i = 0;
-      size_t j = (count_[0] >> 3) & 63;
+      size_t j = (count_[0] >> 3U) & 63U;
       auto len = data.size();
       const auto* data_ptr = data.data();
       auto* buffer_ptr = buffer_.data();
 
-      count_[0] += static_cast<uint32_t>(len << 3);
-      if (count_[0] < (len << 3)) {
+      count_[0] += static_cast<uint32_t>(len << 3U);
+      if (count_[0] < (len << 3U)) {
         count_[1]++;
       }
-      count_[1] += (len >> 29);
+      count_[1] += (len >> 29U);
 
       if ((j + len) > 63) {
         std::memcpy(&buffer_ptr[j], data_ptr, (i = 64 - j));
@@ -73,24 +71,24 @@ namespace aero::detail {
 
       for (std::size_t byte_index{}; byte_index < finalcount.size(); ++byte_index) {
         const auto count_word_index = (byte_index >= 4) ? 0 : 1;
-        const auto word_byte_offset = 3 - (byte_index & 3);
+        const auto word_byte_offset = 3 - (byte_index & 3U);
         const auto shift_bits = word_byte_offset * 8;
 
         const auto selected_count_word = count_[count_word_index];
-        const auto extracted_byte = (selected_count_word >> shift_bits) & 0xFF;
+        const auto extracted_byte = (selected_count_word >> shift_bits) & 0xFFU;
 
         finalcount[byte_index] = static_cast<std::byte>(extracted_byte);
       }
 
       update({reinterpret_cast<const std::byte*>("\200"), 1});
-      while ((count_[0] & 504) != 448) {
+      while ((count_[0] & 504U) != 448) {
         update({reinterpret_cast<const std::byte*>("\0"), 1});
       }
 
       update({finalcount.data(), 8});
 
       for (std::size_t i{}; i < digest.size(); i++) {
-        digest[i] = static_cast<std::byte>((state_[i >> 2] >> ((3 - (i & 3)) * 8)) & 255);
+        digest[i] = static_cast<std::byte>((state_[i >> 2U] >> ((3 - (i & 3U)) * 8)) & 255U);
       }
     }
 
@@ -128,9 +126,9 @@ namespace aero::detail {
         const std::size_t byte_index = word_index * 4;
 
         const auto [first, second, third, fourth] = std::tuple{
-          std::to_integer<std::uint32_t>(data[byte_index]) << 24,
-          std::to_integer<std::uint32_t>(data[byte_index + 1]) << 16,
-          std::to_integer<std::uint32_t>(data[byte_index + 2]) << 8,
+          std::to_integer<std::uint32_t>(data[byte_index]) << 24U,
+          std::to_integer<std::uint32_t>(data[byte_index + 1]) << 16U,
+          std::to_integer<std::uint32_t>(data[byte_index + 2]) << 8U,
           std::to_integer<std::uint32_t>(data[byte_index + 3]),
         };
 
@@ -139,7 +137,7 @@ namespace aero::detail {
 
       for (std::size_t i{16}; i < w.size(); i++) {
         w[i] = w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16];
-        w[i] = (w[i] << 1) | (w[i] >> 31);
+        w[i] = (w[i] << 1U) | (w[i] >> 31U);
       }
 
       a = state_[0];
@@ -150,18 +148,18 @@ namespace aero::detail {
 
       for (std::size_t i{}; i < w.size(); i++) {
         if (i < digest_size) {
-          temp = ((a << 5) | (a >> 27)) + ((b & c) | (~b & d)) + e + w[i] + 0x5A827999;
+          temp = ((a << 5U) | (a >> 27U)) + ((b & c) | (~b & d)) + e + w[i] + 0x5A827999U;
         } else if (i < 40) {
-          temp = ((a << 5) | (a >> 27)) + (b ^ c ^ d) + e + w[i] + 0x6ED9EBA1;
+          temp = ((a << 5U) | (a >> 27U)) + (b ^ c ^ d) + e + w[i] + 0x6ED9EBA1U;
         } else if (i < 60) {
-          temp = ((a << 5) | (a >> 27)) + ((b & c) | (b & d) | (c & d)) + e + w[i] + 0x8F1BBCDC;
+          temp = ((a << 5U) | (a >> 27U)) + ((b & c) | (b & d) | (c & d)) + e + w[i] + 0x8F1BBCDCU;
         } else {
-          temp = ((a << 5) | (a >> 27)) + (b ^ c ^ d) + e + w[i] + 0xCA62C1D6;
+          temp = ((a << 5U) | (a >> 27U)) + (b ^ c ^ d) + e + w[i] + 0xCA62C1D6U;
         }
 
         e = d;
         d = c;
-        c = (b << 30) | (b >> 2);
+        c = (b << 30U) | (b >> 2U);
         b = a;
         a = temp;
       }
@@ -177,7 +175,5 @@ namespace aero::detail {
     std::array<uint32_t, 2> count_{};
     std::array<std::byte, 64> buffer_{};
   };
-
-  // NOLINTEND(*-magic-numbers, *-signed-bitwise)
 
 } // namespace aero::detail
