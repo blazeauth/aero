@@ -35,6 +35,12 @@ namespace aero::http {
     std::string_view reason_phrase;
     if (status_code_str_end != std::string_view::npos) {
       reason_phrase = remaining.substr(status_code_str_end + 1);
+
+      // For cases where the passed buffer ends with a double-CRLF, such as when
+      // the status line is followed by an empty header section
+      if (reason_phrase.ends_with("\r\n")) {
+        reason_phrase.remove_suffix(2);
+      }
     }
 
     auto status_code = aero::http::parse_status(status_code_str);
