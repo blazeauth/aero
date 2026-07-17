@@ -23,7 +23,7 @@ int main() {
       http::headers fields{};
 
       expect(fields.empty());
-      expect(fields.empty());
+      expect(fields.size() == 0);
       expect(fields.begin() == fields.end());
     };
 
