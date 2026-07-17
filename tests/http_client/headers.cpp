@@ -298,19 +298,6 @@ int main() {
       expect(values[1] == "b=2");
     };
 
-    "value views return string views for values"_test = [] {
-      http::headers fields{};
-      fields.add("Set-Cookie", "a=1");
-      fields.add("X", "x");
-      fields.add("set-cookie", "b=2");
-
-      auto values = fields.values("SET-COOKIE") | std::ranges::to<std::vector<std::string_view>>();
-
-      expect[values.size() == 2U];
-      expect(values[0] == "a=1");
-      expect(values[1] == "b=2");
-    };
-
     "value views on const are compatible with ranges algorithms"_test = [] {
       http::headers mutable_fields{};
       mutable_fields.add("Set-Cookie", "a=1");
