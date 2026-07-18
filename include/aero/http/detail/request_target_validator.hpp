@@ -2,10 +2,10 @@
 
 #include <string_view>
 
-#include "aero/detail/ip_address_validator.hpp"
 #include "aero/detail/rfc_grammar.hpp"
-#include "aero/detail/string.hpp"
 #include "aero/http/method.hpp"
+#include "aero/util/ip_address_validator.hpp"
+#include "aero/util/string.hpp"
 
 namespace aero::http::detail {
 
@@ -207,7 +207,7 @@ namespace aero::http::detail {
       }
 
       std::string_view bracketless_ipv6 = uri_host.substr(1, closing_bracket_pos - 1);
-      if (!aero::detail::is_valid_ipv6_address(bracketless_ipv6)) {
+      if (!aero::is_valid_ipv6_address(bracketless_ipv6)) {
         return false;
       }
 
@@ -256,7 +256,7 @@ namespace aero::http::detail {
     // In order to disambiguate the syntax, we apply the "first-match-wins"
     // algorithm: If host matches the rule for IPv4address, then it should
     // be considered an IPv4 address literal and not a reg-name.
-    if (aero::detail::is_valid_ipv4_address(uri_host)) {
+    if (aero::is_valid_ipv4_address(uri_host)) {
       return true;
     }
 
@@ -296,7 +296,7 @@ namespace aero::http::detail {
 
       // Handle a percent-encoded token, which must be exactly 3 bytes
       if (ch == '%') {
-        if (!is_pct_encoded(path.substr(pos, 3))) {
+        if (!aero::detail::is_pct_encoded(path.substr(pos, 3))) {
           return false;
         }
 
@@ -307,7 +307,7 @@ namespace aero::http::detail {
       // Percent encoding has already been validated above, so all that
       // remains is to check whether the character is one of the allowed
       // pchar, unreserved, or sub-delimiter characters.
-      if (ch != ':' && ch != '@' && !is_unreserved(ch) && !is_sub_delim(ch)) {
+      if (ch != ':' && ch != '@' && !aero::detail::is_unreserved(ch) && !aero::detail::is_sub_delim(ch)) {
         return false;
       }
 
@@ -336,7 +336,7 @@ namespace aero::http::detail {
 
       // Handle a percent-encoded token, which must be exactly 3 bytes
       if (ch == '%') {
-        if (!is_pct_encoded(query.substr(pos, 3))) {
+        if (!aero::detail::is_pct_encoded(query.substr(pos, 3))) {
           return false;
         }
 
@@ -347,7 +347,8 @@ namespace aero::http::detail {
       // Percent encoding has already been validated above, so all that
       // remains is to check whether the character is one of the allowed
       // query, pchar, unreserved, or sub-delimiter characters.
-      if (ch != '/' && ch != '?' && ch != ':' && ch != '@' && !is_unreserved(ch) && !is_sub_delim(ch)) [[unlikely]] {
+      if (ch != '/' && ch != '?' && ch != ':' && ch != '@' && !aero::detail::is_unreserved(ch) &&
+          !aero::detail::is_sub_delim(ch)) [[unlikely]] {
         return false;
       }
 
@@ -437,10 +438,10 @@ namespace aero::http::detail {
     // We need to determine exactly which prefix the string has if the
     // request target is specified in absolute-form, but we don't want to
     // validate the prefix again unnecessarily
-    bool starts_with_http = aero::detail::striequal(target.substr(0, http_scheme.size()), http_scheme);
+    bool starts_with_http = aero::striequal(target.substr(0, http_scheme.size()), http_scheme);
     bool starts_with_https = false;
     if (!starts_with_http) {
-      starts_with_https = aero::detail::striequal(target.substr(0, https_scheme.size()), https_scheme);
+      starts_with_https = aero::striequal(target.substr(0, https_scheme.size()), https_scheme);
     }
 
     bool is_absolute_form = starts_with_http || starts_with_https;

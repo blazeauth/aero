@@ -4,7 +4,74 @@
 #include <cstdint>
 #include <string_view>
 
-namespace aero::detail {
+namespace aero {
+
+  namespace detail {
+
+    inline bool is_ipv6_hex_digit(char ch) noexcept {
+      return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
+    }
+
+    inline bool count_ipv6_pieces(std::string_view text, std::size_t& piece_count) noexcept {
+      piece_count = 0;
+
+      // Empty side is valid after splitting around "::".
+      // Examples: "::1", "1::", "::".
+      if (text.empty()) {
+        return true;
+      }
+
+      std::size_t pos = 0;
+
+      while (pos < text.size()) {
+        std::size_t digit_count = 0;
+
+        // Parse one explicit IPv6 piece.
+        // RFC 3986 grammar name:
+        // h16 = 1*4HEXDIG
+        while (pos < text.size() && text[pos] != ':') {
+          char ch = text[pos];
+
+          if (!is_ipv6_hex_digit(ch)) [[unlikely]] {
+            return false;
+          }
+
+          ++digit_count;
+          ++pos;
+
+          if (digit_count > 4) [[unlikely]] {
+            return false;
+          }
+        }
+
+        if (digit_count == 0) [[unlikely]] {
+          return false;
+        }
+
+        ++piece_count;
+
+        if (pos == text.size()) {
+          return true;
+        }
+
+        // Parser stopped before the end, so it must be at ':'
+        if (text[pos] != ':') [[unlikely]] {
+          return false;
+        }
+
+        ++pos;
+
+        // After a single ':' there must be another explicit piece.
+        // Valid "::" compression is handled before this function is called
+        if (pos == text.size()) [[unlikely]] {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+  } // namespace detail
 
   inline bool is_valid_ipv4_address(std::string_view address) noexcept {
     // RFC 3986 3.2.2:
@@ -86,69 +153,6 @@ namespace aero::detail {
     return true;
   }
 
-  inline bool is_ipv6_hex_digit(char ch) noexcept {
-    return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
-  }
-
-  inline bool count_ipv6_pieces(std::string_view text, std::size_t& piece_count) noexcept {
-    piece_count = 0;
-
-    // Empty side is valid after splitting around "::".
-    // Examples: "::1", "1::", "::".
-    if (text.empty()) {
-      return true;
-    }
-
-    std::size_t pos = 0;
-
-    while (pos < text.size()) {
-      std::size_t digit_count = 0;
-
-      // Parse one explicit IPv6 piece.
-      // RFC 3986 grammar name:
-      // h16 = 1*4HEXDIG
-      while (pos < text.size() && text[pos] != ':') {
-        char ch = text[pos];
-
-        if (!is_ipv6_hex_digit(ch)) [[unlikely]] {
-          return false;
-        }
-
-        ++digit_count;
-        ++pos;
-
-        if (digit_count > 4) [[unlikely]] {
-          return false;
-        }
-      }
-
-      if (digit_count == 0) [[unlikely]] {
-        return false;
-      }
-
-      ++piece_count;
-
-      if (pos == text.size()) {
-        return true;
-      }
-
-      // Parser stopped before the end, so it must be at ':'
-      if (text[pos] != ':') [[unlikely]] {
-        return false;
-      }
-
-      ++pos;
-
-      // After a single ':' there must be another explicit piece.
-      // Valid "::" compression is handled before this function is called
-      if (pos == text.size()) [[unlikely]] {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
   inline bool is_valid_ipv6_address(std::string_view address) noexcept {
     constexpr std::size_t min_ipv6_length = 2;  // "::"
     constexpr std::size_t max_ipv6_length = 45; // "xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:255.255.255.255"
@@ -205,11 +209,11 @@ namespace aero::detail {
       std::size_t left_piece_count = 0;
       std::size_t right_piece_count = 0;
 
-      if (!count_ipv6_pieces(left_part, left_piece_count)) {
+      if (!detail::count_ipv6_pieces(left_part, left_piece_count)) {
         return false;
       }
 
-      if (!count_ipv6_pieces(right_part, right_piece_count)) {
+      if (!detail::count_ipv6_pieces(right_part, right_piece_count)) {
         return false;
       }
 
@@ -221,7 +225,7 @@ namespace aero::detail {
 
     // No compression token present, just count all of the IPv6 pieces
     std::size_t piece_count = 0;
-    if (!count_ipv6_pieces(ipv6_part, piece_count)) {
+    if (!detail::count_ipv6_pieces(ipv6_part, piece_count)) {
       return false;
     }
 
@@ -229,4 +233,4 @@ namespace aero::detail {
     return piece_count + ipv4_tail_piece_count == 8;
   }
 
-} // namespace aero::detail
+} // namespace aero
