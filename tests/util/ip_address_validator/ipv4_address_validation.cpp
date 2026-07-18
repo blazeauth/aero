@@ -1,4 +1,4 @@
-#include "aero/detail/ip_address_validator.hpp"
+#include "aero/util/ip_address_validator.hpp"
 #include "aero/http/detail/request_target_validator.hpp"
 
 #include <string_view>
@@ -6,7 +6,7 @@
 
 using namespace ut;
 
-using aero::detail::is_valid_ipv4_address;
+using aero::is_valid_ipv4_address;
 
 int main() {
   suite ipv4_address_validation = [] {

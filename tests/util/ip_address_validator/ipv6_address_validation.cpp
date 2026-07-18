@@ -1,11 +1,11 @@
-#include "aero/detail/ip_address_validator.hpp"
+#include "aero/util/ip_address_validator.hpp"
 
 #include <string_view>
 #include <ut/ut.hpp>
 
 using namespace ut;
 
-using aero::detail::is_valid_ipv6_address;
+using aero::is_valid_ipv6_address;
 
 int main() {
   suite ipv6_address_validation = [] {

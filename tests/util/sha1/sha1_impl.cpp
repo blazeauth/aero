@@ -6,7 +6,7 @@
 #include <ut/ut.hpp>
 #include <vector>
 
-#include "aero/detail/impl/sha1.hpp"
+#include "aero/util/sha1.hpp"
 
 using namespace ut;
 
@@ -82,7 +82,7 @@ int main() {
       sha1 hasher;
       hasher.update(input);
 
-      std::array<std::byte, sha1::digest_size> written_digest{};
+      std::array<std::byte, aero::sha1_digest_size> written_digest{};
       hasher.final(written_digest);
 
       expect(expected == written_digest);
