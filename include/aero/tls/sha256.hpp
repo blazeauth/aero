@@ -12,7 +12,7 @@
 #include <system_error>
 
 #include "aero/detail/concepts.hpp"
-#include "aero/detail/string.hpp"
+#include "aero/util/string.hpp"
 
 #if AERO_USE_WOLFSSL
 #if __has_include(<wolfssl/options.h>)
@@ -133,7 +133,7 @@ namespace aero::tls {
     }
 
     [[nodiscard]] std::string final_hex() {
-      return aero::detail::to_hex_string(final());
+      return aero::to_hex_string(final());
     }
 
    private:

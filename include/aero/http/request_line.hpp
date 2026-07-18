@@ -1,11 +1,8 @@
 #pragma once
 
-#include <array>
 #include <string>
 #include <string_view>
 
-#include "aero/detail/string.hpp"
-#include "aero/http/detail/common.hpp"
 #include "aero/http/detail/request_target_validator.hpp"
 #include "aero/http/error.hpp"
 #include "aero/http/method.hpp"
@@ -118,8 +115,18 @@ namespace aero::http {
         return {};
       }
 
-      auto request_line_str = aero::detail::join_strings(std::array{method_str, std::string_view{target}, version_str}, ' ');
-      request_line_str.append(detail::crlf);
+      std::string request_line_str;
+      // +4 for 2 SP and CRLF
+      request_line_str.reserve(method_str.size() + target.size() + version_str.size() + 4);
+
+      // RFC 9112, Section 3: request-line = method SP request-target SP HTTP-version
+      request_line_str.append(method_str);
+      request_line_str.push_back(' ');
+      request_line_str.append(target);
+      request_line_str.push_back(' ');
+      request_line_str.append(version_str);
+      request_line_str.append("\r\n");
+
       return request_line_str;
     }
 

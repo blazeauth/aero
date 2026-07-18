@@ -6,8 +6,8 @@
 #include <string_view>
 #include <system_error>
 
-#include "aero/detail/string.hpp"
 #include "aero/http/error.hpp"
+#include "aero/util/string.hpp"
 
 namespace aero::http {
 
@@ -42,7 +42,7 @@ namespace aero::http {
     char major_version = http_version[0];
     char version_separator = http_version[1];
     char minor_version = http_version[2];
-    if (!aero::detail::is_digit(major_version) || version_separator != '.' || !aero::detail::is_digit(minor_version)) {
+    if (!aero::is_digit(major_version) || version_separator != '.' || !aero::is_digit(minor_version)) {
       return std::unexpected(protocol_error::version_invalid);
     }
 

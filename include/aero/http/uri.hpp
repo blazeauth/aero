@@ -12,7 +12,7 @@
 #include <system_error>
 #include <utility>
 
-#include "aero/detail/string.hpp"
+#include "aero/util/string.hpp"
 #include "aero/http/error.hpp"
 #include "aero/http/port.hpp"
 
@@ -244,7 +244,7 @@ namespace aero::http {
       std::string normalized_scheme;
       normalized_scheme.reserve(scheme_view.size());
       for (unsigned char character : scheme_view) {
-        normalized_scheme.push_back(static_cast<char>(aero::detail::to_ascii_lower(character)));
+        normalized_scheme.push_back(aero::ascii_tolower(character));
       }
 
       if (normalized_scheme != "http" && normalized_scheme != "https") {

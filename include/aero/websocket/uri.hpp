@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "aero/detail/string.hpp"
+#include "aero/util/string.hpp"
 #include "aero/websocket/error.hpp"
 
 namespace aero::websocket {
@@ -212,8 +212,8 @@ namespace aero::websocket {
       std::string_view scheme_view = uri_text.substr(0, scheme_delimiter_position);
       std::string normalized_scheme;
       normalized_scheme.reserve(scheme_view.size());
-      for (unsigned char character : scheme_view) {
-        normalized_scheme.push_back(static_cast<char>(aero::detail::to_ascii_lower(character)));
+      for (char c : scheme_view) {
+        normalized_scheme.push_back(aero::ascii_tolower(c));
       }
 
       if (normalized_scheme != "ws" && normalized_scheme != "wss") {

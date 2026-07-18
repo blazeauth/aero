@@ -10,9 +10,9 @@
 #include <vector>
 
 #include "aero/detail/attributes.hpp"
-#include "aero/detail/string.hpp"
 #include "aero/http/detail/common.hpp"
 #include "aero/http/error.hpp"
+#include "aero/util/string.hpp"
 
 namespace aero::http {
 
@@ -41,7 +41,7 @@ namespace aero::http {
       for (auto&& split_value : value | std::views::split(',')) {
         std::string_view candidate{split_value};
 
-        if (aero::detail::striequal(detail::trim_optional_whitespace(candidate), token)) {
+        if (aero::striequal(detail::trim_optional_whitespace(candidate), token)) {
           return true;
         }
       }
@@ -104,14 +104,14 @@ namespace aero::http {
       }
 
       [[nodiscard]] friend bool operator==(const matching_iterator& left, const matching_iterator& right) noexcept {
-        return left.owner_ == right.owner_ && left.index_ == right.index_ && aero::detail::striequal(left.key_, right.key_);
+        return left.owner_ == right.owner_ && left.index_ == right.index_ && aero::striequal(left.key_, right.key_);
       }
 
      private:
       void seek_forward() noexcept {
         while (index_ < owner_->headers_.size()) {
           const auto& current = owner_->headers_[index_].name;
-          if (aero::detail::striequal(current, key_)) {
+          if (aero::striequal(current, key_)) {
             return;
           }
           ++index_;
@@ -176,12 +176,12 @@ namespace aero::http {
 
     [[nodiscard]] iterator find(std::string_view name) & noexcept {
       return std::ranges::find_if(headers_,
-        [&](const http::header& field) noexcept { return aero::detail::striequal(field.name, name); });
+        [&](const http::header& field) noexcept { return aero::striequal(field.name, name); });
     }
 
     [[nodiscard]] const_iterator find(std::string_view name) const& noexcept {
       return std::ranges::find_if(headers_,
-        [&](const http::header& field) noexcept { return aero::detail::striequal(field.name, name); });
+        [&](const http::header& field) noexcept { return aero::striequal(field.name, name); });
     }
 
     [[nodiscard]] auto fields(std::string_view name AERO_LIFETIMEBOUND) & {
@@ -213,7 +213,7 @@ namespace aero::http {
 
     [[nodiscard]] std::size_t occurrences(std::string_view name) const& noexcept {
       return std::ranges::count_if(headers_,
-        [name](const http::header& field) noexcept { return aero::detail::striequal(field.name, name); });
+        [name](const http::header& field) noexcept { return aero::striequal(field.name, name); });
     }
 
     [[nodiscard]] std::optional<std::string_view> first_value(std::string_view name) const& noexcept {
@@ -299,8 +299,8 @@ namespace aero::http {
     }
 
     void erase(std::string_view name) {
-      auto to_remove = std::ranges::remove_if(headers_,
-        [&](const http::header& field) noexcept { return aero::detail::striequal(field.name, name); });
+      auto to_remove =
+        std::ranges::remove_if(headers_, [&](const http::header& field) noexcept { return aero::striequal(field.name, name); });
       headers_.erase(to_remove.begin(), to_remove.end());
     }
 
@@ -311,7 +311,7 @@ namespace aero::http {
         return std::unexpected(http::header_error::content_length_missing);
       }
 
-      return aero::detail::to_decimal<T>(*content_len_str);
+      return aero::to_decimal<T>(*content_len_str);
     }
 
     [[nodiscard]] std::expected<std::string_view, std::error_code> content_type() const& noexcept {

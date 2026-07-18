@@ -18,7 +18,7 @@
 #include <asio/ssl/context.hpp>
 #endif
 
-#include "aero/detail/string.hpp"
+#include "aero/util/string.hpp"
 #include "aero/error.hpp"
 #include "aero/http/detail/common.hpp"
 #include "aero/http/error.hpp"
@@ -420,7 +420,7 @@ namespace aero::http::detail {
    private:
     [[nodiscard]] static connection_key make_key(std::string host, std::uint16_t port) {
       return connection_key{
-        .host = aero::detail::to_lowercase(host),
+        .host = aero::to_lowercase(host),
         .port = port,
       };
     }
@@ -499,7 +499,7 @@ namespace aero::http::detail {
           continue;
         }
 
-        auto header_name = aero::detail::to_lowercase(std::string{line.substr(0, value_separator)});
+        auto header_name = aero::to_lowercase(std::string{line.substr(0, value_separator)});
         if (header_name != "transfer-encoding") {
           continue;
         }
@@ -517,7 +517,7 @@ namespace aero::http::detail {
             return info;
           }
 
-          codings.push_back(aero::detail::to_lowercase(std::string{token}));
+          codings.push_back(aero::to_lowercase(std::string{token}));
 
           if (token_separator == std::string_view::npos) {
             break;
