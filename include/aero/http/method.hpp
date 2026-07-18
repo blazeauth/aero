@@ -48,7 +48,7 @@ namespace aero::http {
       // RFC 9112:
       // method = token
       // token = 1*tchar
-      if (!std::ranges::all_of(method_str, detail::is_tchar)) {
+      if (!std::ranges::all_of(method_str, aero::detail::is_tchar)) {
         return std::unexpected(protocol_error::method_invalid);
       }
 

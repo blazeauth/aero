@@ -19,7 +19,7 @@ namespace aero::http {
     constexpr inline std::string_view optional_whitespace_chars{" \t"};
 
     [[nodiscard]] inline bool is_header_field_name_token(std::string_view name) noexcept {
-      return !name.empty() && std::ranges::all_of(name, is_tchar);
+      return !name.empty() && std::ranges::all_of(name, aero::detail::is_tchar);
     }
 
     [[nodiscard]] inline bool is_valid_field_value(std::string_view value) noexcept {
