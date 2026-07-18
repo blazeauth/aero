@@ -9,8 +9,8 @@
 #include "aero/websocket.hpp"
 
 #include "aero/base64.hpp"
-#include "aero/deadline.hpp"
+#include "aero/util/deadline.hpp"
 #include "aero/default_executor.hpp"
 #include "aero/error.hpp"
-#include "aero/final_action.hpp"
-#include "aero/io_runtime.hpp"
+#include "aero/util/final_action.hpp"
+#include "aero/util/io_runtime.hpp"

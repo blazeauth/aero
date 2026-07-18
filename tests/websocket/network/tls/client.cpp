@@ -8,7 +8,7 @@
 #include <system_error>
 #include <ut/ut.hpp>
 
-#include "aero/deadline.hpp"
+#include "aero/util/deadline.hpp"
 
 #include "aero/tls/system_context.hpp"
 #include "aero/tls/version.hpp"

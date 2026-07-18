@@ -26,11 +26,11 @@
 #include <asio/use_awaitable.hpp>
 #include <asio/use_future.hpp>
 
-#include "aero/deadline.hpp"
+#include "aero/util/deadline.hpp"
 #include "aero/default_executor.hpp"
 #include "aero/detail/aligned_allocator.hpp"
 #include "aero/error.hpp"
-#include "aero/final_action.hpp"
+#include "aero/util/final_action.hpp"
 #include "aero/http/detail/common.hpp"
 #include "aero/http/response.hpp"
 #include "aero/net/concepts/transport.hpp"
