@@ -27,7 +27,6 @@ endfunction()
 
 aero_add_unit_test(aero_error_code error_code.cpp)
 
-add_subdirectory(base64)
 add_subdirectory(util)
 
 if(AERO_USE_TLS)

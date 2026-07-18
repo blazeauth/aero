@@ -4,7 +4,7 @@
 #include <random>
 #include <string>
 
-#include "aero/base64/base64.hpp"
+#include "aero/util/base64.hpp"
 #include "aero/util/sha1.hpp"
 
 namespace aero::websocket::detail {

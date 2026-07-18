@@ -8,7 +8,7 @@
 #include "aero/net.hpp"
 #include "aero/websocket.hpp"
 
-#include "aero/base64.hpp"
+#include "aero/util/base64.hpp"
 #include "aero/util/deadline.hpp"
 #include "aero/default_executor.hpp"
 #include "aero/error.hpp"
