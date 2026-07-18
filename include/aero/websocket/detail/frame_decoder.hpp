@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include "aero/detail/bytes.hpp"
+#include "aero/util/bytes.hpp"
 #include "aero/websocket/detail/frame.hpp"
 #include "aero/websocket/detail/opcode.hpp"
 #include "aero/websocket/detail/role.hpp"
@@ -43,7 +43,7 @@ namespace aero::websocket::detail {
         if (buf.size() < payload_length_offset + 2U) {
           return std::unexpected(protocol_error::buffer_truncated);
         }
-        auto payload_length = aero::detail::read_big_endian<uint16_t>(buf.subspan(payload_length_offset).first<2>());
+        auto payload_length = aero::read_big_endian<uint16_t>(buf.subspan(payload_length_offset).first<2>());
         if (payload_length <= 125) {
           // Protocol violation, no extended length should've been passed
           return std::unexpected(protocol_error::payload_length_invalid);
@@ -53,7 +53,7 @@ namespace aero::websocket::detail {
         if (buf.size() < payload_length_offset + 8U) {
           return std::unexpected(protocol_error::buffer_truncated);
         }
-        auto payload_length = aero::detail::read_big_endian<uint64_t>(buf.subspan(payload_length_offset).first<8>());
+        auto payload_length = aero::read_big_endian<uint64_t>(buf.subspan(payload_length_offset).first<8>());
         if (payload_length <= 65535) {
           // Protocol violation, payload_length should've been < 127
           return std::unexpected(protocol_error::payload_length_invalid);
@@ -128,9 +128,9 @@ namespace aero::websocket::detail {
       requires(BytesCount == 2 || BytesCount == 8)
     [[nodiscard]] std::uint64_t read_extended_length(std::span<const std::byte, BytesCount> bytes) const noexcept {
       if constexpr (BytesCount == 2) {
-        return aero::detail::read_big_endian<std::uint16_t>(bytes);
+        return aero::read_big_endian<std::uint16_t>(bytes);
       } else if constexpr (BytesCount == 8) {
-        return aero::detail::read_big_endian<std::uint64_t>(bytes);
+        return aero::read_big_endian<std::uint64_t>(bytes);
       }
     }
 

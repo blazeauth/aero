@@ -5,7 +5,7 @@
 #include <span>
 #include <system_error>
 
-#include "aero/detail/bytes.hpp"
+#include "aero/util/bytes.hpp"
 #include "aero/error.hpp"
 #include "aero/websocket/detail/frame.hpp"
 
@@ -31,9 +31,9 @@ namespace aero::websocket::detail {
       auto extended_length_offset = frame.payload_length_offset();
 
       if (frame.payload_length >= 126 && frame.payload_length <= 65535) {
-        aero::detail::write_big_endian<2>(out.subspan(extended_length_offset).first<2>(), frame.payload_length);
+        aero::write_big_endian<2>(out.subspan(extended_length_offset).first<2>(), frame.payload_length);
       } else if (frame.payload_length > 65535) {
-        aero::detail::write_big_endian<8>(out.subspan(extended_length_offset).first<8>(), frame.payload_length);
+        aero::write_big_endian<8>(out.subspan(extended_length_offset).first<8>(), frame.payload_length);
       }
 
       if (frame.masked && frame.masking_key) {

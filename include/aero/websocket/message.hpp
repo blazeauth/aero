@@ -7,7 +7,7 @@
 #include <string_view>
 #include <vector>
 
-#include "aero/detail/bytes.hpp"
+#include "aero/util/bytes.hpp"
 #include "aero/websocket/close_code.hpp"
 
 namespace aero::websocket {
@@ -85,7 +85,7 @@ namespace aero::websocket {
       if (!has_close_code()) {
         return std::nullopt;
       }
-      return aero::detail::read_big_endian<websocket::close_code>(bytes().first<2>());
+      return aero::read_big_endian<websocket::close_code>(bytes().first<2>());
     }
 
     [[nodiscard]] bool has_close_reason() const noexcept {
