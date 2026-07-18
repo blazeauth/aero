@@ -1,1 +1,0 @@
-aero_add_unit_test(aero_util_striequal striequal.cpp)

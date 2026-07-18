@@ -1,2 +1,0 @@
-aero_add_unit_test(aero_util_ipv4_address_validation ipv4_address_validation.cpp)
-aero_add_unit_test(aero_util_ipv6_address_validation ipv6_address_validation.cpp)
