@@ -4,8 +4,13 @@
 #include <span>
 #include <string>
 
-#ifdef AERO_USE_TLS
-#include "aero/tls/detail/base64.hpp"
+#if AERO_USE_OPENSSL
+#include <openssl/evp.h>
+#elif AERO_USE_WOLFSSL
+#if __has_include(<wolfssl/options.h>)
+#include <wolfssl/options.h>
+#endif
+#include <wolfssl/wolfcrypt/coding.h>
 #endif
 
 namespace aero {
