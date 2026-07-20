@@ -18,9 +18,8 @@
 #include <asio/ssl/context.hpp>
 #endif
 
-#include "aero/util/string.hpp"
 #include "aero/error.hpp"
-#include "aero/http/detail/common.hpp"
+#include "aero/http/detail/line_endings.hpp"
 #include "aero/http/error.hpp"
 #include "aero/http/port.hpp"
 #include "aero/http/request.hpp"
@@ -29,6 +28,7 @@
 #include "aero/http/version.hpp"
 #include "aero/net/concepts/transport.hpp"
 #include "aero/net/detail/basic_transport.hpp"
+#include "aero/util/string.hpp"
 
 #ifdef AERO_USE_TLS
 #include "aero/net/tls_transport.hpp"

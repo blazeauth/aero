@@ -34,8 +34,8 @@
 #include "aero/detail/aligned_allocator.hpp"
 #include "aero/error.hpp"
 #include "aero/http/client_options.hpp"
-#include "aero/http/detail/common.hpp"
 #include "aero/http/detail/connection_pool.hpp"
+#include "aero/http/detail/line_endings.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/http/port.hpp"
 #include "aero/http/request.hpp"
@@ -554,7 +554,7 @@ namespace aero::http {
                 return_as_deferred_tuple());
             }
 
-            auto content_length = response.headers.template content_length<std::uint64_t>();
+            auto content_length = http::content_length<std::uint64_t>(response.headers);
             if (content_length.has_value()) {
               co_return co_await async_read_content_length_body(transport,
                 std::move(response),

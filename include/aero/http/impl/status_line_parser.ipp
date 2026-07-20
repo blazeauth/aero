@@ -3,7 +3,7 @@
 #include <expected>
 #include <system_error>
 
-#include "aero/http/detail/common.hpp"
+#include "aero/http/detail/line_endings.hpp"
 #include "aero/http/error.hpp"
 #include "aero/http/status.hpp"
 #include "aero/http/status_line.hpp"

@@ -1,16 +1,14 @@
 #pragma once
 
 #include <algorithm>
-#include <expected>
-#include <initializer_list>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 #include "aero/detail/attributes.hpp"
-#include "aero/http/detail/common.hpp"
+#include "aero/http/detail/line_endings.hpp"
 #include "aero/http/error.hpp"
 #include "aero/util/string.hpp"
 
@@ -33,7 +31,7 @@ namespace aero::http {
     std::string name;
     std::string value;
 
-    [[nodiscard]] bool contains_token(std::string_view token) const& {
+    [[nodiscard]] bool contains_token(std::string_view token) const {
       if (token.empty()) {
         return false;
       }
@@ -133,11 +131,14 @@ namespace aero::http {
     static std::expected<headers, std::error_code> parse(std::string_view buffer);
     static std::expected<headers, std::error_code> parse(std::span<const std::byte> buffer);
 
-    [[nodiscard]] bool empty() const& noexcept {
+    [[nodiscard]] bool empty() const noexcept {
       return headers_.empty();
     }
-    [[nodiscard]] size_type size() const& noexcept {
+    [[nodiscard]] size_type size() const noexcept {
       return headers_.size();
+    }
+    [[nodiscard]] size_type capacity() const noexcept {
+      return headers_.capacity();
     }
     [[nodiscard]] iterator begin() & noexcept {
       return headers_.begin();
@@ -170,6 +171,9 @@ namespace aero::http {
       return headers_.back();
     }
 
+    void reserve(size_type count) {
+      headers_.reserve(count);
+    }
     void clear() noexcept {
       headers_.clear();
     }
@@ -211,7 +215,7 @@ namespace aero::http {
              std::views::transform([](const http::header& field) noexcept -> std::string_view { return field.value; });
     }
 
-    [[nodiscard]] std::size_t occurrences(std::string_view name) const& noexcept {
+    [[nodiscard]] std::size_t count(std::string_view name) const& noexcept {
       return std::ranges::count_if(headers_,
         [name](const http::header& field) noexcept { return aero::striequal(field.name, name); });
     }
@@ -225,55 +229,54 @@ namespace aero::http {
     }
 
     [[nodiscard]] bool contains(std::string_view name) const noexcept {
-      return find(name) != end(); // NOLINT(*-container-contains)
+      return find(name) != end(); // NOLINT(*-contains)
     }
 
-    [[nodiscard]] bool contains_token(std::string_view name, std::string_view token) const& {
+    [[nodiscard]] bool contains_token(std::string_view name, std::string_view token) const {
       return std::ranges::any_of(fields(name), [token](const http::header& field) { return field.contains_token(token); });
     }
 
     [[nodiscard]] std::string serialize() const {
       using http::detail::crlf;
-      using http::detail::header_name_value_separator;
+      constexpr static std::string_view value_separator = ": ";
 
       if (headers_.empty()) {
-        return {};
+        return std::string{crlf};
       }
 
-      constexpr std::size_t value_separator_length = header_name_value_separator.length();
-      constexpr std::size_t crlf_length = crlf.length();
-
-      // A single range loop on the headers to reserve space, and a second one
-      // for appending, will be much faster than potentially frequent
-      // reallocations within a single append-loop.
+      // A single range loop on the headers to reserve space, and a second
+      // one for appending, will be much faster than potentially frequent
+      // reallocations within a single append-loop
       std::size_t expected_length{};
       for (const auto& [name, value] : headers_) {
-        expected_length += name.length() + value.length() + value_separator_length + crlf_length;
+        expected_length += name.length() + value.length() + value_separator.length() + crlf.length();
       }
 
       std::string result;
-      result.reserve(expected_length + crlf_length);
+      result.reserve(expected_length + crlf.length());
 
       for (const auto& [name, value] : headers_) {
-        // Skip empty field names. Empty field values are still valid under RFC9112
-        if (name.empty()) {
-          continue;
-        }
-        result.append(name).append(": ").append(value).append(crlf);
+        result.append(name).append(value_separator).append(value).append(crlf);
       }
 
-      if (result.empty()) {
-        return {};
-      }
-
-      result.append(crlf);
-
-      return result;
+      return result.append(crlf);
     }
 
     iterator set(std::string name, std::string value) & {
-      erase(name);
-      return add(std::move(name), std::move(value));
+      auto target = find(name);
+      if (target == end()) {
+        return add(std::move(name), std::move(value));
+      }
+
+      target->name = std::move(name);
+      target->value = std::move(value);
+
+      auto duplicates = std::ranges::remove_if(std::next(target), headers_.end(), [&](const http::header& field) noexcept {
+        return aero::striequal(field.name, target->name);
+      });
+      headers_.erase(duplicates.begin(), duplicates.end());
+
+      return target;
     }
 
     iterator add(std::string name, std::string value) & {
@@ -304,25 +307,6 @@ namespace aero::http {
       headers_.erase(to_remove.begin(), to_remove.end());
     }
 
-    template <std::integral T = std::uint32_t>
-    [[nodiscard]] std::expected<T, std::error_code> content_length() const& noexcept {
-      auto content_len_str = first_value("content-length");
-      if (!content_len_str.has_value()) {
-        return std::unexpected(http::header_error::content_length_missing);
-      }
-
-      return aero::to_decimal<T>(*content_len_str);
-    }
-
-    [[nodiscard]] std::expected<std::string_view, std::error_code> content_type() const& noexcept {
-      auto content_type_str = first_value("content-type");
-      if (!content_type_str.has_value()) {
-        return std::unexpected(http::header_error::content_type_missing);
-      }
-
-      return *content_type_str;
-    }
-
     // NOLINTBEGIN(*-use-nodiscard)
     // Disallow use on temporary objects
     iterator begin() && = delete;
@@ -331,10 +315,10 @@ namespace aero::http {
     const_iterator end() const&& = delete;
     const_iterator cbegin() const&& = delete;
     const_iterator cend() const&& = delete;
-    http::header& front() && = delete;
-    const http::header& front() const&& = delete;
-    http::header& back() && = delete;
-    const http::header& back() const&& = delete;
+    header& front() && = delete;
+    const header& front() const&& = delete;
+    header& back() && = delete;
+    const header& back() const&& = delete;
     iterator find(std::string_view name) && = delete;
     const_iterator find(std::string_view name) const&& = delete;
     auto fields(std::string_view name) && = delete;
@@ -343,17 +327,36 @@ namespace aero::http {
     auto values() const&& = delete;
     auto values(std::string_view name) const&& = delete;
     std::optional<std::string_view> first_value(std::string_view name) const&& = delete;
-    bool contains_token(std::string_view name, std::string_view value) const&& = delete;
     iterator add(std::string name, std::string value) && = delete;
     iterator set(std::string name, std::string value) && = delete;
-    template <std::integral T>
-    std::expected<T, std::error_code> content_length() const&& = delete;
-    std::expected<std::string_view, std::error_code> content_type() const&& = delete;
     // NOLINTEND(*-use-nodiscard)
 
    private:
-    std::vector<http::header> headers_;
+    std::vector<value_type> headers_;
   };
+
+  static_assert(std::ranges::forward_range<decltype(std::declval<headers&>().fields(""))>);
+  static_assert(std::ranges::forward_range<decltype(std::declval<headers&>().names())>);
+  static_assert(std::ranges::forward_range<decltype(std::declval<headers&>().values(""))>);
+
+  template <std::integral T = int>
+  [[nodiscard]] inline std::expected<T, std::error_code> content_length(const http::headers& headers) noexcept {
+    auto content_len_str = headers.first_value("content-length");
+    if (!content_len_str.has_value()) {
+      return std::unexpected(header_error::content_length_missing);
+    }
+
+    return aero::to_decimal<T>(*content_len_str);
+  }
+
+  [[nodiscard]] inline std::expected<std::string_view, std::error_code> content_type(const http::headers& headers) noexcept {
+    auto content_type_str = headers.first_value("content-type");
+    if (!content_type_str.has_value()) {
+      return std::unexpected(header_error::content_type_missing);
+    }
+
+    return *content_type_str;
+  }
 
 } // namespace aero::http
 

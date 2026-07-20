@@ -1,7 +1,7 @@
 #pragma once
 
 #include "aero/detail/rfc_grammar.hpp"
-#include "aero/http/detail/common.hpp"
+#include "aero/http/detail/line_endings.hpp"
 #include "aero/http/error.hpp"
 #include "aero/http/headers.hpp"
 

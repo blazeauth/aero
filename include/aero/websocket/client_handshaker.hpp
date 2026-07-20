@@ -5,7 +5,7 @@
 #include <system_error>
 #include <vector>
 
-#include "aero/http/detail/common.hpp"
+#include "aero/http/detail/line_endings.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/http/method.hpp"
 #include "aero/http/request_line.hpp"
