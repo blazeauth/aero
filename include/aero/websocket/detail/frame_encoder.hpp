@@ -5,8 +5,8 @@
 #include <span>
 #include <system_error>
 
-#include "aero/util/bytes.hpp"
 #include "aero/error.hpp"
+#include "aero/util/bytes.hpp"
 #include "aero/websocket/detail/frame.hpp"
 
 namespace aero::websocket::detail {
