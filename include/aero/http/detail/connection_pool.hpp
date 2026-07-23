@@ -26,8 +26,8 @@
 #include "aero/http/response.hpp"
 #include "aero/http/status.hpp"
 #include "aero/http/version.hpp"
-#include "aero/net/concepts/transport.hpp"
 #include "aero/net/detail/basic_transport.hpp"
+#include "aero/net/detail/concepts.hpp"
 #include "aero/util/string.hpp"
 
 #ifdef AERO_USE_TLS

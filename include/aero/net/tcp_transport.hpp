@@ -19,8 +19,8 @@
 #include <asio/strand.hpp>
 
 #include "aero/detail/aligned_allocator.hpp"
-#include "aero/net/concepts/transport.hpp"
 #include "aero/net/detail/basic_transport.hpp"
+#include "aero/net/detail/concepts.hpp"
 #include "aero/net/error.hpp"
 
 namespace aero::net {

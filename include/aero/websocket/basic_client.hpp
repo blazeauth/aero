@@ -31,7 +31,7 @@
 #include "aero/error.hpp"
 #include "aero/http/detail/line_endings.hpp"
 #include "aero/http/response.hpp"
-#include "aero/net/concepts/transport.hpp"
+#include "aero/net/detail/concepts.hpp"
 #include "aero/util/deadline.hpp"
 #include "aero/util/final_action.hpp"
 #include "aero/websocket/client_handshaker.hpp"

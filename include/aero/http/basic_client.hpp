@@ -45,7 +45,7 @@
 #include "aero/http/status_line.hpp"
 #include "aero/http/uri.hpp"
 #include "aero/http/version.hpp"
-#include "aero/net/concepts/transport.hpp"
+#include "aero/net/detail/concepts.hpp"
 #include "aero/util/string.hpp"
 
 namespace aero::http {
