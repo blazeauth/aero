@@ -1,7 +1,6 @@
 #pragma once
 
 #include <concepts>
-#include <ranges>
 
 namespace aero::detail::concepts {
 

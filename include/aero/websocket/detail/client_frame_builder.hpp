@@ -15,7 +15,7 @@
 #endif
 
 #include "aero/websocket/close_code.hpp"
-#include "aero/websocket/concepts/masking_key_source.hpp"
+#include "aero/websocket/detail/concepts.hpp"
 #include "aero/websocket/detail/frame.hpp"
 #include "aero/websocket/detail/frame_encoder.hpp"
 #include "aero/websocket/detail/opcode.hpp"

@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "aero/websocket/close_code.hpp"
-#include "aero/websocket/concepts/masking_key_source.hpp"
+#include "aero/websocket/detail/concepts.hpp"
 #include "aero/websocket/detail/opcode.hpp"
 #include "aero/websocket/error.hpp"
 
