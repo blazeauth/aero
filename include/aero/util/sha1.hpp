@@ -40,7 +40,8 @@ namespace aero {
 
       return result;
     }
-#else
+#endif
+
     class sha1 {
      public:
       static std::array<std::byte, sha1_digest_size> hash(std::span<const std::byte> data) noexcept {
@@ -192,7 +193,6 @@ namespace aero {
       std::array<std::uint32_t, 2> count_{};
       std::array<std::byte, 64> buffer_{};
     };
-#endif
 
   } // namespace detail
 
