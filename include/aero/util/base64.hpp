@@ -3,6 +3,7 @@
 #include <array>
 #include <span>
 #include <string>
+#include <utility>
 
 #if AERO_USE_OPENSSL
 #include <openssl/evp.h>
