@@ -1,4 +1,4 @@
-#include "aero/detail/string.hpp"
+#include "aero/util/string.hpp"
 
 #include <cstddef>
 #include <string>
@@ -7,7 +7,7 @@
 
 using namespace ut;
 
-using aero::detail::striequal;
+using aero::striequal;
 
 int main() {
   suite string_striequal = [] {

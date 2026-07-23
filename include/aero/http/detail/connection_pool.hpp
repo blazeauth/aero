@@ -18,17 +18,17 @@
 #include <asio/ssl/context.hpp>
 #endif
 
-#include "aero/detail/string.hpp"
 #include "aero/error.hpp"
-#include "aero/http/detail/common.hpp"
+#include "aero/http/detail/line_endings.hpp"
 #include "aero/http/error.hpp"
 #include "aero/http/port.hpp"
 #include "aero/http/request.hpp"
 #include "aero/http/response.hpp"
 #include "aero/http/status.hpp"
 #include "aero/http/version.hpp"
-#include "aero/net/concepts/transport.hpp"
 #include "aero/net/detail/basic_transport.hpp"
+#include "aero/net/detail/concepts.hpp"
+#include "aero/util/string.hpp"
 
 #ifdef AERO_USE_TLS
 #include "aero/net/tls_transport.hpp"
@@ -420,7 +420,7 @@ namespace aero::http::detail {
    private:
     [[nodiscard]] static connection_key make_key(std::string host, std::uint16_t port) {
       return connection_key{
-        .host = aero::detail::to_lowercase(host),
+        .host = aero::to_lowercase(host),
         .port = port,
       };
     }
@@ -499,7 +499,7 @@ namespace aero::http::detail {
           continue;
         }
 
-        auto header_name = aero::detail::to_lowercase(std::string{line.substr(0, value_separator)});
+        auto header_name = aero::to_lowercase(std::string{line.substr(0, value_separator)});
         if (header_name != "transfer-encoding") {
           continue;
         }
@@ -517,7 +517,7 @@ namespace aero::http::detail {
             return info;
           }
 
-          codings.push_back(aero::detail::to_lowercase(std::string{token}));
+          codings.push_back(aero::to_lowercase(std::string{token}));
 
           if (token_separator == std::string_view::npos) {
             break;

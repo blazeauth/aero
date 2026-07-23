@@ -1,12 +1,13 @@
 #pragma once
 
-#include "aero/http/detail/common.hpp"
+#include "aero/detail/rfc_grammar.hpp"
+#include "aero/http/detail/line_endings.hpp"
 #include "aero/http/error.hpp"
 #include "aero/http/headers.hpp"
 
 namespace aero::http {
 
-  namespace {
+  namespace detail {
 
     using http::header_error;
 
@@ -16,32 +17,18 @@ namespace aero::http {
     };
 
     constexpr inline std::string_view optional_whitespace_chars{" \t"};
-    constexpr inline std::string_view tchar_symbols{"!#$%&'*+-.^_`|~"};
-
-    [[nodiscard]] constexpr auto to_byte(char ch) noexcept {
-      return static_cast<unsigned char>(ch);
-    }
-
-    [[nodiscard]] constexpr bool is_tchar(unsigned char byte) noexcept {
-      const auto lower = static_cast<unsigned char>(byte | 0x20U);
-      bool is_numeric = byte >= '0' && byte <= '9';
-      bool is_character = (lower >= 'a' && lower <= 'z');
-      bool is_valid_symbol = tchar_symbols.contains(static_cast<char>(byte));
-      return is_numeric || is_character || is_valid_symbol;
-    }
 
     [[nodiscard]] inline bool is_header_field_name_token(std::string_view name) noexcept {
-      return !name.empty() && std::ranges::all_of(name, is_tchar, to_byte);
+      return !name.empty() && std::ranges::all_of(name, aero::detail::is_tchar);
     }
 
     [[nodiscard]] inline bool is_valid_field_value(std::string_view value) noexcept {
       constexpr auto ascii_delete = static_cast<unsigned char>(0x7F);
       constexpr auto obs_text_first_octet = static_cast<unsigned char>(0x80);
 
-      auto is_valid_byte = [](unsigned char byte) noexcept {
+      return std::ranges::all_of(value, [](unsigned char byte) noexcept {
         return byte == '\t' || byte >= obs_text_first_octet || (byte >= ' ' && byte != ascii_delete);
-      };
-      return std::ranges::all_of(value, is_valid_byte, to_byte);
+      });
     }
 
     [[nodiscard]] inline std::expected<field_view, std::error_code> parse_header_field(std::string_view last_header_name,
@@ -112,14 +99,14 @@ namespace aero::http {
       return headers;
     }
 
-  } // namespace
+  } // namespace detail
 
   inline std::expected<headers, std::error_code> headers::parse(std::string_view buffer) {
-    return parse_headers(buffer);
+    return detail::parse_headers(buffer);
   }
 
   inline std::expected<headers, std::error_code> headers::parse(std::span<const std::byte> buffer) {
-    return parse_headers(std::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()});
+    return detail::parse_headers(std::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()});
   }
 
 } // namespace aero::http

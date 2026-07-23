@@ -1,0 +1,5 @@
+aero_add_unit_test(aero_util_base64 base64.cpp)
+aero_add_unit_test(aero_util_io_runtime io_runtime.cpp)
+aero_add_unit_test(aero_util_ip_address_validator ip_address_validator.cpp)
+aero_add_unit_test(aero_util_sha1 sha1.cpp)
+aero_add_unit_test(aero_util_string string.cpp)

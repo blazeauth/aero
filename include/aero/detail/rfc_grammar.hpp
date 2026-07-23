@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-namespace aero::http::detail {
+namespace aero::detail {
 
   [[nodiscard]] constexpr bool is_tchar(char ch) noexcept {
     // RFC 9110, Section 5.6.2:
@@ -44,4 +44,4 @@ namespace aero::http::detail {
            value == '+' || value == ',' || value == ';' || value == '=';
   }
 
-} // namespace aero::http::detail
+} // namespace aero::detail

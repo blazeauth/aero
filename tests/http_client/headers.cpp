@@ -4,683 +4,804 @@
 #include <ut/ut.hpp>
 #include <vector>
 
-#include "aero/http/error.hpp"
 #include "aero/http/headers.hpp"
 
 using namespace ut;
 using namespace std::string_view_literals;
-
 namespace http = aero::http;
-using http::header_error;
 
-bool contains_value(const http::headers& fields, std::string_view name, std::string_view expected_value) {
-  return std::ranges::contains(fields.values(name), expected_value);
+std::vector<std::string> values_of(const http::headers& fields, std::string_view name) {
+  std::vector<std::string> values{};
+  for (std::string_view value : fields.values(name)) {
+    values.emplace_back(value);
+  }
+  return values;
 }
 
-int main() {
-  suite http_headers = [] {
-    "default constructed headers are empty"_test = [] {
-      http::headers fields{};
+bool contains_value(const http::headers& fields, std::string_view name, std::string_view expected_value) {
+  auto values = fields.values(name);
+  return std::ranges::find(values, expected_value) != values.end();
+}
 
-      expect(fields.empty());
-      expect(fields.size() == 0);
-      expect(fields.begin() == fields.end());
-    };
+// The checks are templated because 'requires' reports invalid
+// expressions only during template substitution
+template <class T = http::headers>
+consteval bool rvalue_overloads_are_deleted() {
+  static_assert(not requires(T fields) { std::move(fields).begin(); });
+  static_assert(not requires(T fields) { std::move(fields).end(); });
+  static_assert(not requires(T fields) { std::move(fields).cbegin(); });
+  static_assert(not requires(T fields) { std::move(fields).cend(); });
+  static_assert(not requires(T fields) { std::move(fields).front(); });
+  static_assert(not requires(T fields) { std::move(fields).back(); });
+  static_assert(not requires(T fields) { std::move(fields).find("A"); });
+  static_assert(not requires(T fields) { std::move(fields).fields("A"); });
+  static_assert(not requires(T fields) { std::move(fields).names(); });
+  static_assert(not requires(T fields) { std::move(fields).values(); });
+  static_assert(not requires(T fields) { std::move(fields).values("A"); });
+  static_assert(not requires(T fields) { std::move(fields).first_value("A"); });
+  static_assert(not requires(T fields) { std::move(fields).add("A", "1"); });
+  static_assert(not requires(T fields) { std::move(fields).set("A", "1"); });
 
-    "initializer list preserves insertion order and duplicates"_test = [] {
-      http::headers fields{{"A", "1"}, {"B", "2"}, {"C", "3"}, {"D", "4"}, {"A", "11"}};
-      auto repeated_record_values = fields.values("A") | std::ranges::to<std::vector<std::string>>();
+  static_assert(not requires(const T fields) { std::move(fields).begin(); });
+  static_assert(not requires(const T fields) { std::move(fields).end(); });
+  static_assert(not requires(const T fields) { std::move(fields).front(); });
+  static_assert(not requires(const T fields) { std::move(fields).back(); });
+  static_assert(not requires(const T fields) { std::move(fields).find("A"); });
+  static_assert(not requires(const T fields) { std::move(fields).fields("A"); });
 
-      expect(fields.size() == 5U);
-      expect[repeated_record_values.size() == 2U];
+  return true;
+}
+static_assert(rvalue_overloads_are_deleted());
 
+suite http_headers = [] {
+  "default constructed headers are empty"_test = [] {
+    http::headers fields{};
+
+    expect(fields.empty());
+    expect(fields.size() == 0);
+    expect(fields.begin() == fields.end());
+  };
+
+  "clear removes all fields"_test = [] {
+    http::headers fields{{"A", "1"}, {"B", "2"}};
+
+    fields.clear();
+
+    expect(fields.empty());
+    expect(fields.size() == 0U);
+    expect(fields.begin() == fields.end());
+    expect(fields.cbegin() == fields.cend());
+  };
+
+  "front and back return the first and last fields"_test = [] {
+    http::headers fields{{"A", "1"}, {"B", "2"}, {"C", "3"}};
+
+    expect(fields.front().name == "A");
+    expect(fields.front().value == "1");
+    expect(fields.back().name == "C");
+    expect(fields.back().value == "3");
+
+    const auto& const_fields = fields;
+    expect(const_fields.front().name == "A");
+    expect(const_fields.back().name == "C");
+  };
+
+  "initializer list preserves insertion order and duplicates"_test = [] {
+    http::headers fields{{"A", "1"}, {"B", "2"}, {"C", "3"}, {"D", "4"}, {"A", "11"}};
+    auto repeated_record_values = values_of(fields, "A");
+
+    expect(fields.size() == 5U);
+
+    expect(repeated_record_values.size() == 2U);
+    if (repeated_record_values.size() == 2U) {
       expect(repeated_record_values[0] == "1");
       expect(repeated_record_values[1] == "11");
+    }
 
-      expect[fields.first_value("B").has_value()];
-      expect[fields.first_value("C").has_value()];
-      expect[fields.first_value("D").has_value()];
+    expect(fields.first_value("B") == "2");
+    expect(fields.first_value("C") == "3");
+    expect(fields.first_value("D") == "4");
+  };
 
-      expect(*fields.first_value("B") == "2");
-      expect(*fields.first_value("C") == "3");
-      expect(*fields.first_value("D") == "4");
-    };
+  "adding a field preserves insertion order for iteration"_test = [] {
+    http::headers fields{};
+    fields.add("A", "1");
+    fields.add("B", "2");
+    fields.add("C", "3");
 
-    "adding a field preserves insertion order for iteration"_test = [] {
-      http::headers fields{};
-      fields.add("A", "1");
-      fields.add("B", "2");
-      fields.add("C", "3");
+    std::vector<http::headers::value_type> all_fields(fields.begin(), fields.end());
 
-      expect[fields.size() == 3U];
+    expect(all_fields.size() == 3U);
+    if (all_fields.size() == 3U) {
+      expect(all_fields[0].name == "A");
+      expect(all_fields[0].value == "1");
+      expect(all_fields[1].name == "B");
+      expect(all_fields[1].value == "2");
+      expect(all_fields[2].name == "C");
+      expect(all_fields[2].value == "3");
+    }
+  };
 
-      auto it = fields.begin();
-      expect[it != fields.end()];
-      expect(it->name == "A");
-      expect(it->value == "1");
+  "contains and find are case-insensitive"_test = [] {
+    http::headers fields{};
 
-      ++it;
-      expect[it != fields.end()];
-      expect(it->name == "B");
-      expect(it->value == "2");
+    fields.add("Content-Length", "123");
 
-      ++it;
-      expect[it != fields.end()];
-      expect(it->name == "C");
-      expect(it->value == "3");
-    };
+    expect(fields.contains("content-length"));
+    expect(fields.contains("CONTENT-LENGTH"));
+    expect(not fields.contains("Connection"));
 
-    "contains and find are case-insensitive"_test = [] {
-      http::headers fields{};
-
-      fields.add("Content-Length", "123");
-
-      expect(fields.contains("content-length"));
-      expect(fields.contains("CONTENT-LENGTH"));
-      expect(not fields.contains("Connection"));
-
-      const auto it = fields.find("CONTENT-length");
-      expect[it != fields.end()];
+    const auto it = fields.find("CONTENT-length");
+    expect(it != fields.end());
+    if (it != fields.end()) {
       expect(it->value == "123");
+    }
+  };
+
+  "contains_token matches a single token case-insensitively"_test = [] {
+    http::headers fields{{"Connection", "UpGrAde"}};
+
+    expect(fields.contains_token("Connection", "upgrade"));
+    expect(fields.contains_token("CONNECTION", "UPGRADE"));
+    expect(not fields.contains_token("Connection", "close"));
+  };
+
+  "contains_token finds tokens anywhere in a comma-separated list"_test = [] {
+    http::headers fields{
+      {"Accept-Encoding", "gzip, deflate, br, zstd"},
     };
 
-    "contains_token matches a single token case-insensitively"_test = [] {
-      http::headers fields{{"Connection", "UpGrAde"}};
+    expect(fields.contains_token("Accept-Encoding", "gzip"));
+    expect(fields.contains_token("Accept-Encoding", "deflate"));
+    expect(fields.contains_token("Accept-Encoding", "zstd"));
+    expect(not fields.contains_token("Accept-Encoding", "identity"));
+  };
 
-      expect(fields.contains_token("Connection", "upgrade"));
-      expect(fields.contains_token("CONNECTION", "UPGRADE"));
-      expect(not fields.contains_token("Connection", "close"));
+  "contains_token ignores optional whitespace around tokens"_test = [] {
+    http::headers fields{{"Connection", "  keep-alive  ,\tupgrade\t"}};
+
+    expect(fields.contains_token("Connection", "keep-alive"));
+    expect(fields.contains_token("Connection", "upgrade"));
+  };
+
+  "contains_token does not match a substring of a token"_test = [] {
+    http::headers fields{
+      {"Accept-Encoding", "gzipped, deflated"},
     };
 
-    "contains_token finds tokens anywhere in a comma-separated list"_test = [] {
-      http::headers fields{
-        {"Accept-Encoding", "gzip, deflate, br, zstd"},
-      };
+    expect(not fields.contains_token("Accept-Encoding", "gzip"));
+    expect(not fields.contains_token("Accept-Encoding", "deflate"));
+    expect(fields.contains_token("Accept-Encoding", "gzipped"));
+  };
 
-      expect(fields.contains_token("Accept-Encoding", "gzip"));
-      expect(fields.contains_token("Accept-Encoding", "deflate"));
-      expect(fields.contains_token("Accept-Encoding", "zstd"));
-      expect(not fields.contains_token("Accept-Encoding", "identity"));
+  "contains_token returns false for an empty token"_test = [] {
+    http::headers fields{
+      {"Connection", "keep-alive"},
     };
 
-    "contains_token ignores optional whitespace around tokens"_test = [] {
-      http::headers fields{{"Connection", "  keep-alive  ,\tupgrade\t"}};
+    expect(not fields.contains_token("Connection", ""));
+  };
 
-      expect(fields.contains_token("Connection", "keep-alive"));
-      expect(fields.contains_token("Connection", "upgrade"));
+  "contains_token returns false when the field is missing"_test = [] {
+    http::headers fields{
+      {"Connection", "keep-alive"},
     };
 
-    "contains_token does not match a substring of a token"_test = [] {
-      http::headers fields{
-        {"Accept-Encoding", "gzipped, deflated"},
-      };
+    expect(not fields.contains_token("Upgrade", "websocket"));
+  };
 
-      expect(not fields.contains_token("Accept-Encoding", "gzip"));
-      expect(not fields.contains_token("Accept-Encoding", "deflate"));
-      expect(fields.contains_token("Accept-Encoding", "gzipped"));
+  "contains_token searches every occurrence of a repeated field"_test = [] {
+    http::headers fields{};
+
+    fields.add("Connection", "keep-alive");
+    fields.add("X", "x");
+    fields.add("connection", "upgrade");
+
+    expect(fields.contains_token("Connection", "keep-alive"));
+    expect(fields.contains_token("Connection", "upgrade"));
+    expect(not fields.contains_token("Connection", "close"));
+  };
+
+  "contains_token skips empty list elements"_test = [] {
+    http::headers fields{
+      {"Accept-Encoding", "gzip,,br,"},
     };
 
-    "contains_token returns false for an empty token"_test = [] {
-      http::headers fields{
-        {"Connection", "keep-alive"},
-      };
+    expect(fields.contains_token("Accept-Encoding", "gzip"));
+    expect(fields.contains_token("Accept-Encoding", "br"));
+  };
 
-      expect(not fields.contains_token("Connection", ""));
+  "contains_token returns false on an empty field value"_test = [] {
+    http::headers fields{
+      {"Connection", ""},
     };
 
-    "contains_token returns false when the field is missing"_test = [] {
-      http::headers fields{
-        {"Connection", "keep-alive"},
-      };
+    expect(not fields.contains_token("Connection", "keep-alive"));
+  };
 
-      expect(not fields.contains_token("Upgrade", "websocket"));
-    };
+  "header contains_token matches tokens in its own value"_test = [] {
+    const http::header field{"Accept-Encoding", "gzip, br"};
 
-    "contains_token searches every occurrence of a repeated field"_test = [] {
-      http::headers fields{};
+    expect(field.contains_token("gzip"));
+    expect(field.contains_token("BR"));
+    expect(not field.contains_token("zstd"));
+    expect(not field.contains_token(""));
+  };
 
-      fields.add("Connection", "keep-alive");
-      fields.add("X", "x");
-      fields.add("connection", "upgrade");
+  "erasing a field removes all matching occurrences"_test = [] {
+    http::headers fields{};
 
-      expect(fields.contains_token("Connection", "keep-alive"));
-      expect(fields.contains_token("Connection", "upgrade"));
-      expect(not fields.contains_token("Connection", "close"));
-    };
+    fields.add("Set-Cookie", "a=1");
+    fields.add("Set-Cookie", "b=2");
+    fields.add("X", "x");
 
-    "contains_token skips empty list elements"_test = [] {
-      http::headers fields{
-        {"Accept-Encoding", "gzip,,br,"},
-      };
+    auto cookies = values_of(fields, "SET-COOKIE");
 
-      expect(fields.contains_token("Accept-Encoding", "gzip"));
-      expect(fields.contains_token("Accept-Encoding", "br"));
-    };
+    expect(fields.contains("set-cookie"));
+    expect(cookies.size() == 2U);
 
-    "contains_token returns false on an empty field value"_test = [] {
-      http::headers fields{
-        {"Connection", ""},
-      };
+    fields.erase("set-cookie");
 
-      expect(not fields.contains_token("Connection", "keep-alive"));
-    };
+    expect(not fields.contains("Set-Cookie"));
+    expect(fields.contains("X"));
+    expect(fields.size() == 1U);
+  };
 
-    "header contains_token matches tokens in its own value"_test = [] {
-      const http::header field{"Accept-Encoding", "gzip, br"};
+  "erasing a missing field leaves headers unchanged"_test = [] {
+    http::headers fields{{"A", "1"}, {"B", "2"}};
 
-      expect(field.contains_token("gzip"));
-      expect(field.contains_token("BR"));
-      expect(not field.contains_token("zstd"));
-      expect(not field.contains_token(""));
-    };
+    fields.erase("Missing");
 
-    "fields iterates all occurrences in original order"_test = [] {
-      http::headers fields{};
+    expect(fields.size() == 2U);
+    expect(fields.first_value("A") == "1");
+    expect(fields.first_value("B") == "2");
+  };
 
-      fields.add("Set-Cookie", "a=1");
-      fields.add("X", "x");
-      fields.add("set-cookie", "b=2");
-      fields.add("Y", "y");
-      fields.add("SET-COOKIE", "c=3");
+  "fields view iterates matching pairs in insertion order"_test = [] {
+    http::headers fields{};
+    fields.add("Set-Cookie", "a=1");
+    fields.add("X", "x");
+    fields.add("set-cookie", "b=2");
+    fields.add("Y", "y");
+    fields.add("SET-COOKIE", "c=3");
 
-      auto cookies = fields.values("set-cookie") | std::ranges::to<std::vector<std::string>>();
+    auto range = fields.fields("set-cookie");
 
-      expect[cookies.size() == 3U];
-      expect(cookies[0] == "a=1");
-      expect(cookies[1] == "b=2");
-      expect(cookies[2] == "c=3");
-    };
+    std::vector<std::string> collected_names;
+    std::vector<std::string> collected_values;
 
-    "erasing a field removes all matching occurrences"_test = [] {
-      http::headers fields{};
+    for (auto&& [name, value] : range) {
+      collected_names.emplace_back(name);
+      collected_values.emplace_back(value);
+    }
 
-      fields.add("Set-Cookie", "a=1");
-      fields.add("Set-Cookie", "b=2");
-      fields.add("X", "x");
-
-      auto cookies = fields.values("SET-COOKIE") | std::ranges::to<std::vector<std::string>>();
-
-      expect[fields.contains("set-cookie")];
-      expect[cookies.size() == 2U];
-
-      fields.erase("set-cookie");
-
-      expect(not fields.contains("Set-Cookie"));
-      expect(fields.contains("X"));
-      expect(fields.size() == 1U);
-    };
-
-    "fields view iterates matching pairs in insertion order"_test = [] {
-      http::headers fields{};
-      fields.add("Set-Cookie", "a=1");
-      fields.add("X", "x");
-      fields.add("set-cookie", "b=2");
-      fields.add("Y", "y");
-      fields.add("SET-COOKIE", "c=3");
-
-      auto range = fields.fields("set-cookie");
-
-      std::vector<std::string> collected_names;
-      std::vector<std::string> collected_values;
-
-      for (auto&& [name, value] : range) {
-        collected_names.emplace_back(name);
-        collected_values.emplace_back(value);
-      }
-
-      expect[collected_values.size() == 3U];
+    expect(collected_values.size() == 3U);
+    if (collected_values.size() == 3U) {
       expect(collected_values[0] == "a=1");
       expect(collected_values[1] == "b=2");
       expect(collected_values[2] == "c=3");
+    }
 
-      expect[collected_names.size() == 3U];
+    expect(collected_names.size() == 3U);
+    if (collected_names.size() == 3U) {
       expect(collected_names[0] == "Set-Cookie");
       expect(collected_names[1] == "set-cookie");
       expect(collected_names[2] == "SET-COOKIE");
-    };
+    }
+  };
 
-    "fields view on const works and is case-insensitive"_test = [] {
-      http::headers mutable_fields{};
-      mutable_fields.add("Set-Cookie", "a=1");
-      mutable_fields.add("set-cookie", "b=2");
-      mutable_fields.add("X", "x");
+  "fields view on const works and is case-insensitive"_test = [] {
+    http::headers mutable_fields{};
+    mutable_fields.add("Set-Cookie", "a=1");
+    mutable_fields.add("set-cookie", "b=2");
+    mutable_fields.add("X", "x");
 
-      const auto& fields = mutable_fields;
-      auto range = fields.fields("SET-COOKIE");
+    const auto& fields = mutable_fields;
+    auto range = fields.fields("SET-COOKIE");
 
-      std::vector<std::string> collected_values;
-      for (auto&& field : range) {
-        collected_values.emplace_back(field.value);
-      }
+    std::vector<std::string> collected_values;
+    for (auto&& field : range) {
+      collected_values.emplace_back(field.value);
+    }
 
-      expect[collected_values.size() == 2U];
+    expect(collected_values.size() == 2U);
+    if (collected_values.size() == 2U) {
       expect(collected_values[0] == "a=1");
       expect(collected_values[1] == "b=2");
+    }
+  };
+
+  "fields view is empty when key does not exist"_test = [] {
+    http::headers fields{};
+    fields.add("A", "1");
+    fields.add("B", "2");
+
+    auto range = fields.fields("Missing");
+
+    expect(std::ranges::empty(range));
+    expect(std::ranges::distance(range) == 0);
+  };
+
+  "names view returns every name in insertion order"_test = [] {
+    http::headers fields{{"A", "1"}, {"b", "2"}, {"A", "3"}};
+
+    std::vector<std::string> names{};
+    for (std::string_view name : fields.names()) {
+      names.emplace_back(name);
+    }
+
+    expect(names.size() == 3U);
+    if (names.size() == 3U) {
+      expect(names[0] == "A");
+      expect(names[1] == "b");
+      expect(names[2] == "A");
+    }
+  };
+
+  "values view without a name returns every value in insertion order"_test = [] {
+    http::headers fields{{"A", "1"}, {"B", "2"}, {"A", "3"}};
+
+    std::vector<std::string> values{};
+    for (std::string_view value : fields.values()) {
+      values.emplace_back(value);
+    }
+
+    expect(values.size() == 3U);
+    if (values.size() == 3U) {
+      expect(values[0] == "1");
+      expect(values[1] == "2");
+      expect(values[2] == "3");
+    }
+  };
+
+  "values view returns only values in insertion order"_test = [] {
+    http::headers fields{};
+    fields.add("Set-Cookie", "a=1");
+    fields.add("X", "x");
+    fields.add("set-cookie", "b=2");
+    fields.add("SET-COOKIE", "c=3");
+
+    auto cookies = values_of(fields, "set-cookie");
+
+    expect(cookies.size() == 3U);
+    if (cookies.size() == 3U) {
+      expect(cookies[0] == "a=1");
+      expect(cookies[1] == "b=2");
+      expect(cookies[2] == "c=3");
+    }
+  };
+
+  "values view on const returns only values"_test = [] {
+    http::headers mutable_fields{};
+    mutable_fields.add("Set-Cookie", "a=1");
+    mutable_fields.add("set-cookie", "b=2");
+    mutable_fields.add("X", "x");
+
+    const auto& fields = mutable_fields;
+    auto cookies = values_of(fields, "SET-COOKIE");
+
+    expect(cookies.size() == 2U);
+    if (cookies.size() == 2U) {
+      expect(cookies[0] == "a=1");
+      expect(cookies[1] == "b=2");
+    }
+  };
+
+  "value views on const are compatible with ranges algorithms"_test = [] {
+    http::headers mutable_fields{};
+    mutable_fields.add("Set-Cookie", "a=1");
+    mutable_fields.add("set-cookie", "b=22");
+    mutable_fields.add("SET-COOKIE", "ccc");
+    mutable_fields.add("X", "x");
+
+    const auto& fields = mutable_fields;
+    auto value_views = fields.values("set-cookie");
+
+    expect(not std::ranges::empty(value_views));
+    expect(std::ranges::distance(value_views) == 3);
+  };
+
+  "serializes headers separated with crlf"_test = [] {
+    http::headers fields{
+      {"Set-Cookie", "a=1"},
+      {"A", "a"},
+      {"B", "b"},
+      {"C", "c"},
     };
 
-    "fields view is empty when key does not exist"_test = [] {
-      http::headers fields{};
-      fields.add("A", "1");
-      fields.add("B", "2");
+    http::headers growing_fields{};
 
-      auto range = fields.fields("Missing");
+    for (const auto& [header_name, header_value] : fields) {
+      growing_fields.add(header_name, header_value);
 
-      expect(std::ranges::empty(range));
-      expect(std::ranges::distance(range) == 0);
+      auto fields_str = growing_fields.serialize();
+
+      std::string_view clean_str = fields_str;
+      clean_str.remove_suffix("\r\n\r\n"sv.size());
+
+      auto split_headers = std::views::split(clean_str, "\r\n"sv);
+      auto str_headers_count = std::ranges::distance(split_headers);
+
+      expect(growing_fields.size() == static_cast<http::headers::size_type>(str_headers_count));
+    }
+  };
+
+  "serializes empty headers as a lone crlf terminator"_test = [] {
+    http::headers fields{};
+    expect(fields.serialize() == "\r\n");
+  };
+
+  "serializes multiple fields"_test = [] {
+    http::headers fields{
+      {"Set-Cookie", "a=1"},
+      {"A", "a"},
+      {"B", "b"},
+      {"c", "c"},
     };
 
-    "values view returns only values in insertion order"_test = [] {
-      http::headers fields{};
-      fields.add("Set-Cookie", "a=1");
-      fields.add("X", "x");
-      fields.add("set-cookie", "b=2");
-      fields.add("SET-COOKIE", "c=3");
+    expect(fields.serialize() == "Set-Cookie: a=1\r\nA: a\r\nB: b\r\nc: c\r\n\r\n");
+  };
 
-      auto values = fields.values("set-cookie") | std::ranges::to<std::vector<std::string>>();
-
-      expect[values.size() == 3U];
-      expect(values[0] == "a=1");
-      expect(values[1] == "b=2");
-      expect(values[2] == "c=3");
+  "serializes repeated fields as separate lines"_test = [] {
+    http::headers fields{
+      {"Set-Cookie", "a=1"},
+      {"set-cookie", "b=1"},
     };
 
-    "values view on const returns only values"_test = [] {
-      http::headers mutable_fields{};
-      mutable_fields.add("Set-Cookie", "a=1");
-      mutable_fields.add("set-cookie", "b=2");
-      mutable_fields.add("X", "x");
+    expect(fields.serialize() == "Set-Cookie: a=1\r\nset-cookie: b=1\r\n\r\n");
+  };
 
-      const auto& fields = mutable_fields;
-      auto values = fields.values("SET-COOKIE") | std::ranges::to<std::vector<std::string>>();
-
-      expect[values.size() == 2U];
-      expect(values[0] == "a=1");
-      expect(values[1] == "b=2");
+  "serializes repeated fields in insertion order"_test = [] {
+    http::headers fields{
+      {"Set-Cookie", "a=1"},
+      {"Set-Cookie", "b=22"},
+      {"Set-Cookie", "ccc"},
     };
 
-    "value views on const are compatible with ranges algorithms"_test = [] {
-      http::headers mutable_fields{};
-      mutable_fields.add("Set-Cookie", "a=1");
-      mutable_fields.add("set-cookie", "b=22");
-      mutable_fields.add("SET-COOKIE", "ccc");
-      mutable_fields.add("X", "x");
+    expect(fields.serialize() == "Set-Cookie: a=1\r\nSet-Cookie: b=22\r\nSet-Cookie: ccc\r\n\r\n");
+  };
 
-      const auto& fields = mutable_fields;
-      auto value_views = fields.values("set-cookie");
-
-      expect(not std::ranges::empty(value_views));
-      expect(std::ranges::distance(value_views) == 3);
+  "serializes fields with empty names as-is"_test = [] {
+    http::headers fields{
+      {"", "ghost"},
+      {"A", "1"},
     };
 
-    "serializes headers separated with crlf"_test = [] {
-      http::headers fields{
-        {"Set-Cookie", "a=1"},
-        {"A", "a"},
-        {"B", "b"},
-        {"C", "c"},
-      };
+    expect(fields.serialize() == ": ghost\r\nA: 1\r\n\r\n");
+  };
 
-      http::headers growing_fields{};
-
-      for (const auto& [header_name, header_value] : fields) {
-        growing_fields.add(header_name, header_value);
-
-        auto fields_str = growing_fields.serialize();
-
-        std::string_view clean_str = fields_str;
-        clean_str.remove_suffix("\r\n\r\n"sv.size());
-
-        auto split_headers = std::views::split(clean_str, "\r\n"sv);
-        auto str_headers_count = std::ranges::distance(split_headers);
-
-        expect(growing_fields.size() == static_cast<http::headers::size_type>(str_headers_count));
-      }
+  "serializes a field with an empty value"_test = [] {
+    // Empty field values are valid under RFC 9112
+    http::headers fields{
+      {"X-Empty", ""},
     };
 
-    "serializes non-empty headers with a double crlf suffix"_test = [] {
-      http::headers fields{
-        {"Set-Cookie", "a=1"},
-        {"A", "a"},
-        {"B", "b"},
-        {"C", "c"},
-      };
+    expect(fields.serialize() == "X-Empty: \r\n\r\n");
+  };
 
-      http::headers growing_fields{};
-
-      for (const auto& [header_name, header_value] : fields) {
-        growing_fields.add(header_name, header_value);
-        expect(growing_fields.serialize().ends_with("\r\n\r\n"));
-      }
+  "set replaces the value of an existing field in place"_test = [] {
+    http::headers fields{
+      {"A", "1"},
+      {"Set-Cookie", "a=1"},
+      {"B", "2"},
     };
 
-    "serializes empty headers as an empty string"_test = [] {
-      http::headers fields{};
-      expect(fields.serialize().empty());
+    auto it = fields.set("Set-Cookie", "c=3");
+
+    expect(fields.count("Set-Cookie") == 1U);
+    expect(fields.first_value("Set-Cookie") == "c=3");
+    expect(it == std::next(fields.begin()));
+
+    std::vector<http::headers::value_type> all_fields(fields.begin(), fields.end());
+
+    expect(all_fields.size() == 3U);
+    if (all_fields.size() == 3U) {
+      expect(all_fields[0].name == "A");
+      expect(all_fields[1].name == "Set-Cookie");
+      expect(all_fields[1].value == "c=3");
+      expect(all_fields[2].name == "B");
+    }
+  };
+
+  "set replaces the stored name casing"_test = [] {
+    http::headers fields{
+      {"Set-Cookie", "a=1"},
     };
 
-    "serializes multiple fields"_test = [] {
-      http::headers fields{
-        {"Set-Cookie", "a=1"},
-        {"A", "a"},
-        {"B", "b"},
-        {"c", "c"},
-      };
+    fields.set("SET-COOKIE", "c=3");
 
-      expect(fields.serialize() == "Set-Cookie: a=1\r\nA: a\r\nB: b\r\nc: c\r\n\r\n");
+    expect(fields.count("set-cookie") == 1U);
+    expect(fields.front().name == "SET-COOKIE");
+    expect(fields.serialize() == "SET-COOKIE: c=3\r\n\r\n");
+  };
+
+  "set adds the field at the end when it does not exist"_test = [] {
+    http::headers fields{{"A", "1"}};
+
+    auto it = fields.set("Set-Cookie", "a=1");
+
+    expect(fields.size() == 2U);
+    expect(fields.first_value("Set-Cookie") == "a=1");
+    expect(fields.back().name == "Set-Cookie");
+    expect(it == std::prev(fields.end()));
+  };
+
+  "set collapses duplicates into the first occurrence"_test = [] {
+    http::headers fields{
+      {"Set-Cookie", "a"},
+      {"X", "x"},
+      {"Set-Cookie", "b=2"},
     };
 
-    "serializes repeated fields as separate lines"_test = [] {
-      http::headers fields{
-        {"Set-Cookie", "a=1"},
-        {"set-cookie", "b=1"},
-      };
+    expect(fields.count("Set-Cookie") == 2U);
 
-      expect(fields.serialize() == "Set-Cookie: a=1\r\nset-cookie: b=1\r\n\r\n");
+    fields.set("Set-Cookie", "c=3");
+
+    expect(fields.count("Set-Cookie") == 1U);
+    expect(fields.first_value("Set-Cookie") == "c=3");
+
+    std::vector<http::headers::value_type> all_fields(fields.begin(), fields.end());
+
+    expect(all_fields.size() == 2U);
+    if (all_fields.size() == 2U) {
+      expect(all_fields[0].name == "Set-Cookie");
+      expect(all_fields[0].value == "c=3");
+      expect(all_fields[1].name == "X");
+    }
+  };
+
+  "set matches case-insensitively and stores the new spelling"_test = [] {
+    http::headers fields{
+      {"Set-Cookie", "a=1"},
+      {"SET-COOKIE", "b=2"},
     };
 
-    "serializes repeated fields in insertion order"_test = [] {
-      http::headers fields{
-        {"Set-Cookie", "a=1"},
-        {"Set-Cookie", "b=22"},
-        {"Set-Cookie", "ccc"},
-      };
+    fields.set("set-cookie", "c=3");
 
-      expect(fields.serialize() == "Set-Cookie: a=1\r\nSet-Cookie: b=22\r\nSet-Cookie: ccc\r\n\r\n");
-    };
+    expect(fields.count("Set-Cookie") == 1U);
+    expect(fields.size() == 1U);
+    expect(fields.front().name == "set-cookie");
+    expect(fields.front().value == "c=3");
+  };
 
-    "parse returns headers for a valid header block"_test = [] {
-      auto parsed = http::headers::parse("Upgrade: websocket\r\nConnection: Upgrade\r\n\r\n");
-      expect[parsed.has_value()];
+  "contains is case-insensitive and fields enumerates all occurrences"_test = [] {
+    http::headers fields{};
 
-      auto& parsed_headers = *parsed;
+    fields.add("Upgrade", "websocket");
+    fields.add("upgrade", "h2c");
 
-      expect(parsed_headers.size() == 2U);
-      expect(parsed_headers.contains("upgrade"));
-      expect(parsed_headers.contains("CONNECTION"));
+    expect(fields.contains("UPGRADE"));
+    expect(fields.count("UpGrAdE") == 2U);
 
-      expect[parsed_headers.first_value("Upgrade").has_value()];
-      expect[parsed_headers.first_value("connection").has_value()];
+    std::vector<std::string> values{};
+    for (const auto& value : fields.values("UPGRADE")) {
+      values.emplace_back(value);
+    }
 
-      expect(*parsed_headers.first_value("Upgrade") == "websocket");
-      expect(*parsed_headers.first_value("connection") == "Upgrade");
-    };
-
-    "set updates all occurrences"_test = [] {
-      http::headers fields{};
-      fields.add("Set-Cookie", "a=1");
-      expect(fields.occurrences("Set-Cookie") == 1U);
-
-      fields.set("Set-Cookie", "c=3");
-      expect(fields.occurrences("Set-Cookie") == 1U);
-
-      expect[fields.first_value("Set-Cookie").has_value()];
-      expect(*fields.first_value("Set-Cookie") == "c=3");
-    };
-
-    "add keeps duplicates until set is called"_test = [] {
-      http::headers fields{
-        {"Set-Cookie", "a"},
-        {"Set-Cookie", "b=2"},
-      };
-
-      expect(fields.occurrences("Set-Cookie") == 2U);
-
-      fields.set("Set-Cookie", "c=3");
-      expect(fields.occurrences("Set-Cookie") == 1U);
-
-      expect[fields.first_value("Set-Cookie").has_value()];
-      expect(*fields.first_value("Set-Cookie") == "c=3");
-    };
-
-    "contains is case-insensitive and fields enumerates all occurrences"_test = [] {
-      http::headers fields{};
-
-      fields.add("Upgrade", "websocket");
-      fields.add("upgrade", "h2c");
-
-      expect(fields.contains("UPGRADE"));
-      expect(fields.occurrences("UpGrAdE") == 2U);
-
-      std::vector<std::string> values{};
-      for (const auto& value : fields.values("UPGRADE")) {
-        values.emplace_back(value);
-      }
-
-      expect[values.size() == 2U];
+    expect(values.size() == 2U);
+    if (values.size() == 2U) {
       expect(values[0] == "websocket");
       expect(values[1] == "h2c");
+    }
+  };
+
+  "first_value returns the field value"_test = [] {
+    http::headers fields{
+      {"Content-Length", "123123"},
     };
 
-    "first_value returns the content-length header value"_test = [] {
-      http::headers fields{
-        {"Content-Length", "123123"},
-      };
+    expect(fields.first_value("Content-Length") == "123123");
+  };
 
-      auto content_length = fields.first_value("Content-Length");
-      expect[content_length.has_value()];
-      expect(*content_length == "123123");
+  "first_value returns nullopt when the field is missing"_test = [] {
+    http::headers fields{};
+
+    auto content_length = fields.first_value("Content-Length");
+    expect(not content_length.has_value());
+  };
+
+  "append copies and returns size of both objects"_test = [] {
+    http::headers fields{
+      {"Host", "example.com"},
     };
 
-    "first_value returns nullopt when content-length is missing"_test = [] {
-      http::headers fields{};
-
-      auto content_length = fields.first_value("Content-Length");
-      expect(not content_length.has_value());
+    http::headers other_fields{
+      {"Hello-World", "aero"},
     };
 
-    "first_value returns the content-type header value"_test = [] {
-      http::headers fields{
-        {"Content-Type", "application/json"},
-      };
+    fields.append(other_fields);
 
-      auto content_type = fields.first_value("Content-Type");
-      expect[content_type.has_value()];
-      expect(*content_type == "application/json");
+    expect(contains_value(fields, "Host", "example.com"));
+    expect(contains_value(fields, "Hello-World", "aero"));
+    expect(fields.size() == 2U);
+
+    expect(contains_value(other_fields, "Hello-World", "aero"));
+  };
+
+  "append moves fields and clears source"_test = [] {
+    http::headers fields{
+      {"Host", "example.com"},
     };
 
-    "first_value returns nullopt when content-type is missing"_test = [] {
-      http::headers fields{};
-
-      auto content_type = fields.first_value("Content-Type");
-      expect(not content_type.has_value());
+    http::headers other_fields{
+      {"Hello-World", "aero"},
     };
 
-    "append copies and returns size of both objects"_test = [] {
-      http::headers fields{
-        {"Host", "example.com"},
-      };
+    fields.append(std::move(other_fields));
 
-      http::headers other_fields{
-        {"Hello-World", "aero"},
-      };
+    expect(contains_value(fields, "Host", "example.com"));
+    expect(contains_value(fields, "Hello-World", "aero"));
+    expect(fields.size() == 2U);
 
-      fields.append(other_fields);
+    expect(other_fields.empty());
+    expect(other_fields.begin() == other_fields.end());
+  };
 
-      expect(contains_value(fields, "Host", "example.com"));
-      expect(contains_value(fields, "Hello-World", "aero"));
-      expect(fields.size() == 2U);
-
-      expect(contains_value(other_fields, "Hello-World", "aero"));
+  "append copies nothing from empty object"_test = [] {
+    http::headers fields{
+      {"Host", "example.com"},
     };
 
-    "append moves fields and clears source"_test = [] {
-      http::headers fields{
-        {"Host", "example.com"},
-      };
+    http::headers other_fields{};
 
-      http::headers other_fields{
-        {"Hello-World", "aero"},
-      };
+    auto fields_size_before_append = fields.size();
+    fields.append(other_fields);
 
-      fields.append(std::move(other_fields));
+    expect(contains_value(fields, "Host", "example.com"));
+    expect(fields_size_before_append == fields.size());
+  };
 
-      expect(contains_value(fields, "Host", "example.com"));
-      expect(contains_value(fields, "Hello-World", "aero"));
-      expect(fields.size() == 2U);
-
-      expect(other_fields.empty());
-      expect(other_fields.begin() == other_fields.end());
+  "append copies initialized object to empty"_test = [] {
+    http::headers fields{
+      {"Host", "example.com"},
     };
 
-    "append copies nothing from empty object"_test = [] {
-      http::headers fields{
-        {"Host", "example.com"},
-      };
+    http::headers other_fields{};
 
-      http::headers other_fields{};
+    auto fields_size_before_append = fields.size();
+    other_fields.append(fields);
 
-      auto fields_size_before_append = fields.size();
-      fields.append(other_fields);
+    expect(contains_value(other_fields, "Host", "example.com"));
+    expect(other_fields.size() == fields_size_before_append);
+  };
 
-      expect(contains_value(fields, "Host", "example.com"));
-      expect(fields_size_before_append == fields.size());
+  "append moves initialized object to empty"_test = [] {
+    http::headers fields{};
+
+    http::headers other_fields{
+      {"Host", "example.com"},
+      {"Hello-World", "aero"},
     };
 
-    "append copies initialized object to empty"_test = [] {
-      http::headers fields{
-        {"Host", "example.com"},
-      };
+    auto other_fields_size_before_append = other_fields.size();
+    fields.append(std::move(other_fields));
 
-      http::headers other_fields{};
+    expect(contains_value(fields, "Host", "example.com"));
+    expect(contains_value(fields, "Hello-World", "aero"));
+    expect(fields.size() == other_fields_size_before_append);
 
-      auto fields_size_before_append = fields.size();
-      other_fields.append(fields);
+    expect(other_fields.empty());
+  };
 
-      expect(contains_value(other_fields, "Host", "example.com"));
-      expect(other_fields.size() == fields_size_before_append);
+  "append copies nothing when both objects empty"_test = [] {
+    http::headers fields{};
+    http::headers other_fields{};
+
+    fields.append(other_fields);
+
+    expect(fields.empty());
+    expect(other_fields.empty());
+  };
+
+  "append preserves duplicate header values on copy"_test = [] {
+    http::headers fields{
+      {"Set-Cookie", "a=1"},
     };
 
-    "append moves initialized object to empty"_test = [] {
-      http::headers fields{};
-
-      http::headers other_fields{
-        {"Host", "example.com"},
-        {"Hello-World", "aero"},
-      };
-
-      auto other_fields_size_before_append = other_fields.size();
-      fields.append(std::move(other_fields));
-
-      expect(contains_value(fields, "Host", "example.com"));
-      expect(contains_value(fields, "Hello-World", "aero"));
-      expect(fields.size() == other_fields_size_before_append);
-
-      expect(other_fields.empty());
+    http::headers other_fields{
+      {"Set-Cookie", "b=2"},
     };
 
-    "append copies nothing when both objects empty"_test = [] {
-      http::headers fields{};
-      http::headers other_fields{};
+    fields.append(other_fields);
 
-      fields.append(other_fields);
+    expect(contains_value(fields, "Set-Cookie", "a=1"));
+    expect(contains_value(fields, "Set-Cookie", "b=2"));
+    expect(fields.size() == 2U);
 
-      expect(fields.empty());
-      expect(other_fields.empty());
+    auto cookies = values_of(fields, "Set-Cookie");
+
+    expect(cookies.size() == 2U);
+    if (cookies.size() == 2U) {
+      expect(cookies[0] == "a=1");
+      expect(cookies[1] == "b=2");
+    }
+
+    expect(contains_value(other_fields, "Set-Cookie", "b=2"));
+    expect(other_fields.size() == 1U);
+  };
+
+  "append preserves duplicate header values on move"_test = [] {
+    http::headers fields{
+      {"Set-Cookie", "a=1"},
     };
 
-    "append preserves duplicate header values on copy"_test = [] {
-      http::headers fields{
-        {"Set-Cookie", "a=1"},
-      };
-
-      http::headers other_fields{
-        {"Set-Cookie", "b=2"},
-      };
-
-      fields.append(other_fields);
-
-      expect(contains_value(fields, "Set-Cookie", "a=1"));
-      expect(contains_value(fields, "Set-Cookie", "b=2"));
-      expect(fields.size() == 2U);
-
-      auto cookie_values = fields.values("Set-Cookie") | std::ranges::to<std::vector<std::string>>();
-
-      expect[cookie_values.size() == 2U];
-      expect(cookie_values[0] == "a=1");
-      expect(cookie_values[1] == "b=2");
-
-      expect(contains_value(other_fields, "Set-Cookie", "b=2"));
-      expect(other_fields.size() == 1U);
+    http::headers other_fields{
+      {"Set-Cookie", "b=2"},
     };
 
-    "append preserves duplicate header values on move"_test = [] {
-      http::headers fields{
-        {"Set-Cookie", "a=1"},
-      };
+    fields.append(std::move(other_fields));
 
-      http::headers other_fields{
-        {"Set-Cookie", "b=2"},
-      };
+    expect(contains_value(fields, "Set-Cookie", "a=1"));
+    expect(contains_value(fields, "Set-Cookie", "b=2"));
+    expect(fields.size() == 2U);
 
-      fields.append(std::move(other_fields));
+    auto cookies = values_of(fields, "Set-Cookie");
 
-      expect(contains_value(fields, "Set-Cookie", "a=1"));
-      expect(contains_value(fields, "Set-Cookie", "b=2"));
-      expect(fields.size() == 2U);
+    expect(cookies.size() == 2U);
+    if (cookies.size() == 2U) {
+      expect(cookies[0] == "a=1");
+      expect(cookies[1] == "b=2");
+    }
 
-      auto cookie_values = fields.values("Set-Cookie") | std::ranges::to<std::vector<std::string>>();
+    expect(other_fields.empty());
+  };
 
-      expect[cookie_values.size() == 2U];
-      expect(cookie_values[0] == "a=1");
-      expect(cookie_values[1] == "b=2");
-
-      expect(other_fields.empty());
+  "append finds merged values case-insensitively"_test = [] {
+    http::headers fields{
+      {"host", "example.com"},
     };
 
-    "append finds merged values case-insensitively"_test = [] {
-      http::headers fields{
-        {"host", "example.com"},
-      };
+    http::headers other_fields{
+      {"Host", "example.org"},
+    };
 
-      http::headers other_fields{
-        {"Host", "example.org"},
-      };
+    fields.append(other_fields);
 
-      fields.append(other_fields);
+    expect(contains_value(fields, "Host", "example.com"));
+    expect(contains_value(fields, "HOST", "example.org"));
 
-      expect(contains_value(fields, "Host", "example.com"));
-      expect(contains_value(fields, "HOST", "example.org"));
+    auto host_values = values_of(fields, "HOST");
 
-      auto host_values = fields.values("HOST") | std::ranges::to<std::vector<std::string>>();
-
-      expect[host_values.size() == 2U];
+    expect(host_values.size() == 2U);
+    if (host_values.size() == 2U) {
       expect(host_values[0] == "example.com");
       expect(host_values[1] == "example.org");
+    }
+  };
+
+  "append keeps first value from existing fields when appending"_test = [] {
+    http::headers fields{
+      {"X-Test", "first"},
     };
 
-    "append keeps first value from existing fields when appending"_test = [] {
-      http::headers fields{
-        {"X-Test", "first"},
-      };
-
-      http::headers other_fields{
-        {"X-Test", "second"},
-      };
-
-      fields.append(other_fields);
-
-      expect[fields.first_value("X-Test").has_value()];
-      expect(*fields.first_value("X-Test") == "first");
-      expect(contains_value(fields, "X-Test", "first"));
-      expect(contains_value(fields, "X-Test", "second"));
+    http::headers other_fields{
+      {"X-Test", "second"},
     };
 
-    "append preserves insertion order when appending"_test = [] {
-      http::headers fields{
-        {"A", "1"},
-        {"B", "2"},
-      };
+    fields.append(other_fields);
 
-      http::headers other_fields{
-        {"C", "3"},
-        {"D", "4"},
-      };
+    expect(fields.first_value("X-Test") == "first");
+    expect(contains_value(fields, "X-Test", "first"));
+    expect(contains_value(fields, "X-Test", "second"));
+  };
 
-      fields.append(other_fields);
+  "append preserves insertion order when appending"_test = [] {
+    http::headers fields{
+      {"A", "1"},
+      {"B", "2"},
+    };
 
-      std::vector<http::headers::value_type> all_fields(fields.begin(), fields.end());
+    http::headers other_fields{
+      {"C", "3"},
+      {"D", "4"},
+    };
 
-      expect[all_fields.size() == 4U];
+    fields.append(other_fields);
+
+    std::vector<http::headers::value_type> all_fields(fields.begin(), fields.end());
+
+    expect(all_fields.size() == 4U);
+    if (all_fields.size() == 4U) {
       expect(all_fields[0].name == "A");
       expect(all_fields[0].value == "1");
       expect(all_fields[1].name == "B");
@@ -689,121 +810,36 @@ int main() {
       expect(all_fields[2].value == "3");
       expect(all_fields[3].name == "D");
       expect(all_fields[3].value == "4");
-    };
-
-    "append copies large number of fields"_test = [] {
-      http::headers fields{
-        {"Host", "example.com"},
-      };
-
-      http::headers other_fields{};
-      for (std::size_t i{}; i < 1000; ++i) {
-        other_fields.add("X-Header-" + std::to_string(i), "Value-" + std::to_string(i));
-      }
-
-      fields.append(other_fields);
-
-      expect(fields.size() == 1001U);
-      expect(contains_value(fields, "Host", "example.com"));
-      expect(contains_value(fields, "X-Header-0", "Value-0"));
-      expect(contains_value(fields, "X-Header-999", "Value-999"));
-
-      expect(not other_fields.empty());
-      expect(other_fields.size() == 1000U);
-      expect(contains_value(other_fields, "X-Header-0", "Value-0"));
-      expect(contains_value(other_fields, "X-Header-999", "Value-999"));
-    };
-
-    "append moves large number of fields and clears source"_test = [] {
-      http::headers fields{
-        {"Host", "example.com"},
-      };
-
-      http::headers other_fields{};
-      for (std::size_t i{}; i < 1000; ++i) {
-        other_fields.add("X-Header-" + std::to_string(i), "Value-" + std::to_string(i));
-      }
-
-      fields.append(std::move(other_fields));
-
-      expect(fields.size() == 1001U);
-      expect(contains_value(fields, "Host", "example.com"));
-      expect(contains_value(fields, "X-Header-0", "Value-0"));
-      expect(contains_value(fields, "X-Header-999", "Value-999"));
-
-      expect(other_fields.empty());
-    };
-
-    "self append does nothing"_test = [] {
-      http::headers fields{
-        {"Host", "example.com"},
-        {"Hello-World", "aero"},
-      };
-
-      auto fields_size_before_append = fields.size();
-      fields.append(fields);
-
-      expect(fields.size() == fields_size_before_append);
-      expect(contains_value(fields, "Host", "example.com"));
-      expect(contains_value(fields, "Hello-World", "aero"));
-    };
-
-    "content-length returns parsed integer"_test = [] {
-      http::headers fields{
-        {"Content-Length", "500"},
-      };
-
-      expect(fields.content_length() == 500);
-    };
-
-    "content-length parses header names case-insensitively"_test = [] {
-      http::headers fields{
-        {"CoNtEnT-LeNgtH", "500"},
-      };
-
-      expect(fields.content_length() == 500);
-    };
-
-    "content-length parses uint64"_test = [] {
-      http::headers fields{
-        {"Content-Length", "18446744073709551615"},
-      };
-
-      expect(fields.content_length<std::uint64_t>() == 18446744073709551615ULL);
-    };
-
-    "content-length returns an unexpected error on missing header"_test = [] {
-      http::headers fields{};
-
-      auto content_length = fields.content_length();
-
-      expect[not content_length.has_value()];
-      expect(content_length.error() == header_error::content_length_missing);
-    };
-
-    "content-type returns parsed mime type"_test = [] {
-      http::headers fields{
-        {"Content-Type", "application/json"},
-      };
-
-      expect(fields.content_type() == "application/json");
-    };
-
-    "content-type parses header names case-insensitively"_test = [] {
-      http::headers fields{
-        {"CoNtEnT-TyPe", "application/json"},
-      };
-
-      expect(fields.content_type() == "application/json");
-    };
-
-    "content-type returns an unexpected error on missing header"_test = [] {
-      http::headers fields{};
-
-      auto content_type = fields.content_type();
-
-      expect[not content_type.has_value()];
-      expect(content_type.error() == header_error::content_type_missing);
-    };
+    }
   };
-}
+
+  "self append does nothing on copy"_test = [] {
+    http::headers fields{
+      {"Host", "example.com"},
+      {"Hello-World", "aero"},
+    };
+
+    auto fields_size_before_append = fields.size();
+    fields.append(fields);
+
+    expect(fields.size() == fields_size_before_append);
+    expect(contains_value(fields, "Host", "example.com"));
+    expect(contains_value(fields, "Hello-World", "aero"));
+  };
+
+  "self append does nothing on move"_test = [] {
+    http::headers fields{
+      {"Host", "example.com"},
+      {"Hello-World", "aero"},
+    };
+
+    auto fields_size_before_append = fields.size();
+    fields.append(std::move(fields));
+
+    expect(fields.size() == fields_size_before_append);
+    expect(contains_value(fields, "Host", "example.com"));
+    expect(contains_value(fields, "Hello-World", "aero"));
+  };
+};
+
+int main() {}

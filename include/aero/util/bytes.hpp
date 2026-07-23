@@ -5,7 +5,7 @@
 #include <span>
 #include <type_traits>
 
-namespace aero::detail {
+namespace aero {
 
   template <std::unsigned_integral T>
   [[nodiscard]] inline T read_big_endian(std::span<const std::byte, sizeof(T)> bytes) noexcept {
@@ -39,4 +39,4 @@ namespace aero::detail {
     return result;
   }
 
-} // namespace aero::detail
+} // namespace aero

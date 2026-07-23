@@ -7,7 +7,7 @@
 #include <ut/ut.hpp>
 #include <utility>
 
-#include "aero/http/detail/common.hpp"
+#include "aero/http/detail/line_endings.hpp"
 #include "aero/http/error.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/http/response.hpp"

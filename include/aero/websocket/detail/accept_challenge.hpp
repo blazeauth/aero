@@ -4,8 +4,8 @@
 #include <random>
 #include <string>
 
-#include "aero/base64/base64.hpp"
-#include "aero/detail/sha1.hpp"
+#include "aero/util/base64.hpp"
+#include "aero/util/sha1.hpp"
 
 namespace aero::websocket::detail {
 
@@ -36,7 +36,7 @@ namespace aero::websocket::detail {
   [[nodiscard]] inline std::string compute_sec_websocket_accept(std::string_view sec_websocket_key) {
     constexpr std::string_view websocket_guid{"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"};
     auto concatenated_key = std::string{sec_websocket_key}.append(websocket_guid);
-    auto hashed_bytes = aero::detail::sha1(concatenated_key);
+    auto hashed_bytes = aero::sha1(concatenated_key);
 
     return aero::base64_encode(std::span<const std::byte>{hashed_bytes});
   }

@@ -32,11 +32,10 @@
 
 #include "aero/default_executor.hpp"
 #include "aero/detail/aligned_allocator.hpp"
-#include "aero/detail/string.hpp"
 #include "aero/error.hpp"
 #include "aero/http/client_options.hpp"
-#include "aero/http/detail/common.hpp"
 #include "aero/http/detail/connection_pool.hpp"
+#include "aero/http/detail/line_endings.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/http/port.hpp"
 #include "aero/http/request.hpp"
@@ -46,7 +45,8 @@
 #include "aero/http/status_line.hpp"
 #include "aero/http/uri.hpp"
 #include "aero/http/version.hpp"
-#include "aero/net/concepts/transport.hpp"
+#include "aero/net/detail/concepts.hpp"
+#include "aero/util/string.hpp"
 
 namespace aero::http {
 
@@ -554,7 +554,7 @@ namespace aero::http {
                 return_as_deferred_tuple());
             }
 
-            auto content_length = response.headers.template content_length<std::uint64_t>();
+            auto content_length = http::content_length<std::uint64_t>(response.headers);
             if (content_length.has_value()) {
               co_return co_await async_read_content_length_body(transport,
                 std::move(response),
@@ -836,7 +836,7 @@ namespace aero::http {
         endpoint.host = endpoint.host.substr(1, endpoint.host.size() - 2U);
       }
 
-      endpoint.host = aero::detail::to_lowercase(endpoint.host);
+      endpoint.host = aero::to_lowercase(endpoint.host);
       return endpoint;
     }
 
@@ -905,10 +905,7 @@ namespace aero::http {
         return std::unexpected(client_error::chunked_encoding_invalid);
       }
 
-      using aero::detail::hexadecimal_base;
-      using aero::detail::to_decimal;
-
-      return to_decimal<std::size_t>(size_token, hexadecimal_base).transform_error([](std::error_code) {
+      return aero::to_decimal<std::size_t>(size_token, 16).transform_error([](std::error_code) {
         return client_error::chunked_encoding_invalid;
       });
     }
@@ -1105,7 +1102,7 @@ namespace aero::http {
           continue;
         }
 
-        auto header_name = aero::detail::to_lowercase(std::string{line.substr(0, value_separator)});
+        auto header_name = aero::to_lowercase(std::string{line.substr(0, value_separator)});
         if (header_name != "transfer-encoding") {
           continue;
         }
@@ -1123,7 +1120,7 @@ namespace aero::http {
             return info;
           }
 
-          codings.push_back(aero::detail::to_lowercase(std::string{token}));
+          codings.push_back(aero::to_lowercase(std::string{token}));
 
           if (token_separator == std::string_view::npos) {
             break;

@@ -3,7 +3,7 @@
 #include <expected>
 #include <system_error>
 
-#include "aero/http/detail/common.hpp"
+#include "aero/http/detail/line_endings.hpp"
 #include "aero/http/error.hpp"
 #include "aero/http/status.hpp"
 #include "aero/http/status_line.hpp"
@@ -11,14 +11,10 @@
 
 namespace aero::http {
 
-  namespace {
-    using http::detail::crlf;
-  } // namespace
-
   inline std::expected<status_line, std::error_code> status_line::parse(std::string_view buffer) {
     // Remove CRLF status-line suffix if present
-    if (buffer.ends_with(crlf)) {
-      buffer.remove_suffix(crlf.size());
+    if (buffer.ends_with("\r\n")) {
+      buffer.remove_suffix(2);
     }
 
     auto protocol_str_end = buffer.find(' ');
@@ -38,11 +34,13 @@ namespace aero::http {
     // Reason phrase is just whatever is left (could be empty)
     std::string_view reason_phrase;
     if (status_code_str_end != std::string_view::npos) {
-      auto buffer_reason_phrase = remaining.substr(status_code_str_end + 1);
-      if (buffer_reason_phrase.ends_with(crlf)) {
-        buffer_reason_phrase.remove_suffix(crlf.size());
+      reason_phrase = remaining.substr(status_code_str_end + 1);
+
+      // For cases where the passed buffer ends with a double-CRLF, such as when
+      // the status line is followed by an empty header section
+      if (reason_phrase.ends_with("\r\n")) {
+        reason_phrase.remove_suffix(2);
       }
-      reason_phrase = buffer_reason_phrase;
     }
 
     auto status_code = aero::http::parse_status(status_code_str);

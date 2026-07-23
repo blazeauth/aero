@@ -26,11 +26,8 @@ function(aero_add_unit_test target_name source_file)
 endfunction()
 
 aero_add_unit_test(aero_error_code error_code.cpp)
-aero_add_unit_test(aero_io_runtime io_runtime.cpp)
 
-add_subdirectory(base64)
-add_subdirectory(sha1)
-add_subdirectory(string)
+add_subdirectory(util)
 
 if(AERO_USE_TLS)
   add_subdirectory(tls)
@@ -39,5 +36,4 @@ endif()
 add_subdirectory(http_client)
 add_subdirectory(http_primitives)
 add_subdirectory(http_server)
-add_subdirectory(ip_address_validator)
 add_subdirectory(websocket)

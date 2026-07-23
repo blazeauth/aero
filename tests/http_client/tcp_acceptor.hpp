@@ -22,7 +22,7 @@
 #include <asio/read_until.hpp>
 #include <asio/write.hpp>
 
-#include "aero/http/detail/common.hpp"
+#include "aero/http/detail/line_endings.hpp"
 
 namespace test::http {
 

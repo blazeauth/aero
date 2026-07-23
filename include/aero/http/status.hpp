@@ -5,8 +5,8 @@
 #include <string_view>
 #include <type_traits>
 
-#include "aero/detail/string.hpp"
 #include "aero/http/error.hpp"
+#include "aero/util/string.hpp"
 
 namespace aero::http {
 
@@ -87,11 +87,11 @@ namespace aero::http {
   }
 
   inline std::expected<status, std::error_code> parse_status(std::string_view str) {
-    auto parse_result = aero::detail::to_decimal<status>(str);
+    auto parse_result = aero::to_decimal<int>(str);
     if (!parse_result) {
       return std::unexpected(parse_result.error());
     }
-    auto code = *parse_result;
+    auto code = static_cast<status>(*parse_result);
     if (!is_valid_status_code(code)) {
       return std::unexpected(http::protocol_error::status_code_invalid);
     }

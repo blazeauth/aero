@@ -511,7 +511,7 @@ namespace aero::http {
       // RFC 9112, Section 3.2:
       // A server MUST respond with a 400 (Bad Request) status code to ... any
       // request message that contains more than one Host header field line ...
-      if (headers.occurrences("Host") > 1) {
+      if (headers.count("Host") > 1) {
         return bad_request;
       }
 

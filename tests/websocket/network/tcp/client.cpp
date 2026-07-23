@@ -17,7 +17,7 @@
 
 #include <asio/error.hpp>
 
-#include "aero/deadline.hpp"
+#include "aero/util/deadline.hpp"
 #include "aero/websocket/client.hpp"
 #include "aero/websocket/close_code.hpp"
 #include "aero/websocket/error.hpp"

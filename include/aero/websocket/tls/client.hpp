@@ -13,7 +13,7 @@
 #include "aero/tls/system_context.hpp"
 #include "aero/tls/verify_mode.hpp"
 #include "aero/websocket/basic_client.hpp"
-#include "aero/websocket/concepts/websocket_client.hpp"
+#include "aero/websocket/detail/concepts.hpp"
 
 namespace aero::websocket::tls {
 

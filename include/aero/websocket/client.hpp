@@ -2,7 +2,7 @@
 
 #include "aero/net/tcp_transport.hpp"
 #include "aero/websocket/basic_client.hpp"
-#include "aero/websocket/concepts/websocket_client.hpp"
+#include "aero/websocket/detail/concepts.hpp"
 
 namespace aero::websocket {
 

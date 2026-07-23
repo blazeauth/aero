@@ -5,13 +5,13 @@
 #include <system_error>
 #include <vector>
 
-#include "aero/detail/string.hpp"
-#include "aero/http/detail/common.hpp"
+#include "aero/http/detail/line_endings.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/http/method.hpp"
 #include "aero/http/request_line.hpp"
 #include "aero/http/response.hpp"
 #include "aero/http/version.hpp"
+#include "aero/util/string.hpp"
 #include "aero/websocket/detail/accept_challenge.hpp"
 #include "aero/websocket/error.hpp"
 #include "aero/websocket/uri.hpp"
@@ -96,8 +96,13 @@ namespace aero::websocket {
       }
 
       if (!subprotocols_.empty()) {
-        auto subprotocols_str = aero::detail::join_strings(subprotocols_, http::detail::header_value_separator);
-        handshake_headers.add("Sec-Websocket-Protocol", subprotocols_str);
+        std::string subproto_str;
+        for (std::string_view subproto : subprotocols_) {
+          subproto_str.append(subproto);
+          subproto_str.append("\r\n");
+        }
+
+        handshake_headers.add("Sec-Websocket-Protocol", subproto_str);
       }
 
       return handshake_request{
@@ -177,7 +182,7 @@ namespace aero::websocket {
 
     [[nodiscard]] bool is_reserved_header(std::string_view name) const noexcept {
       return std::ranges::any_of(protocol_reserved_headers,
-        [name](std::string_view header) { return aero::detail::striequal(name, header); });
+        [name](std::string_view header) { return aero::striequal(name, header); });
     }
 
     [[nodiscard]] std::string build_request_target(const aero::websocket::uri& uri) const {

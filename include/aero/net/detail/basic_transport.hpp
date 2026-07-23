@@ -26,7 +26,7 @@
 #include <asio/write.hpp>
 
 #include "aero/detail/aligned_allocator.hpp"
-#include "aero/net/concepts/transport.hpp"
+#include "aero/net/detail/concepts.hpp"
 
 namespace aero::net::detail {
 

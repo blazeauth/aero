@@ -31,7 +31,7 @@ namespace aero::http {
     }
 
     [[nodiscard]] std::expected<std::string_view, std::error_code> content_type() const noexcept {
-      return headers.content_type();
+      return http::content_type(headers);
     }
 
     [[nodiscard]] std::string serialize() const {
