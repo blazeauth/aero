@@ -5,7 +5,7 @@
 <p align="center">
   <strong>Networking that feels just right.</strong>
   <br />
-  C++23 WebSocket-first client library with HTTP/1.x support
+  C++23 WebSocket-first library with HTTP/1.x support
 </p>
 
 <p align="center">
@@ -28,38 +28,51 @@
 
 Aero is a lightweight, header-only networking library for modern C++.
 
-Library gives you a clean client-side API for **WebSocket** and **HTTP/1.0 / HTTP/1.1**, with optional **TLS** support. The project is built around a pretty simple idea: networking code should be easy to write, provide clear and straightforward errors, be pretty fast, and not turn into a heavyweight dependency just because you needed a client.
+Library gives you a clean client-side API for **WebSocket**, plus **HTTP/1.0 / HTTP/1.1** protocol types and a server, with optional **TLS** support. The project is built around a pretty simple idea: networking code should be easy to write, provide clear and straightforward errors, be pretty fast, and not turn into a heavyweight dependency just because you needed a client.
 
 The library compiles with both OpenSSL and wolfSSL. The asynchronous model is built on asio completion tokens and feels like an extension of asio rather than part of a different library, in other words, the library is designed to feel like a pleasant addition to asio, but it doesn't adhere to the asio style as strictly as, say, Boost-Beast.
 
-Here's an example of GET request:
+> [!NOTE]
+>
+> The HTTP server is under active development and should be ready soon.
+
+Here's an example of a WebSocket echo client:
 ```cpp
 #include <print>
 
-#include "aero/http.hpp"
+#include "aero/websocket/client.hpp"
+#include "aero/websocket/close_code.hpp"
 
-namespace http = aero::http;
+namespace websocket = aero::websocket;
 
 int main() {
-  std::expected<http::response, std::error_code> response = http::get("https://example.com/");
-  if (!response) {
-    std::println("Request failed: {}", response.error().message());
+  websocket::client client;
+
+  auto [connect_ec, handshake_response] = client.connect("ws://websockets.chilkat.io/wsChilkatEcho.ashx");
+  if (connect_ec) {
+    std::println("Connect failed: {}", connect_ec.message());
     return 1;
   }
 
-  std::println("Received response from example.com:");
+  std::println("Connected. HTTP status: {} ({})",
+    handshake_response.status_line.reason_phrase,
+    handshake_response.status_code());
 
-  std::println("Response Headers:");
-  for (const auto& [name, value] : response->headers) {
-    std::println("{}: {}", name, value);
+  if (auto send_ec = client.send_text("hello from aero client")) {
+    std::println("Send failed: {}", send_ec.message());
+    return 1;
   }
-  
-  std::println("Status: {} ({})", response->status_line.reason_phrase, response->status_code());
 
-  if (response->content_type() == "text/html") {
-    std::println("Body (first 100 bytes): {}", response->text().substr(0, 100));
-  } else {
-    std::println("Body: {}", response->text());
+  auto message = client.read();
+  if (!message) {
+    std::println("Read failed: {}", message.error().message());
+    return 1;
+  }
+
+  std::println("Echo: {}", message->text());
+
+  if (auto close_ec = client.close(websocket::close_code::normal)) {
+    std::println("Close failed: {}", close_ec.message());
   }
 }
 ```
@@ -335,207 +348,6 @@ int main() {
 ```
 </details>
 
-#### HTTP
-
-<details>
-<summary>HTTP httpforever.com GET (<strong>Sync</strong>)</summary>
-
-```cpp
-#include <print>
-
-#include "aero/http/client.hpp"
-
-namespace http = aero::http;
-
-int main() {
-  auto response = http::get("http://httpforever.com/");
-  if (!response) {
-    std::println("Request failed: {}", response.error().message());
-    return 1;
-  }
-
-  std::println("Received response from example.com:");
-  std::println("Response Headers:");
-  for (const auto& [name, value] : response->headers) {
-    std::println("{}: {}", name, value);
-  }
-  std::println("Status: {} ({})", response->status_line.reason_phrase, response->status_code());
-  if (response->content_type() == "text/html") {
-    std::println("Body (first 100 bytes): {}", response->text().substr(0, 100));
-  } else {
-    std::println("Body: {}", response->text());
-  }
-}
-```
-</details>
-
-<details>
-<summary>HTTPS example.com GET (<strong>Async</strong>)</summary>
-
-```cpp
-#include <latch>
-#include <print>
-
-#include "aero/http/client.hpp"
-#include "aero/http/response.hpp"
-#include "aero/util/io_runtime.hpp"
-#include "aero/tls/system_context.hpp"
-
-namespace http = aero::http;
-namespace tls = aero::tls;
-
-int main() {
-  aero::io_runtime io_runtime{1};
-
-  tls::system_context tls_context{tls::version::tlsv1_3};
-  tls_context.disable_deprecated_versions();
-
-  http::client client{io_runtime.get_executor(),
-    http::client_options{
-      .max_response_body_size = 32768,
-      .tls_context = std::ref(tls_context.context()),
-    }};
-
-  std::latch latch{1};
-
-  client.async_get("https://example.com/", [&](std::error_code ec, http::response response) {
-    if (ec) {
-      std::println("Request failed: {}", ec.message());
-      latch.count_down();
-      return;
-    }
-
-    std::println("Received response from example.com:");
-    std::println("Response Headers:");
-    for (const auto& [name, value] : response.headers) {
-      std::println("{}: {}", name, value);
-    }
-    std::println("Status: {} ({})", response.status_line.reason_phrase, response.status_code());
-
-    if (response.content_type() == "text/html") {
-      std::println("Body (first 100 bytes): {}", response.text().substr(0, 100));
-    } else {
-      std::println("Body: {}", response.text());
-    }
-
-    latch.count_down();
-  });
-
-  latch.wait();
-
-  std::println("Request completed");
-}
-```
-</details>
-
-<details>
-<summary>HTTPS example.com GET (<strong>Coro</strong>)</summary>
-
-```cpp
-#include <print>
-
-#include <asio/awaitable.hpp>
-#include <asio/use_awaitable.hpp>
-#include <asio/use_future.hpp>
-#include <system_error>
-
-#include "aero/default_executor.hpp"
-#include "aero/http/client.hpp"
-#include "aero/tls/system_context.hpp"
-
-namespace http = aero::http;
-namespace tls = aero::tls;
-
-asio::awaitable<std::error_code> do_request(http::client& client) {
-  auto [ec, response] = co_await client.async_get("https://example.com/", asio::as_tuple(asio::use_awaitable));
-  if (ec) {
-    co_return ec;
-  }
-
-  std::println("Received response from example.com:");
-  std::println("Response Headers:");
-  for (const auto& [name, value] : response.headers) {
-    std::println("{}: {}", name, value);
-  }
-  std::println("Status: {} ({})", response.status_line.reason_phrase, response.status_code());
-
-  if (response.content_type() == "text/html") {
-    std::println("Body (first 100 bytes): {}", response.text().substr(0, 100));
-  } else {
-    std::println("Body: {}", response.text());
-  }
-
-  co_return std::error_code{};
-}
-
-int main() {
-  tls::system_context tls_context{tls::version::tlsv1_3};
-  tls_context.disable_deprecated_versions();
-
-  http::client client{aero::get_default_executor(),
-    http::client_options{
-      .max_response_body_size = 32768,
-      .tls_context = std::ref(tls_context.context()),
-    }};
-
-  auto fut = asio::co_spawn(client.get_executor(), do_request(client), asio::use_future);
-
-  try {
-    auto request_ec = fut.get();
-    if (request_ec) {
-      std::println("HTTPS request failed with error: {} ({})", request_ec.message(), request_ec.category().name());
-    }
-  } catch (const std::exception& e) {
-    std::println("Exception: {}", e.what());
-  }
-
-  std::println("Request completed");
-}
-```
-</details>
-
-<details>
-<summary>HTTPS example.com GET (<strong>Sync</strong>)</summary>
-
-```cpp
-#include <print>
-
-#include "aero/http/client.hpp"
-#include "aero/tls/system_context.hpp"
-
-namespace http = aero::http;
-namespace tls = aero::tls;
-
-int main() {
-  tls::system_context tls_context{tls::version::tlsv1_3};
-  tls_context.disable_deprecated_versions();
-
-  http::client client{http::client_options{
-    .max_response_body_size = 32768,
-    .tls_context = std::ref(tls_context.context()),
-  }};
-
-  auto response = client.get("https://example.com/");
-  if (!response) {
-    std::println("Request failed: {}", response.error().message());
-    return 1;
-  }
-
-  std::println("Received response from example.com:");
-  std::println("Response Headers:");
-  for (const auto& [name, value] : response->headers) {
-    std::println("{}: {}", name, value);
-  }
-  std::println("Status: {} ({})", response->status_line.reason_phrase, response->status_code());
-  if (response->content_type() == "text/html") {
-    std::println("Body (first 100 bytes): {}", response->text().substr(0, 100));
-  } else {
-    std::println("Body: {}", response->text());
-  }
-}
-```
-</details>
-
 ---
 
 ### Why Aero?
@@ -751,13 +563,10 @@ Please note that all references to functions apply to both synchronous and async
 
 ### What you get
 - HTTP/1.0 and HTTP/1.1 support
-- plain HTTP and HTTPS client support
-- one-shot helper functions for common requests
-- a reusable HTTP client type for when you want connection reuse and more control
 - request and response types
+- methods, status codes and versions as enums, not strings
+- request line, status line and URI parsing
 - header utilities that are actually pleasant to work with
-- common request helpers for things like `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, and `OPTIONS`
-- client options for connection reuse, idle connection limits, transport buffer sizing, response body size caps, and `Expect: 100-continue` timing
 
 # Build and integration
 Aero is header‑only and requires a C++23 compiler. The primary dependency is standalone Asio (header‑only), and optional TLS support depends on WolfSSL or OpenSSL. Currently, Aero does not support package managers due to time constraints and because the current version is an MVP. PRs are very welcome.

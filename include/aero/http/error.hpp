@@ -49,23 +49,6 @@ namespace aero::http {
     character_invalid,
   };
 
-  enum class connection_error : std::uint8_t {
-    pool_unavailable = 1,
-    endpoint_host_empty,
-    endpoint_port_invalid,
-    tls_context_missing,
-  };
-
-  enum class client_error : std::uint8_t {
-    client_unavailable = 1,
-    request_encoding_unsupported,
-    response_encoding_unsupported,
-    content_length_mismatch,
-    chunked_encoding_invalid,
-    response_body_too_large,
-    unexpected_failure,
-  };
-
   namespace detail {
     class protocol_error_category final : public std::error_category {
      public:
@@ -175,55 +158,6 @@ namespace aero::http {
       }
     };
 
-    class connection_error_category final : public std::error_category {
-     public:
-      [[nodiscard]] const char* name() const noexcept override {
-        return "aero.http.connection_error";
-      }
-
-      [[nodiscard]] std::string message(int value) const override {
-        switch (static_cast<connection_error>(value)) {
-        case connection_error::pool_unavailable:
-          return "http connection pool is unavailable";
-        case connection_error::endpoint_host_empty:
-          return "http endpoint host is empty";
-        case connection_error::endpoint_port_invalid:
-          return "http endpoint port is invalid";
-        case connection_error::tls_context_missing:
-          return "tls context is missing";
-        default:
-          return "unknown http connection error";
-        }
-      }
-    };
-
-    class client_error_category final : public std::error_category {
-     public:
-      [[nodiscard]] const char* name() const noexcept override {
-        return "aero.http.client_error";
-      }
-
-      [[nodiscard]] std::string message(int value) const override {
-        switch (static_cast<client_error>(value)) {
-        case client_error::client_unavailable:
-          return "http client is unavailable";
-        case client_error::request_encoding_unsupported:
-          return "request transfer-encoding is not supported";
-        case client_error::response_encoding_unsupported:
-          return "response transfer-encoding is not supported";
-        case client_error::content_length_mismatch:
-          return "response body exceeds declared content-length";
-        case client_error::chunked_encoding_invalid:
-          return "response chunked encoding is invalid";
-        case client_error::response_body_too_large:
-          return "response body is too large";
-        case client_error::unexpected_failure:
-          return "http client failed unexpectedly";
-        default:
-          return "unknown http client error";
-        }
-      }
-    };
   } // namespace detail
 
   [[nodiscard]] const inline std::error_category& protocol_error_category() noexcept {
@@ -241,16 +175,6 @@ namespace aero::http {
     return instance;
   }
 
-  [[nodiscard]] const inline std::error_category& connection_error_category() noexcept {
-    static const detail::connection_error_category instance{};
-    return instance;
-  }
-
-  [[nodiscard]] const inline std::error_category& client_error_category() noexcept {
-    static const detail::client_error_category instance{};
-    return instance;
-  }
-
   [[nodiscard]] inline std::error_code make_error_code(protocol_error error) noexcept {
     return std::error_code{static_cast<int>(error), protocol_error_category()};
   }
@@ -263,14 +187,6 @@ namespace aero::http {
     return std::error_code{static_cast<int>(error), uri_error_category()};
   }
 
-  [[nodiscard]] inline std::error_code make_error_code(connection_error error) noexcept {
-    return std::error_code{static_cast<int>(error), connection_error_category()};
-  }
-
-  [[nodiscard]] inline std::error_code make_error_code(client_error error) noexcept {
-    return std::error_code{static_cast<int>(error), client_error_category()};
-  }
-
 } // namespace aero::http
 
 template <>
@@ -281,9 +197,3 @@ struct std::is_error_code_enum<aero::http::header_error> : std::true_type {};
 
 template <>
 struct std::is_error_code_enum<aero::http::uri_error> : std::true_type {};
-
-template <>
-struct std::is_error_code_enum<aero::http::connection_error> : std::true_type {};
-
-template <>
-struct std::is_error_code_enum<aero::http::client_error> : std::true_type {};
