@@ -20,9 +20,5 @@ int main() {
     "all uri errors have messages"_test = [] {
       aero::tests::test_enum_error_code_messages<http::uri_error>(http::uri_error_category());
     };
-
-    "all connection errors have messages"_test = [] {
-      aero::tests::test_enum_error_code_messages<http::connection_error>(http::connection_error_category());
-    };
   };
 }

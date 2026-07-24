@@ -10,9 +10,3 @@ endfunction()
 
 file(GLOB aero_http_examples_SOURCES *.cpp)
 _create_directory_executables_from_sources("http" "${aero_http_examples_SOURCES}")
-
-if(AERO_USE_TLS)
-  message(STATUS "[AERO] Adding HTTPS examples")
-  file(GLOB aero_http_tls_examples_SOURCES tls/*.cpp)
-  _create_directory_executables_from_sources("https" "${aero_http_tls_examples_SOURCES}")
-endif()
