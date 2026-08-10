@@ -106,23 +106,10 @@ struct connection {
 
 class tcp_server final {
  public:
-  explicit tcp_server()
-    : acceptor_(io_context_, tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0)), thread_([this]() mutable {
-        for (;;) {
-          std::error_code accept_ec;
-          tcp::socket socket = acceptor_.accept(accept_ec);
-          if (accept_ec) {
-            return;
-          }
-
-          try {
-            last_conn_ = std::make_shared<connection>(connection{.socket = std::move(socket), .buffer = {}});
-            accept_handler_(last_conn_);
-          } catch (...) {
-            exception_ = std::current_exception();
-          }
-        }
-      }) {}
+  explicit tcp_server(): acceptor_(io_context_, tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0)) {
+    async_accept();
+    thread_ = std::thread([this] { io_context_.run(); });
+  }
 
   tcp_server(const tcp_server&) = delete;
   tcp_server& operator=(const tcp_server&) = delete;
@@ -130,9 +117,12 @@ class tcp_server final {
   tcp_server& operator=(tcp_server&&) = delete;
 
   ~tcp_server() {
-    std::error_code ec;
-    static_cast<void>(acceptor_.close(ec));
-    join();
+    asio::post(io_context_, [this] {
+      std::error_code ignored;
+      static_cast<void>(acceptor_.close(ignored));
+    });
+
+    thread_.join();
   }
 
   [[nodiscard]] std::uint16_t port() const {
@@ -163,6 +153,24 @@ class tcp_server final {
   }
 
  private:
+  void async_accept() {
+    acceptor_.async_accept([this](std::error_code ec, asio::ip::tcp::socket socket) {
+      if (ec) {
+        return;
+      }
+
+      auto conn = std::make_shared<connection>(connection{.socket = std::move(socket)});
+
+      last_conn_ = conn;
+      try {
+        accept_handler_(conn);
+      } catch (const std::system_error& e) {
+        exception_ = std::make_exception_ptr(e);
+      }
+      async_accept();
+    });
+  }
+
   std::function<void(std::shared_ptr<connection>)> accept_handler_;
   std::shared_ptr<connection> last_conn_;
   asio::io_context io_context_;
