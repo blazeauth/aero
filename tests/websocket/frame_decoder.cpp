@@ -48,7 +48,11 @@ bool frame_headers_equal(frame first, frame second) {
 template <typename Decoder>
 void expect_header_decodes_to(std::span<const std::byte> bytes, const frame& expected) {
   auto decoded = Decoder{}.decode_header(bytes);
-  expect[decoded.has_value()];
+  expect(decoded.has_value());
+  if (decoded) {
+    return;
+  }
+
   expect(frame_headers_equal(expected, decoded.value()));
   expect(decoded->payload_data.empty());
   expect(decoded->application_data.empty());
@@ -62,7 +66,11 @@ void expect_rejected(std::span<const std::byte> bytes) {
 template <typename ErrorEnum>
 void expect_rejected_with(std::span<const std::byte> bytes, ErrorEnum expected_error) {
   auto decoded = client_frame_decoder{}.decode_header(bytes);
-  expect[not decoded.has_value()];
+  expect(not decoded.has_value());
+  if (decoded) {
+    return;
+  }
+
   expect(decoded.error() == expected_error);
 }
 
@@ -245,10 +253,9 @@ int main() {
       }
 
       auto decoded = client_frame_decoder{}.decode_header(header_only);
-      if (!decoded) {
+      expect(not decoded);
+      if (not decoded) {
         expect(decoded.error() == protocol_error::payload_length_too_big);
-      } else {
-        expect[false];
       }
     };
 

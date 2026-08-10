@@ -30,7 +30,11 @@ int main() {
       auto status_line_buf = generate_status_line_buffer(status_line);
       auto parsed_status_line = http::status_line::parse(status_line_buf);
 
-      expect[parsed_status_line.has_value()];
+      expect(parsed_status_line.has_value());
+      if (not parsed_status_line.has_value()) {
+        return;
+      }
+
       expect(parsed_status_line == status_line);
     };
 
@@ -43,7 +47,11 @@ int main() {
       auto status_line_buf = generate_status_line_buffer(status_line);
       auto parsed_status_line = http::status_line::parse(status_line_buf);
 
-      expect[parsed_status_line.has_value()];
+      expect(parsed_status_line.has_value());
+      if (not parsed_status_line.has_value()) {
+        return;
+      }
+
       expect(parsed_status_line->reason_phrase.empty());
       expect(parsed_status_line == status_line);
     };
@@ -57,7 +65,7 @@ int main() {
       auto status_line_buf = generate_status_line_buffer(status_line);
       auto parsed_status_line = http::status_line::parse(status_line_buf);
 
-      expect[not parsed_status_line.has_value()];
+      expect(not parsed_status_line.has_value());
     };
 
     // HTTP 1.1 RFC says that header section can have "zero or more header field lines"
@@ -70,7 +78,11 @@ int main() {
       std::string_view status_line_buf{"HTTP/1.0 200 OK\r\n\r\n"};
       auto parsed_status_line = http::status_line::parse(status_line_buf);
 
-      expect[parsed_status_line.has_value()];
+      expect(parsed_status_line.has_value());
+      if (not parsed_status_line.has_value()) {
+        return;
+      }
+
       expect(not parsed_status_line->reason_phrase.empty());
       expect(parsed_status_line == status_line);
     };

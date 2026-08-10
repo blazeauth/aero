@@ -41,15 +41,17 @@ int main() {
         {"Date", "Sun, 15 Feb 2026 23:19:40 GMT"},
       });
 
-      auto parsed = http::headers::parse(headers_buffer);
-      expect[parsed.has_value()];
+      auto headers = http::headers::parse(headers_buffer);
+      expect(headers.has_value());
 
-      auto& headers = *parsed;
+      if (not headers.has_value()) {
+        return;
+      }
 
-      expect(headers.size() == 3);
-      expect(headers.first_value("Connection") == "Upgrade");
-      expect(headers.first_value("Upgrade") == "websocket");
-      expect(headers.first_value("Date") == "Sun, 15 Feb 2026 23:19:40 GMT");
+      expect(headers->size() == 3);
+      expect(headers->first_value("Connection") == "Upgrade");
+      expect(headers->first_value("Upgrade") == "websocket");
+      expect(headers->first_value("Date") == "Sun, 15 Feb 2026 23:19:40 GMT");
     };
 
     "field names are case-insensitive"_test = [] {
@@ -58,33 +60,37 @@ int main() {
         {"cOnNeCtIoN", "close"},
       });
 
-      auto parsed = http::headers::parse(headers_buffer);
-      expect[parsed.has_value()];
+      auto headers = http::headers::parse(headers_buffer);
+      expect(headers.has_value());
 
-      auto& headers = *parsed;
+      if (not headers.has_value()) {
+        return;
+      }
 
-      expect(headers.size() == 2);
+      expect(headers->size() == 2);
 
-      expect(headers.contains("content-length"));
-      expect(headers.contains("CONTENT-LENGTH"));
-      expect(headers.contains("connection"));
-      expect(headers.contains("CONNECTION"));
+      expect(headers->contains("content-length"));
+      expect(headers->contains("CONTENT-LENGTH"));
+      expect(headers->contains("connection"));
+      expect(headers->contains("CONNECTION"));
 
-      expect(headers.first_value("content-length") == "123");
-      expect(headers.first_value("CONTENT-LENGTH") == "123");
-      expect(headers.first_value("Connection") == "close");
+      expect(headers->first_value("content-length") == "123");
+      expect(headers->first_value("CONTENT-LENGTH") == "123");
+      expect(headers->first_value("Connection") == "close");
     };
 
     "trims optional whitespace around value"_test = [] {
-      auto parsed = http::headers::parse("A:    b\r\nB:\t\tc\r\nC:\t d \t\r\n\r\n");
-      expect[parsed.has_value()];
+      auto headers = http::headers::parse("A:    b\r\nB:\t\tc\r\nC:\t d \t\r\n\r\n");
+      expect(headers.has_value());
 
-      auto& headers = *parsed;
+      if (not headers.has_value()) {
+        return;
+      }
 
-      expect(headers.size() == 3);
-      expect(headers.first_value("A") == "b");
-      expect(headers.first_value("B") == "c");
-      expect(headers.first_value("C") == "d");
+      expect(headers->size() == 3);
+      expect(headers->first_value("A") == "b");
+      expect(headers->first_value("B") == "c");
+      expect(headers->first_value("C") == "d");
     };
 
     "preserves duplicate field names"_test = [] {
@@ -95,20 +101,30 @@ int main() {
         {"x-foo", "two"},
       });
 
-      auto parsed = http::headers::parse(headers_buffer);
-      expect[parsed.has_value()];
+      auto headers = http::headers::parse(headers_buffer);
+      expect(headers.has_value());
 
-      auto& headers = *parsed;
+      if (not headers.has_value()) {
+        return;
+      }
 
-      expect(headers.size() == 4);
+      expect(headers->size() == 4);
 
-      auto set_cookie_values = get_all_header_values(headers, "SET-COOKIE");
-      expect[set_cookie_values.size() == 2];
+      auto set_cookie_values = get_all_header_values(*headers, "SET-COOKIE");
+      expect(set_cookie_values.size() == 2);
+      if (set_cookie_values.size() != 2) {
+        return;
+      }
+
       expect(set_cookie_values[0] == "a=1");
       expect(set_cookie_values[1] == "b=2");
 
-      auto x_foo_values = get_all_header_values(headers, "X-FOO");
-      expect[x_foo_values.size() == 2];
+      auto x_foo_values = get_all_header_values(*headers, "X-FOO");
+      expect(x_foo_values.size() == 2);
+      if (x_foo_values.size() != 2) {
+        return;
+      }
+
       expect(x_foo_values[0] == "one");
       expect(x_foo_values[1] == "two");
     };
@@ -121,64 +137,94 @@ int main() {
         },
         "Body-Line: must-not-be-parsed\r\nAnother: line\r\n");
 
-      auto parsed = http::headers::parse(buffer);
-      expect[parsed.has_value()];
+      auto headers = http::headers::parse(buffer);
+      expect(headers.has_value());
 
-      auto& headers = *parsed;
+      if (not headers.has_value()) {
+        return;
+      }
 
-      expect(headers.size() == 2);
-      expect(headers.contains("Connection"));
-      expect(headers.contains("Upgrade"));
-      expect(not headers.contains("Body-Line"));
-      expect(not headers.contains("Another"));
+      expect(headers->size() == 2);
+      expect(headers->contains("Connection"));
+      expect(headers->contains("Upgrade"));
+      expect(not headers->contains("Body-Line"));
+      expect(not headers->contains("Another"));
     };
 
     "fails if obs fold continuation appears in header line"_test = [] {
       auto parsed = http::headers::parse("X-Test: first\r\n\tsecond\r\n third\r\nY: ok\r\n\r\n");
 
-      expect[not parsed.has_value()];
+      expect(not parsed.has_value());
+      if (parsed.has_value()) {
+        return;
+      }
+
       expect(parsed.error() == header_error::obs_fold_not_supported);
     };
 
     "fails if headers end separator missing"_test = [] {
       auto parsed = http::headers::parse("A: b\r\nC: d\r\n");
 
-      expect[not parsed.has_value()];
+      expect(not parsed.has_value());
+      if (parsed.has_value()) {
+        return;
+      }
+
       expect(parsed.error() == header_error::section_incomplete);
     };
 
     "fails if header line has no colon"_test = [] {
       auto parsed = http::headers::parse("A: b\r\nThisIsNotAHeaderField\r\n\r\n");
 
-      expect[not parsed.has_value()];
+      expect(not parsed.has_value());
+      if (parsed.has_value()) {
+        return;
+      }
+
       expect(parsed.error() == header_error::field_invalid);
     };
 
     "fails if header name contains whitespace"_test = [] {
       auto parsed = http::headers::parse("Bad Name: value\r\n\r\n");
 
-      expect[not parsed.has_value()];
+      expect(not parsed.has_value());
+      if (parsed.has_value()) {
+        return;
+      }
+
       expect(parsed.error() == header_error::name_invalid);
     };
 
     "fails if header name has whitespace before colon"_test = [] {
       auto parsed = http::headers::parse("BadName : value\r\n\r\n");
 
-      expect[not parsed.has_value()];
+      expect(not parsed.has_value());
+      if (parsed.has_value()) {
+        return;
+      }
+
       expect(parsed.error() == header_error::name_invalid);
     };
 
     "fails if header section ends with double lf"_test = [] {
       auto parsed = http::headers::parse("A: b\nC: d\n\n");
 
-      expect[not parsed.has_value()];
+      expect(not parsed.has_value());
+      if (parsed.has_value()) {
+        return;
+      }
+
       expect(parsed.error() == header_error::lf_field_endings_not_supported);
     };
 
     "fails if bare cr appears inside header line"_test = [] {
       auto parsed = http::headers::parse("A: b\rc\r\n\r\n");
 
-      expect[not parsed.has_value()];
+      expect(not parsed.has_value());
+      if (parsed.has_value()) {
+        return;
+      }
+
       expect(parsed.error() == header_error::field_invalid);
     };
 
@@ -190,21 +236,27 @@ int main() {
 
       auto parsed = http::headers::parse(buffer);
 
-      expect[not parsed.has_value()];
+      expect(not parsed.has_value());
+      if (parsed.has_value()) {
+        return;
+      }
+
       expect(parsed.error() == header_error::field_invalid);
     };
 
     "parses empty header values"_test = [] {
-      auto parsed = http::headers::parse("X-Empty:\r\nY-Empty:   \t\r\n\r\n");
-      expect[parsed.has_value()];
+      auto headers = http::headers::parse("X-Empty:\r\nY-Empty:   \t\r\n\r\n");
+      expect(headers.has_value());
 
-      auto& headers = *parsed;
+      if (not headers.has_value()) {
+        return;
+      }
 
-      expect(headers.size() == 2);
-      expect(headers.contains("X-Empty"));
-      expect(headers.contains("Y-Empty"));
-      expect(headers.first_value("X-Empty") == "");
-      expect(headers.first_value("Y-Empty") == "");
+      expect(headers->size() == 2);
+      expect(headers->contains("X-Empty"));
+      expect(headers->contains("Y-Empty"));
+      expect(headers->first_value("X-Empty") == "");
+      expect(headers->first_value("Y-Empty") == "");
     };
 
     "allows obs text inside header values"_test = [] {
@@ -217,13 +269,15 @@ int main() {
       buffer += expected_value;
       buffer += "\r\n\r\n";
 
-      auto parsed = http::headers::parse(buffer);
-      expect[parsed.has_value()];
+      auto headers = http::headers::parse(buffer);
+      expect(headers.has_value());
 
-      auto& headers = *parsed;
+      if (not headers.has_value()) {
+        return;
+      }
 
-      expect(headers.size() == 1);
-      expect(headers.first_value("X-Text") == expected_value);
+      expect(headers->size() == 1);
+      expect(headers->first_value("X-Text") == expected_value);
     };
 
     "parses large duplicate set-cookie field values"_test = [] {
@@ -240,15 +294,21 @@ int main() {
         {"Set-Cookie", second_cookie},
       });
 
-      auto parsed = http::headers::parse(headers_buffer);
-      expect[parsed.has_value()];
+      auto headers = http::headers::parse(headers_buffer);
+      expect(headers.has_value());
 
-      auto& headers = *parsed;
+      if (not headers.has_value()) {
+        return;
+      }
 
-      expect(headers.size() == 2);
+      expect(headers->size() == 2);
 
-      auto set_cookie_values = get_all_header_values(headers, "SET-COOKIE");
-      expect[set_cookie_values.size() == 2];
+      auto set_cookie_values = get_all_header_values(*headers, "SET-COOKIE");
+      expect(set_cookie_values.size() == 2);
+      if (set_cookie_values.size() != 2) {
+        return;
+      }
+
       expect(set_cookie_values[0] == first_cookie);
       expect(set_cookie_values[1] == second_cookie);
     };

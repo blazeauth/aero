@@ -143,24 +143,30 @@ int main() {
       const masking_key key = make_masking_key(0x00, 0x01, 0x02, 0x03);
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
-      auto built = builder.build_text_frame("Hi");
-      expect[built.has_value()];
+      auto built_text_frame = builder.build_text_frame("Hi");
+      expect(built_text_frame.has_value());
+      if (not built_text_frame.has_value()) {
+        return;
+      }
+
+      auto text_frame = built_text_frame.value();
 
       const auto expected_prefix = expected_masked_header_prefix(opcode::text, 2U, key);
-      expect[starts_with(*built, expected_prefix)];
+      expect(starts_with(text_frame, expected_prefix));
 
-      expect[built->size() == expected_prefix.size() + 2U];
+      expect(text_frame.size() == expected_prefix.size() + 2U);
 
-      const auto first = std::to_integer<std::uint8_t>((*built)[0]);
+      const auto first = std::to_integer<std::uint8_t>(text_frame[0]);
       const auto first_fin_bit = first & 0x80U;
       const auto first_rsv_bits = first & 0x70U;
       const auto first_opcode_bits = first & 0x0FU;
       const auto expected_opcode_bits = static_cast<std::uint8_t>(opcode::text) & 0x0FU;
+
       expect(first_fin_bit == 0x80U);
       expect(first_rsv_bits == 0x00U);
       expect(first_opcode_bits == expected_opcode_bits);
 
-      const auto second = std::to_integer<std::uint8_t>((*built)[1]);
+      const auto second = std::to_integer<std::uint8_t>(text_frame[1]);
       const auto second_mask_bit = second & 0x80U;
       expect(second_mask_bit == 0x80U);
     };
@@ -170,21 +176,28 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       const auto payload = to_bytes("abcd");
-      auto built = builder.build_text_frame("abcd");
-      expect[built.has_value()];
+      auto built_text_frame = builder.build_text_frame("abcd");
+      expect(built_text_frame.has_value());
+      if (not built_text_frame.has_value()) {
+        return;
+      }
+
+      auto text_frame = built_text_frame.value();
 
       const auto header_prefix = expected_masked_header_prefix(opcode::text, payload.size(), key);
-      expect[starts_with(*built, header_prefix)];
+      expect(starts_with(text_frame, header_prefix));
 
-      const auto extracted_key = extract_masking_key(*built);
+      const auto extracted_key = extract_masking_key(text_frame);
       expect(extracted_key == key);
 
-      const auto masked_payload = payload_bytes(*built);
+      const auto masked_payload = payload_bytes(text_frame);
       const auto expected_masked = mask_payload(payload, key);
-      expect[masked_payload.size() == expected_masked.size()];
+      expect(masked_payload.size() == expected_masked.size());
 
-      for (std::size_t i{}; i < expected_masked.size(); ++i) {
-        expect(masked_payload[i] == expected_masked[i]);
+      if (masked_payload.size() == expected_masked.size()) {
+        for (std::size_t i{}; i < expected_masked.size(); ++i) {
+          expect(masked_payload[i] == expected_masked[i]);
+        }
       }
     };
 
@@ -193,14 +206,19 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       std::string payload(125, 'x');
-      auto built = builder.build_text_frame(payload);
-      expect[built.has_value()];
+      auto built_text_frame = builder.build_text_frame(payload);
+      expect(built_text_frame.has_value());
+      if (not built_text_frame.has_value()) {
+        return;
+      }
+
+      auto text_frame = built_text_frame.value();
 
       const auto expected_prefix = expected_masked_header_prefix(opcode::text, 125U, key);
-      expect[starts_with(*built, expected_prefix)];
-      expect(built->size() == expected_prefix.size() + 125U);
+      expect(starts_with(text_frame, expected_prefix));
+      expect(text_frame.size() == expected_prefix.size() + 125U);
 
-      const auto second = std::to_integer<std::uint8_t>((*built)[1]);
+      const auto second = std::to_integer<std::uint8_t>(text_frame[1]);
       expect(second == static_cast<std::uint8_t>(0x80U | 125U));
     };
 
@@ -209,20 +227,24 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       std::string payload(126, 'y');
-      auto built = builder.build_text_frame(payload);
-      expect[built.has_value()];
+      auto built_text_frame = builder.build_text_frame(payload);
+      expect(built_text_frame.has_value());
+      if (not built_text_frame.has_value()) {
+        return;
+      }
+
+      auto text_frame = built_text_frame.value();
 
       const auto expected_prefix = expected_masked_header_prefix(opcode::text, 126U, key);
-      expect[starts_with(*built, expected_prefix)];
-      expect(built->size() == expected_prefix.size() + 126U);
+      expect(starts_with(text_frame, expected_prefix));
+      expect(text_frame.size() == expected_prefix.size() + 126U);
 
-      const auto second = std::to_integer<std::uint8_t>((*built)[1]);
+      const auto second = std::to_integer<std::uint8_t>(text_frame[1]);
       expect(second == static_cast<std::uint8_t>(0x80U | 126U));
 
       const auto extended = big_endian_bytes<2>(126U);
-      const auto& frame = *built;
-      expect(frame[2] == extended[0]);
-      expect(frame[3] == extended[1]);
+      expect(text_frame[2] == extended[0]);
+      expect(text_frame[3] == extended[1]);
     };
 
     "encodes masked payload length using 64-bit extended encoding from 65536 upwards"_test = [] {
@@ -230,20 +252,24 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       std::string payload(65536, 'z');
-      auto built = builder.build_text_frame(payload);
-      expect[built.has_value()];
+      auto built_text_frame = builder.build_text_frame(payload);
+      expect(built_text_frame.has_value());
+      if (not built_text_frame.has_value()) {
+        return;
+      }
+
+      auto text_frame = built_text_frame.value();
 
       const auto expected_prefix = expected_masked_header_prefix(opcode::text, 65536U, key);
-      expect[starts_with(*built, expected_prefix)];
-      expect(built->size() == expected_prefix.size() + 65536U);
+      expect(starts_with(text_frame, expected_prefix));
+      expect(text_frame.size() == expected_prefix.size() + 65536U);
 
-      const auto second = std::to_integer<std::uint8_t>((*built)[1]);
+      const auto second = std::to_integer<std::uint8_t>(text_frame[1]);
       expect(second == static_cast<std::uint8_t>(0x80U | 127U));
 
       const auto extended = big_endian_bytes<8>(65536U);
-      const auto& frame = *built;
       for (std::size_t i{}; i < 8U; ++i) {
-        expect(frame[2U + i] == extended[i]);
+        expect(text_frame[2U + i] == extended[i]);
       }
     };
 
@@ -252,14 +278,19 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       std::vector<std::byte> payload{std::byte{0x00}, std::byte{0xFF}, std::byte{0x10}, std::byte{0x20}, std::byte{0x30}};
-      auto built = builder.build_binary_frame(payload);
-      expect[built.has_value()];
+      auto built_binary_frame = builder.build_binary_frame(payload);
+      expect(built_binary_frame.has_value());
+      if (not built_binary_frame.has_value()) {
+        return;
+      }
+
+      auto binary_frame = built_binary_frame.value();
 
       const auto expected_prefix = expected_masked_header_prefix(opcode::binary, payload.size(), key);
-      expect[starts_with(*built, expected_prefix)];
-      expect(built->size() == expected_prefix.size() + payload.size());
+      expect(starts_with(binary_frame, expected_prefix));
+      expect(binary_frame.size() == expected_prefix.size() + payload.size());
 
-      const auto masked = payload_bytes(*built);
+      const auto masked = payload_bytes(binary_frame);
       const auto expected_masked = mask_payload(payload, key);
 
       for (std::size_t i{}; i < payload.size(); ++i) {
@@ -273,14 +304,20 @@ int main() {
       source.keys.push_back(make_masking_key(0x01, 0x01, 0x01, 0x01));
       client_frame_builder<sequence_masking_key_source> builder{source};
 
-      auto first = builder.build_text_frame("a");
-      expect[first.has_value()];
+      auto built_first_frame = builder.build_text_frame("a");
+      expect(built_first_frame.has_value());
+      if (not built_first_frame.has_value()) {
+        return;
+      }
 
-      auto second = builder.build_text_frame("b");
-      expect[second.has_value()];
+      auto built_second_frame = builder.build_text_frame("b");
+      expect(built_second_frame.has_value());
+      if (not built_second_frame.has_value()) {
+        return;
+      }
 
-      const auto first_key = extract_masking_key(*first);
-      const auto second_key = extract_masking_key(*second);
+      const auto first_key = extract_masking_key(built_first_frame.value());
+      const auto second_key = extract_masking_key(built_second_frame.value());
 
       expect(first_key != second_key);
     };
@@ -290,10 +327,12 @@ int main() {
       source.error = protocol_error::masking_key_generation_failed;
 
       client_frame_builder<failing_masking_key_source> builder{source};
-      auto built = builder.build_text_frame("x");
+      auto built_text_frame = builder.build_text_frame("x");
 
-      expect[not built.has_value()];
-      expect(built.error() == protocol_error::masking_key_generation_failed);
+      expect(not built_text_frame.has_value());
+      if (not built_text_frame.has_value()) {
+        expect(built_text_frame.error() == protocol_error::masking_key_generation_failed);
+      }
     };
 
     "builds ping frame as final masked control frame"_test = [] {
@@ -301,14 +340,19 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       auto payload = to_bytes("p");
-      auto built = builder.build_ping_frame(std::span<const std::byte>{payload});
-      expect[built.has_value()];
+      auto built_ping_frame = builder.build_ping_frame(std::span<const std::byte>{payload});
+      expect(built_ping_frame.has_value());
+      if (not built_ping_frame.has_value()) {
+        return;
+      }
+
+      auto ping_frame = built_ping_frame.value();
 
       const auto expected_prefix = expected_masked_header_prefix(opcode::ping, 1U, key);
-      expect[starts_with(*built, expected_prefix)];
-      expect(built->size() == expected_prefix.size() + 1U);
+      expect(starts_with(ping_frame, expected_prefix));
+      expect(ping_frame.size() == expected_prefix.size() + 1U);
 
-      const auto first = std::to_integer<std::uint8_t>((*built)[0]);
+      const auto first = std::to_integer<std::uint8_t>(ping_frame[0]);
       const auto fin_bit = first & 0x80U;
       const auto rsv_bits = first & 0x70U;
       const auto opcode_bits = first & 0x0FU;
@@ -323,10 +367,12 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       auto payload = make_payload_bytes(126, std::byte{0x11});
-      auto built = builder.build_ping_frame(std::span<const std::byte>{payload});
+      auto built_ping_frame = builder.build_ping_frame(std::span<const std::byte>{payload});
 
-      expect[not built.has_value()];
-      expect(built.error() == protocol_error::control_frame_payload_too_big);
+      expect(not built_ping_frame.has_value());
+      if (not built_ping_frame.has_value()) {
+        expect(built_ping_frame.error() == protocol_error::control_frame_payload_too_big);
+      }
     };
 
     "rejects pong payload longer than 125 bytes with control frame error"_test = [] {
@@ -334,10 +380,12 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       auto payload = make_payload_bytes(126, std::byte{0x22});
-      auto built = builder.build_pong_frame(std::span<const std::byte>{payload});
+      auto built_pong_frame = builder.build_pong_frame(std::span<const std::byte>{payload});
 
-      expect[not built.has_value()];
-      expect(built.error() == protocol_error::control_frame_payload_too_big);
+      expect(not built_pong_frame.has_value());
+      if (not built_pong_frame.has_value()) {
+        expect(built_pong_frame.error() == protocol_error::control_frame_payload_too_big);
+      }
     };
 
     "builds pong frame as final masked control frame"_test = [] {
@@ -345,14 +393,19 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       auto payload = make_payload_bytes(125, std::byte{0x33});
-      auto built = builder.build_pong_frame(std::span<const std::byte>{payload});
-      expect[built.has_value()];
+      auto built_pong_frame = builder.build_pong_frame(std::span<const std::byte>{payload});
+      expect(built_pong_frame.has_value());
+      if (not built_pong_frame.has_value()) {
+        return;
+      }
+
+      auto pong_frame = built_pong_frame.value();
 
       const auto expected_prefix = expected_masked_header_prefix(opcode::pong, 125U, key);
-      expect[starts_with(*built, expected_prefix)];
-      expect(built->size() == expected_prefix.size() + 125U);
+      expect(starts_with(pong_frame, expected_prefix));
+      expect(pong_frame.size() == expected_prefix.size() + 125U);
 
-      const auto first = std::to_integer<std::uint8_t>((*built)[0]);
+      const auto first = std::to_integer<std::uint8_t>(pong_frame[0]);
       const auto fin_bit = first & 0x80U;
       const auto opcode_bits = first & 0x0FU;
       const auto expected_opcode_bits = static_cast<std::uint8_t>(opcode::pong) & 0x0FU;
@@ -364,20 +417,27 @@ int main() {
       const masking_key key = make_masking_key(0x55, 0x66, 0x77, 0x88);
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
-      auto built = builder.build_close_frame(close_code::normal, std::nullopt);
-      expect[built.has_value()];
+      auto built_close_frame = builder.build_close_frame(close_code::normal, std::nullopt);
+      expect(built_close_frame.has_value());
+      if (not built_close_frame.has_value()) {
+        return;
+      }
+
+      auto close_frame = built_close_frame.value();
 
       const auto expected_prefix = expected_masked_header_prefix(opcode::close, 2U, key);
-      expect[starts_with(*built, expected_prefix)];
-      expect(built->size() == expected_prefix.size() + 2U);
+      expect(starts_with(close_frame, expected_prefix));
+      expect(close_frame.size() == expected_prefix.size() + 2U);
 
-      const auto masked = payload_bytes(*built);
+      const auto masked = payload_bytes(close_frame);
       const auto unmasked = unmask_payload(masked, key);
 
       const auto expected_code = big_endian_bytes<2>(std::to_underlying(close_code::normal));
-      expect[unmasked.size() == 2U];
-      expect(unmasked[0] == expected_code[0]);
-      expect(unmasked[1] == expected_code[1]);
+      expect(unmasked.size() == 2U);
+      if (unmasked.size() == 2U) {
+        expect(unmasked[0] == expected_code[0]);
+        expect(unmasked[1] == expected_code[1]);
+      }
     };
 
     "builds close frame with reason without padding or duplication"_test = [] {
@@ -385,23 +445,29 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       constexpr std::string_view reason = "bye";
-      auto built = builder.build_close_frame(close_code::normal, reason);
-      expect[built.has_value()];
+      auto built_close_frame = builder.build_close_frame(close_code::normal, reason);
+      expect(built_close_frame.has_value());
+      if (not built_close_frame.has_value()) {
+        return;
+      }
+
+      auto close_frame = built_close_frame.value();
 
       constexpr auto payload_length = 2U + reason.size();
       const auto expected_prefix = expected_masked_header_prefix(opcode::close, payload_length, key);
-      expect[starts_with(*built, expected_prefix)];
-      expect(built->size() == expected_prefix.size() + payload_length);
+      expect(starts_with(close_frame, expected_prefix));
+      expect(close_frame.size() == expected_prefix.size() + payload_length);
 
-      const auto unmasked = unmask_payload(payload_bytes(*built), key);
-      expect[unmasked.size() == payload_length];
+      const auto unmasked = unmask_payload(payload_bytes(close_frame), key);
+      expect(unmasked.size() == payload_length);
+      if (unmasked.size() == payload_length) {
+        const auto expected_code = big_endian_bytes<2>(std::to_underlying(close_code::normal));
+        expect(unmasked[0] == expected_code[0]);
+        expect(unmasked[1] == expected_code[1]);
 
-      const auto expected_code = big_endian_bytes<2>(std::to_underlying(close_code::normal));
-      expect(unmasked[0] == expected_code[0]);
-      expect(unmasked[1] == expected_code[1]);
-
-      const std::string recovered_reason = to_string(std::span<const std::byte>{unmasked}.subspan(2));
-      expect(recovered_reason == reason);
+        const std::string recovered_reason = to_string(std::span<const std::byte>{unmasked}.subspan(2));
+        expect(recovered_reason == reason);
+      }
     };
 
     "rejects close reason that is not valid utf8"_test = [] {
@@ -412,9 +478,11 @@ int main() {
       invalid_utf8.push_back(static_cast<char>(0xC3));
       invalid_utf8.push_back(static_cast<char>(0x28));
 
-      auto built = builder.build_close_frame(close_code::normal, invalid_utf8);
-      expect[not built.has_value()];
-      expect(built.error() == protocol_error::close_reason_invalid_utf8);
+      auto built_close_frame = builder.build_close_frame(close_code::normal, invalid_utf8);
+      expect(not built_close_frame.has_value());
+      if (not built_close_frame.has_value()) {
+        expect(built_close_frame.error() == protocol_error::close_reason_invalid_utf8);
+      }
     };
 
     "rejects text payload that is not valid utf8"_test = [] {
@@ -425,9 +493,11 @@ int main() {
       invalid_utf8.push_back(static_cast<char>(0xC3));
       invalid_utf8.push_back(static_cast<char>(0x28));
 
-      auto built = builder.build_text_frame(invalid_utf8);
-      expect[not built.has_value()];
-      expect(built.error() == protocol_error::payload_text_invalid_utf8);
+      auto built_text_frame = builder.build_text_frame(invalid_utf8);
+      expect(not built_text_frame.has_value());
+      if (not built_text_frame.has_value()) {
+        expect(built_text_frame.error() == protocol_error::payload_text_invalid_utf8);
+      }
     };
 
     "ignores invalid utf8 when validation is disabled via config"_test = [] {
@@ -438,11 +508,11 @@ int main() {
       invalid_utf8.push_back(static_cast<char>(0xC3));
       invalid_utf8.push_back(static_cast<char>(0x28));
 
-      auto built = builder.build_close_frame(close_code::normal, invalid_utf8);
-      expect[built.has_value()];
+      auto built_frame = builder.build_close_frame(close_code::normal, invalid_utf8);
+      expect(built_frame.has_value());
 
-      built = builder.build_text_frame(invalid_utf8);
-      expect[built.has_value()];
+      built_frame = builder.build_text_frame(invalid_utf8);
+      expect(built_frame.has_value());
     };
 
     "accepts maximum allowed close reason length for control frame payload limit"_test = [] {
@@ -450,13 +520,18 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       std::string reason(123, 'r');
-      auto built = builder.build_close_frame(close_code::normal, reason);
-      expect[built.has_value()];
+      auto built_close_frame = builder.build_close_frame(close_code::normal, reason);
+      expect(built_close_frame.has_value());
+      if (not built_close_frame.has_value()) {
+        return;
+      }
+
+      auto close_frame = built_close_frame.value();
 
       const std::size_t payload_length = 125U;
       const auto expected_prefix = expected_masked_header_prefix(opcode::close, payload_length, key);
-      expect[starts_with(*built, expected_prefix)];
-      expect(built->size() == expected_prefix.size() + payload_length);
+      expect(starts_with(close_frame, expected_prefix));
+      expect(close_frame.size() == expected_prefix.size() + payload_length);
     };
 
     "rejects close reason that would exceed control frame payload limit"_test = [] {
@@ -464,9 +539,11 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       std::string reason(124, 'r');
-      auto built = builder.build_close_frame(close_code::normal, reason);
-      expect[not built.has_value()];
-      expect(built.error() == protocol_error::control_frame_payload_too_big);
+      auto built_close_frame = builder.build_close_frame(close_code::normal, reason);
+      expect(not built_close_frame.has_value());
+      if (not built_close_frame.has_value()) {
+        expect(built_close_frame.error() == protocol_error::control_frame_payload_too_big);
+      }
     };
   };
 }
