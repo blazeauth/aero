@@ -28,13 +28,13 @@
 
 Aero is a lightweight, header-only networking library for modern C++.
 
-Library gives you a clean client-side API for **WebSocket**, plus **HTTP/1.0 / HTTP/1.1** protocol types and a server, with optional **TLS** support. The project is built around a pretty simple idea: networking code should be easy to write, provide clear and straightforward errors, be pretty fast, and not turn into a heavyweight dependency just because you needed a client.
+Library provides an API for working with a WebSocket client, with optional TLS support. We plan to add HTTP/1.0 and HTTP/1.1 server support in the near future, and to further develop the library so that it can simultaneously offer a lightweight client component and a feature-rich, high-performance server framework.
 
 The library compiles with both OpenSSL and wolfSSL. The asynchronous model is built on asio completion tokens and feels like an extension of asio rather than part of a different library, in other words, the library is designed to feel like a pleasant addition to asio, but it doesn't adhere to the asio style as strictly as, say, Boost-Beast.
 
-> [!NOTE]
+> [!WARNING]
 >
-> The HTTP server is under active development and should be ready soon.
+> Aero is still in active development, so you should expect changes to the API at least until it exits the pre-major release phase.
 
 Here's an example of a WebSocket echo client:
 ```cpp
@@ -562,7 +562,6 @@ Please note that all references to functions apply to both synchronous and async
 ## HTTP
 
 ### What you get
-- HTTP/1.0 and HTTP/1.1 support
 - request and response types
 - methods, status codes and versions as enums, not strings
 - request line, status line and URI parsing
