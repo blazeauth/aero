@@ -14,8 +14,10 @@ using aero::websocket::uri_error;
 
 void expect_parse_error(std::string_view uri_text, uri_error expected_error) {
   auto parsed = websocket::uri::parse(uri_text);
-  expect[not parsed.has_value()];
-  expect(parsed.error() == expected_error);
+  expect(not parsed);
+  if (not parsed) {
+    expect(parsed.error() == expected_error);
+  }
 }
 
 websocket::uri parse_or_fail(std::string_view uri_text) {

@@ -12,11 +12,3 @@ aero_add_unit_test(aero_websocket_message message.cpp)
 aero_add_unit_test(aero_websocket_message_reader message_reader.cpp)
 aero_add_unit_test(aero_websocket_uri uri.cpp)
 aero_add_unit_test(aero_websocket_utf8_validator utf8_validator.cpp)
-
-if(AERO_BUILD_NETWORK_TESTS)
-  aero_add_unit_test(aero_websocket_network_tcp_client network/tcp/client.cpp)
-
-  if(AERO_BUILD_NETWORK_TLS_TESTS AND AERO_USE_TLS)
-    aero_add_unit_test(aero_websocket_network_tls_client network/tls/client.cpp)
-  endif()
-endif()

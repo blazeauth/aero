@@ -72,7 +72,11 @@ void expect_buffers_truncated_payload_until_complete(std::uint64_t payload_lengt
   expect(reader.consume(remaining_payload) == std::error_code{});
 
   auto produced = poll_one(reader);
-  expect[produced.has_value()];
+  expect(produced.has_value());
+  if (not produced.has_value()) {
+    return;
+  }
+
   expect(produced->kind == message_kind::text);
   expect(produced->payload.size() == static_cast<std::size_t>(payload_length));
   expect(not poll_one(reader).has_value());
@@ -90,7 +94,10 @@ int main() {
       expect(reader.consume(frame) == std::error_code{});
 
       auto produced = poll_one(reader);
-      expect[produced.has_value()];
+      expect(produced.has_value());
+      if (not produced.has_value()) {
+        return;
+      }
 
       expect(produced->is_text());
       expect(produced->text() == "hello");
@@ -106,7 +113,10 @@ int main() {
       expect(reader.consume(frame) == std::error_code{});
 
       auto produced = poll_one(reader);
-      expect[produced.has_value()];
+      expect(produced.has_value());
+      if (not produced.has_value()) {
+        return;
+      }
 
       expect(produced->kind == message_kind::binary);
       expect(produced->payload == payload);
@@ -127,7 +137,10 @@ int main() {
       expect(reader.consume(continuation_frame) == std::error_code{});
 
       auto produced = poll_one(reader);
-      expect[produced.has_value()];
+      expect(produced.has_value());
+      if (not produced.has_value()) {
+        return;
+      }
 
       expect(produced->kind == message_kind::text);
       expect(to_string(produced->payload) == "hello");
@@ -161,14 +174,22 @@ int main() {
       expect(reader.consume(ping_frame) == std::error_code{});
 
       auto produced_after_ping = poll_one(reader);
-      expect[produced_after_ping.has_value()];
+      expect(produced_after_ping.has_value());
+      if (not produced_after_ping.has_value()) {
+        return;
+      }
+
       expect(produced_after_ping->kind == message_kind::ping);
       expect(to_string(produced_after_ping->payload) == "p");
 
       expect(reader.consume(final_continuation) == std::error_code{});
 
       auto produced_text = poll_one(reader);
-      expect[produced_text.has_value()];
+      expect(produced_text.has_value());
+      if (not produced_text.has_value()) {
+        return;
+      }
+
       expect(produced_text->kind == message_kind::text);
       expect(to_string(produced_text->payload) == "hello");
     };
@@ -190,7 +211,11 @@ int main() {
       expect(reader.closed());
 
       auto produced = poll_one(reader);
-      expect[produced.has_value()];
+      expect(produced.has_value());
+      if (not produced.has_value()) {
+        return;
+      }
+
       expect(produced->kind == message_kind::close);
       expect(produced->payload == close_payload);
     };
@@ -220,7 +245,11 @@ int main() {
       expect(reader.consume(close_frame) == std::error_code{});
 
       auto produced = poll_one(reader);
-      expect[produced.has_value()];
+      expect(produced.has_value());
+      if (not produced.has_value()) {
+        return;
+      }
+
       expect(produced->kind == message_kind::close);
       expect(produced->payload.empty());
       expect(produced->close_code() == std::nullopt);
@@ -269,7 +298,11 @@ int main() {
       expect(reader.consume(continuation_frame) == std::error_code{});
 
       auto produced = poll_one(reader);
-      expect[produced.has_value()];
+      expect(produced.has_value());
+      if (not produced.has_value()) {
+        return;
+      }
+
       expect(produced->kind == message_kind::text);
       expect(to_string(produced->payload) == "€");
     };
@@ -327,7 +360,11 @@ int main() {
       expect(reader.consume(std::span<const std::byte>{text_frame.data() + 4, 1}) == std::error_code{});
 
       auto produced = poll_one(reader);
-      expect[produced.has_value()];
+      expect(produced.has_value());
+      if (not produced.has_value()) {
+        return;
+      }
+
       expect(produced->kind == message_kind::text);
       expect(to_string(produced->payload) == "€");
     };
@@ -351,7 +388,10 @@ int main() {
       message_reader reader;
 
       auto full_frame = serialize_unmasked_frame(opcode::text, true, to_bytes("Hi"));
-      expect[full_frame.size() >= 4U];
+      expect(full_frame.size() >= 4U);
+      if (full_frame.size() < 4U) {
+        return;
+      }
 
       expect(reader.consume(std::span<const std::byte>{full_frame.data(), 1}) == std::error_code{});
       expect(not poll_one(reader).has_value());
@@ -364,7 +404,11 @@ int main() {
       expect(reader.consume(std::span<const std::byte>{full_frame.data() + 2, full_frame.size() - 2}) == std::error_code{});
 
       auto produced = poll_one(reader);
-      expect[produced.has_value()];
+      expect(produced.has_value());
+      if (not produced.has_value()) {
+        return;
+      }
+
       expect(produced->kind == message_kind::text);
       expect(to_string(produced->payload) == "Hi");
       expect(reader.buffered_bytes() == 0U);
@@ -395,7 +439,11 @@ int main() {
       expect(reader.consume(complete_text_frame) == std::error_code{});
 
       auto produced = poll_one(reader);
-      expect[produced.has_value()];
+      expect(produced.has_value());
+      if (not produced.has_value()) {
+        return;
+      }
+
       expect(produced->kind == message_kind::text);
       expect(to_string(produced->payload) == "ok");
       expect(not reader.closed());
@@ -405,7 +453,7 @@ int main() {
       message_reader reader{message_reader_config{.max_message_size = 5}};
 
       auto text_frame = serialize_unmasked_frame(opcode::text, true, to_bytes("HiHello"));
-      expect[text_frame.size() > (4U)];
+      expect(text_frame.size() > 4U);
 
       expect(reader.consume(text_frame) == message_reader_error::message_too_big);
     };
@@ -419,12 +467,16 @@ int main() {
       std::vector<std::byte> chunk;
       chunk.append_range(first_frame);
       chunk.append_range(second_frame);
-      expect[chunk.size() > (5U)];
+      expect(chunk.size() > 5U);
 
       expect(reader.consume(chunk) == std::error_code{});
 
       auto produced = poll_all(reader);
-      expect[produced.size() == 2U];
+      expect(produced.size() == 2U);
+      if (produced.size() != 2U) {
+        return;
+      }
+
       expect(to_string(produced[0].payload) == "abc");
       expect(to_string(produced[1].payload) == "de");
     };
@@ -451,7 +503,10 @@ int main() {
       expect(reader.consume(pong_frame) == std::error_code{});
 
       auto produced = poll_all(reader);
-      expect[produced.size() == 3U];
+      expect(produced.size() == 3U);
+      if (produced.size() != 3U) {
+        return;
+      }
 
       expect(produced[0].kind == message_kind::ping);
       expect(to_string(produced[0].payload) == "p");

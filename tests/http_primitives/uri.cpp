@@ -13,8 +13,10 @@ using http::uri_error;
 
 void expect_parse_error(std::string_view uri_text, uri_error expected_error) {
   auto parsed = http::uri::parse(uri_text);
-  expect[not parsed.has_value()];
-  expect(parsed.error() == expected_error);
+  expect(not parsed.has_value());
+  if (not parsed.has_value()) {
+    expect(parsed.error() == expected_error);
+  }
 }
 
 http::uri parse_or_fail(std::string_view uri_text) {

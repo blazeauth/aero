@@ -40,10 +40,13 @@ int main() {
 
       std::vector<std::byte> out(input.header_size(), std::byte{0xAA});
       auto encoded = frame_encoder{}.encode(out, input);
-      expect[encoded.has_value()];
+      expect(encoded.has_value());
+      if (not encoded.has_value()) {
+        return;
+      }
 
       std::array<std::byte, 2> expected{to_byte(0x81U), to_byte(0x00U)};
-      expect[starts_with(out, expected)];
+      expect(starts_with(out, expected));
 
       for (std::size_t i = input.header_size(); i < out.size(); ++i) {
         expect(out[i] == std::byte{0xAA});
@@ -61,10 +64,13 @@ int main() {
 
       std::vector<std::byte> out(input.header_size(), std::byte{0xAA});
       auto encoded = frame_encoder{}.encode(out, input);
-      expect[encoded.has_value()];
+      expect(encoded.has_value());
+      if (not encoded.has_value()) {
+        return;
+      }
 
       std::array<std::byte, 2> expected{to_byte(0x81U), to_byte(0x7DU)};
-      expect[starts_with(out, expected)];
+      expect(starts_with(out, expected));
     };
 
     "encodes unmasked length 126 as 16-bit extended"_test = [] {
@@ -78,11 +84,14 @@ int main() {
 
       std::vector<std::byte> out(input.header_size(), std::byte{0xAA});
       auto encoded = frame_encoder{}.encode(out, input);
-      expect[encoded.has_value()];
+      expect(encoded.has_value());
+      if (not encoded.has_value()) {
+        return;
+      }
 
       auto extended = big_endian_bytes<2>(126U);
       std::vector<std::byte> expected{to_byte(0x81U), to_byte(0x7EU), extended[0], extended[1]};
-      expect[starts_with(out, expected)];
+      expect(starts_with(out, expected));
     };
 
     "encodes unmasked length 65535 as 16-bit extended"_test = [] {
@@ -96,11 +105,14 @@ int main() {
 
       std::vector<std::byte> out(input.header_size(), std::byte{0xAA});
       auto encoded = frame_encoder{}.encode(out, input);
-      expect[encoded.has_value()];
+      expect(encoded.has_value());
+      if (not encoded.has_value()) {
+        return;
+      }
 
       auto extended = big_endian_bytes<2>(65535U);
       std::vector<std::byte> expected{to_byte(0x81U), to_byte(0x7EU), extended[0], extended[1]};
-      expect[starts_with(out, expected)];
+      expect(starts_with(out, expected));
     };
 
     "encodes unmasked length 65536 as 64-bit extended"_test = [] {
@@ -114,7 +126,10 @@ int main() {
 
       std::vector<std::byte> out(input.header_size(), std::byte{0xAA});
       auto encoded = frame_encoder{}.encode(out, input);
-      expect[encoded.has_value()];
+      expect(encoded.has_value());
+      if (not encoded.has_value()) {
+        return;
+      }
 
       auto extended = big_endian_bytes<8>(65536U);
       std::vector<std::byte> expected{
@@ -129,7 +144,7 @@ int main() {
         extended[6],
         extended[7],
       };
-      expect[starts_with(out, expected)];
+      expect(starts_with(out, expected));
     };
 
     "encodes masked length 15 and copies masking key"_test = [] {
@@ -144,10 +159,13 @@ int main() {
 
       std::vector<std::byte> out(input.header_size(), std::byte{0xAA});
       auto encoded = frame_encoder{}.encode(out, input);
-      expect[encoded.has_value()];
+      expect(encoded.has_value());
+      if (not encoded.has_value()) {
+        return;
+      }
 
       std::vector<std::byte> expected{to_byte(0x81U), to_byte(0x8FU), key[0], key[1], key[2], key[3]};
-      expect[starts_with(out, expected)];
+      expect(starts_with(out, expected));
     };
 
     "encodes masked length 50000 with 16-bit extended and copies masking key"_test = [] {
@@ -162,11 +180,14 @@ int main() {
 
       std::vector<std::byte> out(input.header_size(), std::byte{0xAA});
       auto encoded = frame_encoder{}.encode(out, input);
-      expect[encoded.has_value()];
+      expect(encoded.has_value());
+      if (not encoded.has_value()) {
+        return;
+      }
 
       auto extended = big_endian_bytes<2>(50000U);
       std::vector<std::byte> expected{to_byte(0x81U), to_byte(0xFEU), extended[0], extended[1], key[0], key[1], key[2], key[3]};
-      expect[starts_with(out, expected)];
+      expect(starts_with(out, expected));
     };
 
     "encodes masked length 100000 with 64-bit extended and copies masking key"_test = [] {
@@ -181,7 +202,10 @@ int main() {
 
       std::vector<std::byte> out(input.header_size(), std::byte{0xAA});
       auto encoded = frame_encoder{}.encode(out, input);
-      expect[encoded.has_value()];
+      expect(encoded.has_value());
+      if (not encoded.has_value()) {
+        return;
+      }
 
       auto extended = big_endian_bytes<8>(100000U);
       std::vector<std::byte> expected{
@@ -200,7 +224,7 @@ int main() {
         key[2],
         key[3],
       };
-      expect[starts_with(out, expected)];
+      expect(starts_with(out, expected));
     };
 
     "rejects output too small"_test = [] {
@@ -215,9 +239,11 @@ int main() {
       std::vector<std::byte> out(input.header_size() - 1U);
       auto encoded = frame_encoder{}.encode(out, input);
       expect(not encoded.has_value());
-      if (!encoded) {
-        expect(encoded.error() == aero::basic_error::not_enough_memory);
+      if (encoded.has_value()) {
+        return;
       }
+
+      expect(encoded.error() == aero::basic_error::not_enough_memory);
     };
 
     "rejects masked frame without masking key"_test = [] {
@@ -232,9 +258,11 @@ int main() {
       std::vector<std::byte> out(64);
       auto encoded = frame_encoder{}.encode(out, input);
       expect(not encoded.has_value());
-      if (!encoded) {
-        expect(encoded.error() == protocol_error::masking_key_missing);
+      if (encoded.has_value()) {
+        return;
       }
+
+      expect(encoded.error() == protocol_error::masking_key_missing);
     };
 
     "rejects unmasked frame with masking key"_test = [] {
@@ -250,9 +278,11 @@ int main() {
       std::vector<std::byte> out(64);
       auto encoded = frame_encoder{}.encode(out, input);
       expect(not encoded.has_value());
-      if (!encoded) {
-        expect(encoded.error() == protocol_error::masking_flag_missing);
+      if (encoded.has_value()) {
+        return;
       }
+
+      expect(encoded.error() == protocol_error::masking_flag_missing);
     };
 
     "rejects non-final control frame"_test = [] {
@@ -267,9 +297,11 @@ int main() {
       std::vector<std::byte> out(64);
       auto encoded = frame_encoder{}.encode(out, input);
       expect(not encoded.has_value());
-      if (!encoded) {
-        expect(encoded.error() == protocol_error::control_frame_fragmented);
+      if (encoded.has_value()) {
+        return;
       }
+
+      expect(encoded.error() == protocol_error::control_frame_fragmented);
     };
 
     "rejects oversized control frame payload"_test = [] {
@@ -284,9 +316,11 @@ int main() {
       std::vector<std::byte> out(64);
       auto encoded = frame_encoder{}.encode(out, input);
       expect(not encoded.has_value());
-      if (!encoded) {
-        expect(encoded.error() == protocol_error::control_frame_payload_too_big);
+      if (encoded.has_value()) {
+        return;
       }
+
+      expect(encoded.error() == protocol_error::control_frame_payload_too_big);
     };
 
     "rejects undersized close frame payload"_test = [] {
@@ -301,10 +335,17 @@ int main() {
       std::vector<std::byte> out(64);
       auto encoded_valid = frame_encoder{}.encode(out, input);
       expect(encoded_valid.has_value());
+      if (not encoded_valid.has_value()) {
+        return;
+      }
 
       input.application_data = std::span{out.data(), 1};
       auto encoded_invalid = frame_encoder{}.encode(out, input);
-      expect[not encoded_invalid.has_value()];
+      expect(not encoded_invalid.has_value());
+      if (encoded_invalid.has_value()) {
+        return;
+      }
+
       expect(encoded_invalid.error() == protocol_error::close_frame_payload_too_small);
     };
 
@@ -323,9 +364,11 @@ int main() {
       std::vector<std::byte> out(64);
       auto encoded = frame_encoder{}.encode(out, input);
       expect(not encoded.has_value());
-      if (!encoded) {
-        expect(encoded.error() == protocol_error::reserved_bits_nonzero);
+      if (encoded.has_value()) {
+        return;
       }
+
+      expect(encoded.error() == protocol_error::reserved_bits_nonzero);
     };
 
     "rejects reserved opcodes"_test = [] {
@@ -340,9 +383,11 @@ int main() {
       std::vector<std::byte> out(64);
       auto encoded = frame_encoder{}.encode(out, input);
       expect(not encoded.has_value());
-      if (!encoded) {
-        expect(encoded.error() == protocol_error::opcode_reserved);
+      if (encoded.has_value()) {
+        return;
       }
+
+      expect(encoded.error() == protocol_error::opcode_reserved);
     };
   };
 }
