@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -103,6 +104,10 @@ namespace aero {
       }
 
       return true;
+    }
+
+    bool consume(std::span<const std::byte> bytes) noexcept {
+      return consume(std::string_view{reinterpret_cast<const char*>(bytes.data()), bytes.size()});
     }
 
     [[nodiscard]] bool complete() const noexcept {
@@ -435,6 +440,10 @@ namespace aero {
   [[nodiscard]] inline bool is_valid_utf8(std::string_view str) noexcept {
     utf8_stream_validator validator;
     return validator.consume(str) && validator.complete();
+  }
+
+  [[nodiscard]] inline bool is_valid_utf8(std::span<const std::byte> bytes) noexcept {
+    return is_valid_utf8(std::string_view{reinterpret_cast<const char*>(bytes.data()), bytes.size()});
   }
 
   namespace detail {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "aero/util/utf8.hpp"
 #include <expected>
 #include <span>
 #include <string_view>
@@ -14,12 +15,12 @@
 #include <random>
 #endif
 
+#include "aero/util/utf8.hpp"
 #include "aero/websocket/close_code.hpp"
 #include "aero/websocket/detail/concepts.hpp"
 #include "aero/websocket/detail/frame.hpp"
 #include "aero/websocket/detail/frame_encoder.hpp"
 #include "aero/websocket/detail/opcode.hpp"
-#include "aero/websocket/detail/utf8_validator.hpp"
 #include "aero/websocket/error.hpp"
 
 namespace aero::websocket::detail {
@@ -88,7 +89,7 @@ namespace aero::websocket::detail {
         return std::unexpected(protocol_error::control_frame_payload_too_big);
       }
 
-      if (close_reason && !validate_utf8(*close_reason)) {
+      if (close_reason && !is_valid_utf8(*close_reason)) {
         return std::unexpected(protocol_error::close_reason_invalid_utf8);
       }
 
@@ -117,7 +118,7 @@ namespace aero::websocket::detail {
     }
 
     [[nodiscard]] result_type build_text_frame(std::string_view payload) {
-      if (!validate_utf8(payload)) {
+      if (!is_valid_utf8(payload)) {
         return std::unexpected(protocol_error::payload_text_invalid_utf8);
       }
 
@@ -168,11 +169,11 @@ namespace aero::websocket::detail {
       return message;
     }
 
-    [[nodiscard]] bool validate_utf8(std::string_view content) const {
+    [[nodiscard]] bool is_valid_utf8(std::string_view content) const {
       if (!validate_utf8_) {
         return true;
       }
-      return websocket::detail::is_valid_utf8(content);
+      return aero::is_valid_utf8(content);
     }
 
     frame_encoder frame_encoder_{};

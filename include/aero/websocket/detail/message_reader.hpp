@@ -12,11 +12,11 @@
 #include <utility>
 #include <vector>
 
+#include "aero/util/utf8.hpp"
 #include "aero/websocket/close_code.hpp"
 #include "aero/websocket/detail/frame.hpp"
 #include "aero/websocket/detail/frame_decoder.hpp"
 #include "aero/websocket/detail/opcode.hpp"
-#include "aero/websocket/detail/utf8_validator.hpp"
 #include "aero/websocket/error.hpp"
 #include "aero/websocket/message.hpp"
 
@@ -125,7 +125,7 @@ namespace aero::websocket::detail {
     struct message_in_progress {
       detail::opcode opcode{};
       std::vector<std::byte> payload;
-      utf8_validator utf8;
+      aero::utf8_stream_validator utf8;
     };
 
    public:
@@ -199,7 +199,7 @@ namespace aero::websocket::detail {
 
       assert(message_);
 
-      if (message_->opcode == opcode::text && config_.validate_message_utf8 && !message_->utf8.finish()) {
+      if (message_->opcode == opcode::text && config_.validate_message_utf8 && !message_->utf8.complete()) {
         return std::unexpected(protocol_error::payload_text_invalid_utf8);
       }
 
@@ -220,7 +220,7 @@ namespace aero::websocket::detail {
         return {};
       }
 
-      if (message_->utf8.write(chunk)) {
+      if (message_->utf8.consume(chunk)) {
         return {};
       }
 
@@ -550,7 +550,7 @@ namespace aero::websocket::detail {
       const auto frame_has_close_reason = frame.application_data.size() > sizeof(close_code);
       if (frame_has_close_reason) {
         auto close_reason = frame.application_data.subspan(sizeof(close_code));
-        if (config_.validate_message_utf8 && !is_valid_utf8(close_reason)) {
+        if (config_.validate_message_utf8 && !aero::is_valid_utf8(close_reason)) {
           return protocol_error::close_reason_invalid_utf8;
         }
       }
