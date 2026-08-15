@@ -36,11 +36,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup MSVC environment
-        uses: ilammy/msvc-dev-cmd@v4
-        with:
-          arch: x64
-
       - name: Setup vcpkg
         if: matrix.tls.use_vcpkg
         uses: lukka/run-vcpkg@v11
