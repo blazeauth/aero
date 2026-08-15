@@ -2,7 +2,7 @@ name: Windows ClangCL
 
 on:
   push:
-    branches: ["main", "feature/*"]
+    branches: ["main"]
     paths-ignore: ["**/*.md", "docs/**"]
   pull_request:
     branches: ["main"]
