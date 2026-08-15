@@ -12,6 +12,7 @@ Checks: >
   -bugprone-exception-escape,
   -hicpp-invalid-access-moved,
   -modernize-use-designated-initializers,
+  -modernize-raw-string-literal,
   -misc-use-internal-linkage,
   -readability-static-accessed-through-instance,
   -readability-container-size-empty,
