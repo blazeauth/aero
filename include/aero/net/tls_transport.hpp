@@ -74,27 +74,31 @@ namespace aero::net {
             if (using_address) {
               asio::ip::tcp::endpoint endpoint(address, port);
               co_await lowest_layer().async_connect(endpoint, asio::redirect_error(asio::deferred, connect_ec));
-              co_return connect_ec;
-            }
-
-            auto service = std::to_string(port);
-
-            auto [resolve_ec, resolved_endpoints] =
-              co_await resolver_.async_resolve(host, service, asio::as_tuple(asio::deferred));
-            if (resolve_ec) {
-              if (resolve_ec == asio::error::bad_descriptor) {
-                co_return connect_error::host_invalid;
+              if (connect_ec) {
+                co_return connect_ec;
               }
-              if (resolve_ec == asio::error::operation_aborted) {
-                co_return resolve_ec;
+            } else {
+              auto service = std::to_string(port);
+
+              auto [resolve_ec, resolved_endpoints] =
+                co_await resolver_.async_resolve(host, service, asio::as_tuple(asio::deferred));
+              if (resolve_ec) {
+                if (resolve_ec == asio::error::bad_descriptor) {
+                  co_return connect_error::host_invalid;
+                }
+                if (resolve_ec == asio::error::operation_aborted) {
+                  co_return resolve_ec;
+                }
+
+                co_return connect_error::host_resolve_failed;
               }
 
-              co_return connect_error::host_resolve_failed;
-            }
-
-            co_await asio::async_connect(lowest_layer(), resolved_endpoints, asio::redirect_error(asio::deferred, connect_ec));
-            if (connect_ec) {
-              co_return connect_ec;
+              co_await asio::async_connect(lowest_layer(),
+                resolved_endpoints,
+                asio::redirect_error(asio::deferred, connect_ec));
+              if (connect_ec) {
+                co_return connect_ec;
+              }
             }
 
             if (!using_address) {
