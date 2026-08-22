@@ -412,13 +412,13 @@ class basic_client {
 
   ...
 
-  auto async_connect(websocket::uri uri, CompletionToken&& token);
-  auto async_connect(std::expected<websocket::uri, std::error_code> parsed_uri, CompletionToken&& token);
-  auto async_connect(std::string_view uri, CompletionToken&& token);
+  auto async_connect(urls::url url, CompletionToken&& token);
+  auto async_connect(std::expected<urls::url, std::error_code> parsed_url, CompletionToken&& token);
+  auto async_connect(std::string_view url, CompletionToken&& token);
 
-  auto async_connect(websocket::uri uri, http::headers headers, CompletionToken&& token);
-  auto async_connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers, CompletionToken&& token);
-  auto async_connect(std::string_view uri, http::headers headers, CompletionToken&& token);
+  auto async_connect(urls::url url, http::headers headers, CompletionToken&& token);
+  auto async_connect(std::expected<urls::url, std::error_code> parsed_url, http::headers headers, CompletionToken&& token);
+  auto async_connect(std::string_view url, http::headers headers, CompletionToken&& token);
 
   auto async_send_text(std::string_view text, CompletionToken&& token);
   auto async_send_binary(std::span<const std::byte> data, CompletionToken&& token);
@@ -437,19 +437,19 @@ class basic_client {
 
   auto async_read(CompletionToken&& token);
 
-  std::tuple<std::error_code, http::response> connect(websocket::uri uri);
-  std::tuple<std::error_code, http::response> connect(websocket::uri uri, duration timeout);
-  std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri);
-  std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri, duration timeout);
-  std::tuple<std::error_code, http::response> connect(std::string_view uri_string);
-  std::tuple<std::error_code, http::response> connect(std::string_view uri_string, duration timeout);
+  std::tuple<std::error_code, http::response> connect(urls::url url);
+  std::tuple<std::error_code, http::response> connect(urls::url url, duration timeout);
+  std::tuple<std::error_code, http::response> connect(std::expected<urls::url, std::error_code> parsed_url);
+  std::tuple<std::error_code, http::response> connect(std::expected<urls::url, std::error_code> parsed_url, duration timeout);
+  std::tuple<std::error_code, http::response> connect(std::string_view url_string);
+  std::tuple<std::error_code, http::response> connect(std::string_view url_string, duration timeout);
 
-  std::tuple<std::error_code, http::response> connect(websocket::uri uri, http::headers headers);
-  std::tuple<std::error_code, http::response> connect(websocket::uri uri, http::headers headers, duration timeout);
-  std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers);
-  std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers, duration timeout);
-  std::tuple<std::error_code, http::response> connect(std::string_view uri_string, http::headers headers);
-  std::tuple<std::error_code, http::response> connect(std::string_view uri_string, http::headers headers, duration timeout);
+  std::tuple<std::error_code, http::response> connect(urls::url url, http::headers headers);
+  std::tuple<std::error_code, http::response> connect(urls::url url, http::headers headers, duration timeout);
+  std::tuple<std::error_code, http::response> connect(std::expected<urls::url, std::error_code> parsed_url, http::headers headers);
+  std::tuple<std::error_code, http::response> connect(std::expected<urls::url, std::error_code> parsed_url, http::headers headers, duration timeout);
+  std::tuple<std::error_code, http::response> connect(std::string_view url_string, http::headers headers);
+  std::tuple<std::error_code, http::response> connect(std::string_view url_string, http::headers headers, duration timeout);
 
   std::error_code send_text(std::string_view text);
   std::error_code send_binary(std::span<const std::byte> data);
@@ -564,7 +564,7 @@ Please note that all references to functions apply to both synchronous and async
 ### What you get
 - request and response types
 - methods, status codes and versions as enums, not strings
-- request line, status line and URI parsing
+- request line, status line and URL parsing
 - header utilities that are actually pleasant to work with
 
 # Build and integration

@@ -11,10 +11,11 @@
 #include "aero/http/request_line.hpp"
 #include "aero/http/response.hpp"
 #include "aero/http/version.hpp"
+#include "aero/urls/url.hpp"
 #include "aero/util/string.hpp"
 #include "aero/websocket/detail/accept_challenge.hpp"
 #include "aero/websocket/error.hpp"
-#include "aero/websocket/uri.hpp"
+#include "aero/websocket/port.hpp"
 
 namespace aero::websocket {
 
@@ -53,14 +54,14 @@ namespace aero::websocket {
     explicit client_handshaker(handshake_options options)
       : subprotocols_(std::move(options.subprotocols)), origin_(std::move(options.origin)) {}
 
-    [[nodiscard]] std::expected<handshake_request, std::error_code> build_request(const aero::websocket::uri& uri,
-      http::headers headers, std::optional<std::string> sec_websocket_key = std::nullopt) {
+    [[nodiscard]] std::expected<handshake_request, std::error_code> build_request(const urls::url& url, http::headers headers,
+      std::optional<std::string> sec_websocket_key = std::nullopt) {
       if (contains_reserved_header(headers)) {
         return std::unexpected(handshake_error::header_name_reserved);
       }
 
-      std::string request_target = build_request_target(uri);
-      std::string host_header_value = build_request_host(uri);
+      std::string request_target = build_request_target(url);
+      std::string host_header_value = build_request_host(url);
 
       auto request_line = http::request_line{
         .method = http::method::GET,
@@ -185,45 +186,31 @@ namespace aero::websocket {
         [name](std::string_view header) { return aero::striequal(name, header); });
     }
 
-    [[nodiscard]] std::string build_request_target(const aero::websocket::uri& uri) const {
+    [[nodiscard]] std::string build_request_target(const urls::url& url) const {
       std::string target;
 
-      std::string_view path = uri.path();
-      if (path.empty()) {
+      std::string_view path = url.path();
+      if (path.empty() || path.front() != '/') {
         target.push_back('/');
-      } else {
-        if (path.front() != '/') {
-          target.push_back('/');
-        }
-        target.append(path);
       }
+      target.append(path);
 
-      std::span query = uri.query();
-      if (!query.empty()) {
+      if (url.has_query()) {
         target.push_back('?');
-        for (std::size_t i{}; i < query.size(); ++i) {
-          if (i != 0) {
-            target.push_back('&');
-          }
-          target.append(query[i].first);
-          if (!query[i].second.empty()) {
-            target.push_back('=');
-            target.append(query[i].second);
-          }
-        }
+        target.append(url.query());
       }
 
       return target;
     }
 
-    [[nodiscard]] std::string build_request_host(const aero::websocket::uri& uri) const {
-      std::string host_str{uri.host()};
-      std::uint16_t port = uri.port();
-      std::uint16_t default_port = uri.default_port();
-
-      if (port != 0 && port != default_port) {
-        host_str += ':' + std::to_string(port);
+    [[nodiscard]] std::string build_request_host(const urls::url& url) const {
+      std::string host_str{url.host()};
+      auto url_port = url.port_number();
+      auto default_port = websocket::get_default_port(url.scheme());
+      if (url_port != 0 && url_port != default_port) {
+        host_str += (':' + std::to_string(*url_port));
       }
+
       return host_str;
     }
 

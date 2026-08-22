@@ -226,18 +226,18 @@ int main() {
       expect(connect_ec == websocket::handshake_error::accept_header_invalid);
     };
 
-    "connect rejects a non-websocket uri scheme before connecting"_test = [&] {
+    "connect rejects a non-websocket url scheme before connecting"_test = [&] {
       websocket::client client;
       auto [connect_ec, response] = client.connect("http://127.0.0.1/socket");
 
-      expect(connect_ec == websocket::uri_error::scheme_invalid);
+      expect(connect_ec == aero::urls::url_error::scheme_invalid);
     };
 
-    "connect rejects a uri without a host before connecting"_test = [&] {
+    "connect rejects a url without a host before connecting"_test = [&] {
       websocket::client client;
       auto [connect_ec, response] = client.connect("ws:///socket");
 
-      expect(connect_ec == websocket::uri_error::authority_empty);
+      expect(connect_ec == aero::urls::url_error::authority_invalid);
     };
 
     "the test server handled all requests without throwing"_test = [&] {
