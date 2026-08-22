@@ -49,7 +49,7 @@ template <typename Decoder>
 void expect_header_decodes_to(std::span<const std::byte> bytes, const frame& expected) {
   auto decoded = Decoder{}.decode_header(bytes);
   expect(decoded.has_value());
-  if (decoded) {
+  if (not decoded) {
     return;
   }
 
