@@ -12,6 +12,7 @@
 #include "aero/net/tls_transport.hpp"
 #include "aero/tls/system_context.hpp"
 #include "aero/tls/verify_mode.hpp"
+#include "aero/urls/url.hpp"
 #include "aero/websocket/basic_client.hpp"
 #include "aero/websocket/detail/concepts.hpp"
 
@@ -49,34 +50,33 @@ namespace aero::websocket::tls {
         basic_client_(std::move(options), std::in_place_type<transport_type>, tls_context_) {}
 
     template <typename CompletionToken>
-    auto async_connect(std::string_view uri, http::headers headers, CompletionToken&& token) {
-      return basic_client_.async_connect(uri, std::move(headers), std::forward<CompletionToken>(token));
+    auto async_connect(std::string_view url, http::headers headers, CompletionToken&& token) {
+      return basic_client_.async_connect(url, std::move(headers), std::forward<CompletionToken>(token));
     }
 
     template <typename CompletionToken>
-    auto async_connect(std::expected<websocket::uri, std::error_code> parsed_uri, http::headers headers,
-      CompletionToken&& token) {
-      return basic_client_.async_connect(std::move(parsed_uri), std::move(headers), std::forward<CompletionToken>(token));
+    auto async_connect(std::expected<urls::url, std::error_code> parsed_url, http::headers headers, CompletionToken&& token) {
+      return basic_client_.async_connect(std::move(parsed_url), std::move(headers), std::forward<CompletionToken>(token));
     }
 
     template <typename CompletionToken>
-    auto async_connect(websocket::uri uri, http::headers headers, CompletionToken&& token) {
-      return basic_client_.async_connect(std::move(uri), std::move(headers), std::forward<CompletionToken>(token));
+    auto async_connect(urls::url url, http::headers headers, CompletionToken&& token) {
+      return basic_client_.async_connect(std::move(url), std::move(headers), std::forward<CompletionToken>(token));
     }
 
     template <typename CompletionToken>
-    auto async_connect(std::string_view uri, CompletionToken&& token) {
-      return basic_client_.async_connect(uri, std::forward<CompletionToken>(token));
+    auto async_connect(std::string_view url, CompletionToken&& token) {
+      return basic_client_.async_connect(url, std::forward<CompletionToken>(token));
     }
 
     template <typename CompletionToken>
-    auto async_connect(std::expected<websocket::uri, std::error_code> parsed_uri, CompletionToken&& token) {
-      return basic_client_.async_connect(std::move(parsed_uri), std::forward<CompletionToken>(token));
+    auto async_connect(std::expected<urls::url, std::error_code> parsed_url, CompletionToken&& token) {
+      return basic_client_.async_connect(std::move(parsed_url), std::forward<CompletionToken>(token));
     }
 
     template <typename CompletionToken>
-    auto async_connect(websocket::uri uri, CompletionToken&& token) {
-      return basic_client_.async_connect(std::move(uri), std::forward<CompletionToken>(token));
+    auto async_connect(urls::url url, CompletionToken&& token) {
+      return basic_client_.async_connect(std::move(url), std::forward<CompletionToken>(token));
     }
 
     // Caller must ensure that given buffer remains valid until the operation is completed
@@ -146,55 +146,55 @@ namespace aero::websocket::tls {
       return basic_client_.async_read(std::forward<CompletionToken>(token));
     }
 
-    std::tuple<std::error_code, http::response> connect(websocket::uri uri, http::headers headers) {
-      return basic_client_.connect(std::move(uri), std::move(headers));
+    std::tuple<std::error_code, http::response> connect(urls::url url, http::headers headers) {
+      return basic_client_.connect(std::move(url), std::move(headers));
     }
 
-    std::tuple<std::error_code, http::response> connect(websocket::uri uri, http::headers headers, duration timeout) {
-      return basic_client_.connect(std::move(uri), std::move(headers), timeout);
+    std::tuple<std::error_code, http::response> connect(urls::url url, http::headers headers, duration timeout) {
+      return basic_client_.connect(std::move(url), std::move(headers), timeout);
     }
 
-    std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
+    std::tuple<std::error_code, http::response> connect(std::expected<urls::url, std::error_code> parsed_url,
       http::headers headers) {
-      return basic_client_.connect(std::move(parsed_uri), std::move(headers));
+      return basic_client_.connect(std::move(parsed_url), std::move(headers));
     }
 
-    std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
+    std::tuple<std::error_code, http::response> connect(std::expected<urls::url, std::error_code> parsed_url,
       http::headers headers, duration timeout) {
-      return basic_client_.connect(std::move(parsed_uri), std::move(headers), timeout);
+      return basic_client_.connect(std::move(parsed_url), std::move(headers), timeout);
     }
 
-    std::tuple<std::error_code, http::response> connect(std::string_view uri_string, http::headers headers) {
-      return basic_client_.connect(uri_string, std::move(headers));
+    std::tuple<std::error_code, http::response> connect(std::string_view url_string, http::headers headers) {
+      return basic_client_.connect(url_string, std::move(headers));
     }
 
-    std::tuple<std::error_code, http::response> connect(std::string_view uri_string, http::headers headers, duration timeout) {
-      return basic_client_.connect(uri_string, std::move(headers), timeout);
+    std::tuple<std::error_code, http::response> connect(std::string_view url_string, http::headers headers, duration timeout) {
+      return basic_client_.connect(url_string, std::move(headers), timeout);
     }
 
-    std::tuple<std::error_code, http::response> connect(websocket::uri uri) {
-      return basic_client_.connect(std::move(uri));
+    std::tuple<std::error_code, http::response> connect(urls::url url) {
+      return basic_client_.connect(std::move(url));
     }
 
-    std::tuple<std::error_code, http::response> connect(websocket::uri uri, duration timeout) {
-      return basic_client_.connect(std::move(uri), timeout);
+    std::tuple<std::error_code, http::response> connect(urls::url url, duration timeout) {
+      return basic_client_.connect(std::move(url), timeout);
     }
 
-    std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri) {
-      return basic_client_.connect(std::move(parsed_uri));
+    std::tuple<std::error_code, http::response> connect(std::expected<urls::url, std::error_code> parsed_url) {
+      return basic_client_.connect(std::move(parsed_url));
     }
 
-    std::tuple<std::error_code, http::response> connect(std::expected<websocket::uri, std::error_code> parsed_uri,
+    std::tuple<std::error_code, http::response> connect(std::expected<urls::url, std::error_code> parsed_url,
       duration timeout) {
-      return basic_client_.connect(std::move(parsed_uri), timeout);
+      return basic_client_.connect(std::move(parsed_url), timeout);
     }
 
-    std::tuple<std::error_code, http::response> connect(std::string_view uri_string) {
-      return basic_client_.connect(uri_string);
+    std::tuple<std::error_code, http::response> connect(std::string_view url_string) {
+      return basic_client_.connect(url_string);
     }
 
-    std::tuple<std::error_code, http::response> connect(std::string_view uri_string, duration timeout) {
-      return basic_client_.connect(uri_string, timeout);
+    std::tuple<std::error_code, http::response> connect(std::string_view url_string, duration timeout) {
+      return basic_client_.connect(url_string, timeout);
     }
 
     // Caller must ensure that given buffer remains valid until the operation is completed

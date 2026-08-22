@@ -9,7 +9,6 @@
 #include "aero/websocket/error.hpp"
 #include "aero/websocket/message.hpp"
 #include "aero/websocket/state.hpp"
-#include "aero/websocket/uri.hpp"
 
 #ifdef AERO_USE_TLS
 #include "aero/websocket/tls/client.hpp"

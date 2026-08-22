@@ -42,23 +42,6 @@ namespace aero::websocket {
     header_name_reserved,
   };
 
-  enum class uri_error : std::uint8_t {
-    scheme_invalid = 1,
-    scheme_delimiter_missing,
-    character_invalid,
-    fragment_not_allowed,
-    authority_empty,
-    userinfo_not_allowed,
-    authority_invalid,
-    host_empty,
-    host_invalid,
-    ipv6_literal_invalid,
-    port_empty,
-    port_invalid,
-    port_out_of_range,
-    path_invalid
-  };
-
   enum class message_reader_error : std::uint8_t {
     unexpected_continuation = 1,
     interleaved_data_frame,
@@ -157,49 +140,6 @@ namespace aero::websocket {
       }
     };
 
-    class uri_error_category : public std::error_category {
-     public:
-      [[nodiscard]] const char* name() const noexcept override {
-        return "aero.websocket.uri_error";
-      }
-
-      [[nodiscard]] std::string message(int value) const override {
-        using aero::websocket::uri_error;
-        switch (static_cast<uri_error>(value)) {
-        case uri_error::scheme_invalid:
-          return "invalid scheme (only ws and wss are allowed)";
-        case uri_error::scheme_delimiter_missing:
-          return "missing scheme delimiter (expected ://)";
-        case uri_error::character_invalid:
-          return "URI contains forbidden characters (control characters or spaces are not allowed)";
-        case uri_error::fragment_not_allowed:
-          return "fragment is not allowed in WebSocket URI";
-        case uri_error::authority_empty:
-          return "authority is missing or empty";
-        case uri_error::userinfo_not_allowed:
-          return "userinfo is not allowed in WebSocket URI";
-        case uri_error::authority_invalid:
-          return "authority is invalid";
-        case uri_error::host_empty:
-          return "host is missing or empty";
-        case uri_error::host_invalid:
-          return "host is invalid";
-        case uri_error::ipv6_literal_invalid:
-          return "IPv6 literal is invalid (expected [IPv6-address])";
-        case uri_error::port_empty:
-          return "port delimiter is present but port is empty";
-        case uri_error::port_invalid:
-          return "port is invalid (must be a decimal number from 1 to 65535)";
-        case uri_error::port_out_of_range:
-          return "port is out of range (must be from 1 to 65535)";
-        case uri_error::path_invalid:
-          return "path is invalid (must be empty or start with /)";
-        default:
-          return "unknown websocket URI error";
-        }
-      }
-    };
-
     class message_reader_error_category final : public std::error_category {
      public:
       [[nodiscard]] const char* name() const noexcept override {
@@ -233,11 +173,6 @@ namespace aero::websocket {
     return category;
   }
 
-  const inline std::error_category& uri_error_category() noexcept {
-    static const detail::uri_error_category category{};
-    return category;
-  }
-
   const inline std::error_category& message_reader_category() noexcept {
     static const detail::message_reader_error_category category;
     return category;
@@ -249,10 +184,6 @@ namespace aero::websocket {
 
   inline std::error_code make_error_code(handshake_error value) {
     return {static_cast<int>(value), websocket::handshake_error_category()};
-  }
-
-  inline std::error_code make_error_code(uri_error value) {
-    return {static_cast<int>(value), websocket::uri_error_category()};
   }
 
   inline std::error_code make_error_code(message_reader_error value) noexcept {
@@ -289,7 +220,5 @@ template <>
 struct std::is_error_code_enum<aero::websocket::protocol_error> : std::true_type {};
 template <>
 struct std::is_error_code_enum<aero::websocket::handshake_error> : std::true_type {};
-template <>
-struct std::is_error_code_enum<aero::websocket::uri_error> : std::true_type {};
 template <>
 struct std::is_error_code_enum<aero::websocket::message_reader_error> : std::true_type {};

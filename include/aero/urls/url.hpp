@@ -8,6 +8,8 @@
 #include <string_view>
 #include <system_error>
 
+#include "aero/urls/query_params.hpp"
+
 namespace aero::urls {
 
   struct url_parser_opts {
@@ -62,6 +64,10 @@ namespace aero::urls {
 
     [[nodiscard]] std::string_view query() const noexcept {
       return query_;
+    }
+
+    [[nodiscard]] urls::query_params query_params() const {
+      return detail::parse_query_params(query_);
     }
 
     [[nodiscard]] std::string_view fragment() const noexcept {
