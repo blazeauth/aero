@@ -1,2 +1,7 @@
+aero_add_unit_test(aero_urls_authority authority.cpp)
+aero_add_unit_test(aero_urls_error_code error_code.cpp)
+aero_add_unit_test(aero_urls_hostname hostname.cpp)
+aero_add_unit_test(aero_urls_path path.cpp)
+aero_add_unit_test(aero_urls_url url.cpp)
 aero_add_unit_test(aero_urls_query_params query_params.cpp)
 aero_add_unit_test(aero_urls_query_params_parser query_params_parser.cpp)

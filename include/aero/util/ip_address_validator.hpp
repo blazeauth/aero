@@ -4,9 +4,33 @@
 #include <cstdint>
 #include <string_view>
 
+#include "aero/util/string.hpp"
+
 namespace aero {
 
   namespace detail {
+
+    inline bool is_ipv4_address_like(std::string_view text) noexcept {
+      if (text.empty()) {
+        return false;
+      }
+
+      bool has_ipv4_separator = false;
+
+      for (char ch : text) {
+        if (ch == '.') {
+          has_ipv4_separator = true;
+          continue;
+        }
+
+        // IPv4 address can consist only of digits and '.'
+        if (not aero::is_digit(ch)) {
+          return false;
+        }
+      }
+
+      return has_ipv4_separator;
+    }
 
     inline bool is_ipv6_hex_digit(char ch) noexcept {
       return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
@@ -166,7 +190,7 @@ namespace aero {
 
     // RFC 3986 describes IPv6 format in 3.2.2, stating that the last
     // 32 bits of an IPv6 address (2 last parts) can be an IPv4 address
-    bool has_ipv4_tail = address.find('.') != std::string_view::npos;
+    bool has_ipv4_tail = address.contains('.');
     if (has_ipv4_tail) {
       // Find the last IPv6 separator before the IPv4 tail
       std::size_t tail_separator_pos = address.rfind(':');
@@ -202,7 +226,7 @@ namespace aero {
       // Only one compression token is allowed in an IPv6 literal.
       // Only the right side needs to be scanned because the first
       // compression token has already been found
-      if (right_part.find("::") != std::string_view::npos) {
+      if (right_part.contains("::")) {
         return false;
       }
 

@@ -4,38 +4,45 @@
 
 #include "aero/detail/rfc_grammar.hpp"
 #include "aero/http/method.hpp"
+#include "aero/urls/detail/authority.hpp"
+#include "aero/urls/detail/hostname.hpp"
 #include "aero/util/ip_address_validator.hpp"
 #include "aero/util/string.hpp"
 
 namespace aero::http::detail {
 
-  inline bool is_ipv4_address_like(std::string_view text) noexcept {
-    if (text.empty()) {
+  constexpr inline urls::detail::authority_parser_opts authority_parser_opts{
+    // RFC 9110, Section 4.2.4:
+    // Before making use of an "http" or "https" URI reference received from
+    // an untrusted source, a recipient SHOULD parse for userinfo and treat
+    // its presence as an error; ...
+    .allow_userinfo = false,
+
+    // RFC 9110, Section 4.2.1:
+    // A sender MUST NOT generate an "http" URI with an empty host
+    // identifier.  A recipient that processes such a URI reference MUST
+    // reject it as invalid.
+    .allow_empty_host = false,
+
+    // Stricter than the RFCs require: port 0 and IPvFuture literals are
+    // rejected by internal policy
+    .allowed_port_range = urls::detail::port_range{.min = 1},
+  };
+
+  inline bool is_valid_authority(std::string_view authority) noexcept {
+    auto parsed = urls::detail::parse_authority(authority, authority_parser_opts);
+    if (!parsed) {
       return false;
     }
 
-    bool has_ipv4_separator = false;
-
-    for (char ch : text) {
-      if (ch == '.') {
-        has_ipv4_separator = true;
-        continue;
-      }
-
-      // IPv4 address can consist only of digits and '.'
-      bool is_digit = ch >= '0' && ch <= '9';
-      if (!is_digit) {
-        return false;
-      }
+    if (parsed->type != urls::detail::host_type::reg_name) {
+      return true;
     }
 
-    return has_ipv4_separator;
-  }
-
-  inline bool is_valid_hostname(std::string_view hostname) noexcept {
-    // The current implementation accepts strict ASCII DNS-like hostnames, allows
-    // numeric-only DNS labels, and additionally permits the underscore '_',
-    // while rejecting raw Unicode and percent-encoding.
+    // Reject hosts that look like an IPv4 address but failed IPv4 validation
+    if (aero::detail::is_ipv4_address_like(parsed->host)) {
+      return false;
+    }
 
     // The underscore is not a valid DNS label character under RFC 1035, but it
     // appears routinely in real-world Host values: internal service names
@@ -55,217 +62,9 @@ namespace aero::http::detail {
     // Before implementing a percent-encoding parser, we should weigh the
     // pros and cons and accept the fact that it may create an additional
     // attack surface for HTTP server routing.
+    constexpr static std::string_view extra_hostname_chars = "_";
 
-    // RFC 1035 limits a DNS name to 255 octets in DNS message form.
-    // For dotted text form used in Host, the maximum length without
-    // a trailing root dot is 253 characters:
-    // 63 "." 63 "." 63 "." 61
-    constexpr std::size_t max_host_name_length = 253;
-
-    // RFC 1035, Section 2.3.1:
-    // Labels must be 63 characters or less.
-    constexpr std::size_t max_dns_label_length = 63;
-
-    if (hostname.empty()) {
-      return false;
-    }
-
-    // Accept and normalize absolute hostnames that end with '.'
-    if (hostname.ends_with('.')) {
-      hostname.remove_suffix(1);
-      if (hostname.empty()) {
-        return false;
-      }
-    }
-
-    if (hostname.empty() || hostname.size() > max_host_name_length) {
-      return false;
-    }
-
-    std::size_t dns_label_length = 0;
-    char prev_char = '\0';
-
-    for (char ch : hostname) {
-      if (ch == '.') {
-        // DNS label must not be empty
-        if (dns_label_length == 0) {
-          return false;
-        }
-
-        // RFC 1035, Section 2.3.1:
-        // They must ... end with a letter or digit...
-        if (prev_char == '-') {
-          return false;
-        }
-
-        dns_label_length = 0;
-        prev_char = ch;
-        continue;
-      }
-
-      // RFC 1035, Section 2.3.1:
-      // The labels must follow the rules for ARPANET host names. They must
-      // start with a letter, end with a letter or digit, and have as
-      // interior characters only letters, digits, and hyphen.
-      // The underscore is permitted as a pragmatic superset (see note above);
-      // unlike hyphen it carries no start/end position restriction.
-      bool is_dns_label_char =
-        (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_';
-      if (!is_dns_label_char) {
-        return false;
-      }
-
-      // RFC 1123, Section 2.1:
-      // One aspect of host name syntax is hereby changed: the restriction on the
-      // first character is relaxed to allow either a letter or a digit.
-      if (dns_label_length == 0 && ch == '-') {
-        return false;
-      }
-
-      ++dns_label_length;
-
-      if (dns_label_length > max_dns_label_length) {
-        return false;
-      }
-
-      prev_char = ch;
-    }
-
-    if (dns_label_length == 0) {
-      return false;
-    }
-
-    // RFC 1035, Section 2.3.1:
-    // They must ... end with a letter or digit...
-    if (prev_char == '-') {
-      return false;
-    }
-
-    return true;
-  }
-
-  inline bool is_valid_port(std::string_view port_str) noexcept {
-    // RFC 3986, Section 3.2.3:
-    // port = *DIGIT
-    //
-    // RFC 9110, Section 4.2.1 and Section 4.2.2:
-    // If the port subcomponent is empty or not given, the default port is used.
-
-    if (port_str.empty()) {
-      return true;
-    }
-
-    constexpr std::uint32_t min_port = 1;
-    constexpr std::uint32_t max_port = 65535;
-    std::uint32_t port_value = 0;
-
-    for (char ch : port_str) {
-      if (ch < '0' || ch > '9') [[unlikely]] {
-        return false;
-      }
-
-      port_value = (port_value * 10) + static_cast<std::uint32_t>(ch - '0');
-
-      if (port_value > max_port) [[unlikely]] {
-        return false;
-      }
-    }
-
-    return port_value >= min_port;
-  }
-
-  // Deliberately stricter than RFC 3986 authority:
-  //  - userinfo is rejected per RFC 9110, Section 4.2.4 (deprecated in http/https URIs)
-  //  - IPvFuture literals are rejected by internal policy
-  inline bool is_valid_authority(std::string_view authority) noexcept {
-    // RFC 9110, Section 7.2:
-    // Host = uri-host [ ":" port ]
-    std::string_view uri_host = authority;
-
-    // RFC 9110, Section 4.2.1 and Section 4.2.2:
-    // A sender MUST NOT generate an "http" or "https" URI with an empty host
-    // identifier. A recipient that processes such a URI reference MUST reject
-    // it as invalid.
-    if (authority.empty()) {
-      return false;
-    }
-
-    // RFC 3986, Section 3.2.2:
-    // host = IP-literal / IPv4address / reg-name
-    // IP-literal = "[" ( IPv6address / IPvFuture  ) "]"
-
-    // URI Host inside brackets must be interpreted as an IPv6 literal
-    if (uri_host.starts_with('[')) {
-      std::size_t closing_bracket_pos = uri_host.find(']');
-      if (closing_bracket_pos == std::string_view::npos) {
-        return false;
-      }
-
-      // Bracketed IPv6 literal must not be empty
-      if (closing_bracket_pos == 1) {
-        return false;
-      }
-
-      std::string_view bracketless_ipv6 = uri_host.substr(1, closing_bracket_pos - 1);
-      if (!aero::is_valid_ipv6_address(bracketless_ipv6)) {
-        return false;
-      }
-
-      // No port is present and IPv6 is validated - host is valid
-      if (closing_bracket_pos + 1 == uri_host.size()) {
-        return true;
-      }
-
-      std::string_view tail_after_ipv6 = uri_host.substr(closing_bracket_pos + 1);
-
-      // After the IPv6 brackets, only a port is allowed
-      if (!tail_after_ipv6.starts_with(':')) {
-        return false;
-      }
-
-      std::string_view port_str = tail_after_ipv6.substr(1);
-
-      return is_valid_port(port_str);
-    }
-
-    // RFC 9110, Section 4.2.3:
-    // If the port is equal to the default port for a scheme, the normal
-    // form is to omit the port subcomponent.
-    std::size_t port_delimiter_pos = authority.find(':');
-    if (port_delimiter_pos != std::string_view::npos) {
-      // Only one port delimiter is allowed
-      if (authority.find(':', port_delimiter_pos + 1) != std::string_view::npos) {
-        return false;
-      }
-
-      uri_host = authority.substr(0, port_delimiter_pos);
-      std::string_view port_str = authority.substr(port_delimiter_pos + 1);
-
-      if (uri_host.empty()) {
-        return false;
-      }
-
-      if (!is_valid_port(port_str)) {
-        return false;
-      }
-    }
-
-    // RFC 3986, Section 3.2.2:
-    // The syntax rule for host is ambiguous because it does not completely
-    // distinguish between an IPv4address and a reg-name.
-    // In order to disambiguate the syntax, we apply the "first-match-wins"
-    // algorithm: If host matches the rule for IPv4address, then it should
-    // be considered an IPv4 address literal and not a reg-name.
-    if (aero::is_valid_ipv4_address(uri_host)) {
-      return true;
-    }
-
-    // A host that looks like an IPv4 address but failed IPv4 validation is invalid
-    if (is_ipv4_address_like(uri_host)) {
-      return false;
-    }
-
-    return is_valid_hostname(uri_host);
+    return urls::detail::is_valid_hostname(parsed->host, extra_hostname_chars);
   }
 
   inline bool is_valid_absolute_path(std::string_view path) noexcept {
@@ -318,44 +117,16 @@ namespace aero::http::detail {
   }
 
   inline bool is_valid_uri_query(std::string_view query) noexcept {
-    // RFC 3986, Appendix A:
-    // query       = *( pchar / "/" / "?" )
-    // pchar       = unreserved / pct-encoded / sub-delims / ":" / "@"
-    // unreserved  = ALPHA / DIGIT / "-" / "." / "_" / "~"
-    // pct-encoded = "%" HEXDIG HEXDIG
-    // sub-delims  = "!" / "$" / "&" / "'" / "(" / ")"
-    //             / "*" / "+" / "," / ";" / "="
-
     if (query.empty()) {
       return true;
     }
 
-    std::size_t pos = 0;
-    while (pos < query.size()) {
-      char ch = query[pos];
-
-      // Handle a percent-encoded token, which must be exactly 3 bytes
-      if (ch == '%') {
-        if (!aero::detail::is_pct_encoded(query.substr(pos, 3))) {
-          return false;
-        }
-
-        pos += 3;
-        continue;
-      }
-
-      // Percent encoding has already been validated above, so all that
-      // remains is to check whether the character is one of the allowed
-      // query, pchar, unreserved, or sub-delimiter characters.
-      if (ch != '/' && ch != '?' && ch != ':' && ch != '@' && !aero::detail::is_unreserved(ch) &&
-          !aero::detail::is_sub_delim(ch)) [[unlikely]] {
-        return false;
-      }
-
-      pos++;
-    }
-
-    return true;
+    return aero::detail::is_pct_encoded_sequence(query, [](char c) {
+      // RFC 3986, Appendix A:
+      // query       = *( pchar / "/" / "?" )
+      // pchar       = unreserved / pct-encoded / sub-delims / ":" / "@"
+      return aero::detail::is_unencoded_pchar(c) || c == '/' || c == '?';
+    });
   }
 
   inline bool is_valid_origin_form(std::string_view origin) noexcept {
