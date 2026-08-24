@@ -32,23 +32,6 @@ namespace aero::http {
     content_type_missing,
   };
 
-  enum class uri_error : std::uint8_t {
-    scheme_delimiter_missing = 1,
-    scheme_invalid,
-    authority_empty,
-    host_empty,
-    userinfo_not_allowed,
-    fragment_not_allowed,
-    authority_invalid,
-    host_invalid,
-    ipv6_literal_invalid,
-    port_empty,
-    port_invalid,
-    port_out_of_range,
-    path_invalid,
-    character_invalid,
-  };
-
   namespace detail {
     class protocol_error_category final : public std::error_category {
      public:
@@ -115,49 +98,6 @@ namespace aero::http {
         }
       }
     };
-
-    class uri_error_category final : public std::error_category {
-     public:
-      [[nodiscard]] const char* name() const noexcept override {
-        return "aero.http.uri_error";
-      }
-
-      [[nodiscard]] std::string message(int value) const override {
-        switch (static_cast<uri_error>(value)) {
-        case uri_error::scheme_delimiter_missing:
-          return "uri scheme delimiter is missing";
-        case uri_error::scheme_invalid:
-          return "uri scheme is invalid";
-        case uri_error::authority_empty:
-          return "uri authority is empty";
-        case uri_error::host_empty:
-          return "uri host is empty";
-        case uri_error::userinfo_not_allowed:
-          return "uri userinfo is not allowed";
-        case uri_error::fragment_not_allowed:
-          return "uri fragment is not allowed";
-        case uri_error::authority_invalid:
-          return "uri authority is invalid";
-        case uri_error::host_invalid:
-          return "uri host is invalid";
-        case uri_error::ipv6_literal_invalid:
-          return "uri ipv6 literal is invalid";
-        case uri_error::port_empty:
-          return "uri port is empty";
-        case uri_error::port_invalid:
-          return "uri port is invalid";
-        case uri_error::port_out_of_range:
-          return "uri port is out of range";
-        case uri_error::path_invalid:
-          return "uri path is invalid";
-        case uri_error::character_invalid:
-          return "uri contains invalid character";
-        default:
-          return "unknown http uri error";
-        }
-      }
-    };
-
   } // namespace detail
 
   [[nodiscard]] const inline std::error_category& protocol_error_category() noexcept {
@@ -170,21 +110,12 @@ namespace aero::http {
     return instance;
   }
 
-  [[nodiscard]] const inline std::error_category& uri_error_category() noexcept {
-    static const detail::uri_error_category instance{};
-    return instance;
-  }
-
   [[nodiscard]] inline std::error_code make_error_code(protocol_error error) noexcept {
     return std::error_code{static_cast<int>(error), protocol_error_category()};
   }
 
   [[nodiscard]] inline std::error_code make_error_code(header_error error) noexcept {
     return std::error_code{static_cast<int>(error), header_error_category()};
-  }
-
-  [[nodiscard]] inline std::error_code make_error_code(uri_error error) noexcept {
-    return std::error_code{static_cast<int>(error), uri_error_category()};
   }
 
 } // namespace aero::http
@@ -194,6 +125,3 @@ struct std::is_error_code_enum<aero::http::protocol_error> : std::true_type {};
 
 template <>
 struct std::is_error_code_enum<aero::http::header_error> : std::true_type {};
-
-template <>
-struct std::is_error_code_enum<aero::http::uri_error> : std::true_type {};

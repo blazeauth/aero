@@ -16,9 +16,5 @@ int main() {
     "all protocol errors have messages"_test = [] {
       test_enum_error_code_messages<http::protocol_error>(http::protocol_error_category());
     };
-
-    "all uri errors have messages"_test = [] {
-      test_enum_error_code_messages<http::uri_error>(http::uri_error_category());
-    };
   };
 }
