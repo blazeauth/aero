@@ -3,12 +3,17 @@
 #include <exception>
 #include <expected>
 #include <functional>
+#include <future>
+#include <latch>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
 #include <vector>
+
+#include <asio/as_tuple.hpp>
+#include <asio/use_future.hpp>
 
 #include <ut/ut.hpp>
 
@@ -306,6 +311,50 @@ int main() {
         expect(received_close_code == 1009U)
           << "close frame should carry close code 1009 (message too big), got: " << received_close_code;
       };
+
+    "send during connect returns connection_closed"_test = [&] {
+      aero::final_action cleanup{[&] { server.close_last_conn(); }};
+
+      std::latch request_received{1};
+      std::latch response_sent{1};
+
+      server.on_accept([&](std::shared_ptr<connection> conn) {
+        auto raw_request = conn->read_request();
+        request_received.count_down();
+        response_sent.wait();
+        conn->write_response(make_websocket_switching_response(raw_request));
+      });
+
+      websocket::client client;
+      auto connect_future = client.async_connect(url_str, asio::as_tuple(asio::use_future));
+      request_received.wait();
+
+      auto send_ec = client.send_text("hello");
+      response_sent.count_down();
+      auto [connect_ec, response] = connect_future.get();
+
+      expect(send_ec == websocket::protocol_error::connection_closed)
+        << "send while the handshake is still in progress must be refused, got: " << send_ec.message();
+      expect(not static_cast<bool>(connect_ec));
+    };
+
+    "connect returns connection_not_closed while the connection is open"_test = [&] {
+      aero::final_action cleanup{[&] { server.close_last_conn(); }};
+
+      server.on_accept([&](std::shared_ptr<connection> conn) {
+        auto raw_request = conn->read_request();
+        conn->write_response(make_websocket_switching_response(raw_request));
+      });
+
+      websocket::client client;
+      auto [connect_ec, response] = client.connect(url_str);
+      expect(not static_cast<bool>(connect_ec));
+
+      auto [reconnect_ec, reconnect_response] = client.connect(url_str);
+      expect(reconnect_ec == websocket::protocol_error::connection_not_closed)
+        << "second connect must be refused without touching the open connection, got: " << reconnect_ec.message();
+      expect(client.is_open_for_writing()) << "refused connect must leave the open connection usable";
+    };
 
     "test server handled all requests without throwing"_test = [&] {
       expect(server.exception() == nullptr);

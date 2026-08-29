@@ -124,6 +124,10 @@ namespace aero::websocket {
       return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
         asio::co_composed<void(std::error_code, http::response)>(
           [this](auto, std::expected<urls::url, std::error_code> parsed_url, http::headers headers) -> void {
+            if (!is_current_state(state::closed)) {
+              co_return {protocol_error::connection_not_closed, http::response{}};
+            }
+
             if (!parsed_url.has_value()) {
               co_return {parsed_url.error(), http::response{}};
             }

@@ -31,6 +31,7 @@ namespace aero::websocket {
     masked_frame_from_server,
     already_closing,
     already_reading,
+    connection_not_closed,
   };
 
   enum class handshake_error : std::uint8_t {
@@ -107,6 +108,8 @@ namespace aero::websocket {
           return "connection is already in a closing state";
         case protocol_error::already_reading:
           return "already reading";
+        case protocol_error::connection_not_closed:
+          return "connect requires a closed connection";
         default:
           return "unknown websocket protocol error";
         }
