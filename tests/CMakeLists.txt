@@ -35,5 +35,6 @@ endif()
 
 add_subdirectory(http_primitives)
 add_subdirectory(http_server)
+add_subdirectory(net)
 add_subdirectory(urls)
 add_subdirectory(websocket)
