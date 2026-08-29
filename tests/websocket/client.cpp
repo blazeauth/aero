@@ -1,3 +1,5 @@
+#include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <expected>
 #include <functional>
@@ -5,8 +7,10 @@
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <ut/ut.hpp>
 #include <utility>
+#include <vector>
+
+#include <ut/ut.hpp>
 
 #include "aero/http/detail/line_endings.hpp"
 #include "aero/http/error.hpp"
@@ -15,48 +19,82 @@
 #include "aero/http/status_line.hpp"
 #include "aero/util/final_action.hpp"
 #include "aero/websocket/client.hpp"
+#include "aero/websocket/connection_options.hpp"
 #include "aero/websocket/detail/accept_challenge.hpp"
+#include "aero/websocket/detail/opcode.hpp"
 #include "aero/websocket/error.hpp"
 
 #include "tcp_server.hpp"
+#include "websocket/test_helpers.hpp"
 
 using namespace ut;
 
 namespace http = aero::http;
 namespace websocket = aero::websocket;
 
-std::string extract_sec_websocket_key(std::string_view raw_request) {
-  auto request_line_end = raw_request.find(http::detail::crlf);
-  if (request_line_end == std::string_view::npos) {
-    throw std::runtime_error{"websocket request line terminator is missing"};
+using aero::tests::websocket::serialize_unmasked_frame;
+using aero::tests::websocket::to_string;
+using aero::websocket::detail::opcode;
+
+namespace {
+
+  std::string extract_sec_websocket_key(std::string_view raw_request) {
+    auto request_line_end = raw_request.find(http::detail::crlf);
+    if (request_line_end == std::string_view::npos) {
+      throw std::runtime_error{"websocket request line terminator is missing"};
+    }
+
+    auto parsed_headers = http::headers::parse(raw_request.substr(request_line_end + http::detail::crlf.size()));
+    if (!parsed_headers.has_value()) {
+      throw std::system_error{parsed_headers.error()};
+    }
+
+    auto key = parsed_headers->first_value("sec-websocket-key");
+    if (!key.has_value()) {
+      throw std::runtime_error{"sec-websocket-key header is missing"};
+    }
+
+    return std::string{*key};
   }
 
-  auto parsed_headers = http::headers::parse(raw_request.substr(request_line_end + http::detail::crlf.size()));
-  if (!parsed_headers.has_value()) {
-    throw std::system_error{parsed_headers.error()};
+  std::string make_websocket_switching_response(std::string_view request_str, std::string_view extra_headers = {}) {
+    auto accept = websocket::detail::compute_sec_websocket_accept(extract_sec_websocket_key(request_str));
+
+    std::string response;
+    response.append("HTTP/1.1 101 Switching Protocols\r\n");
+    response.append("Upgrade: websocket\r\n");
+    response.append("Connection: Upgrade\r\n");
+    response.append("Sec-WebSocket-Accept: ").append(accept).append(http::detail::crlf);
+    response.append(extra_headers);
+    response.append(http::detail::crlf);
+
+    return response;
   }
 
-  auto key = parsed_headers->first_value("sec-websocket-key");
-  if (!key.has_value()) {
-    throw std::runtime_error{"sec-websocket-key header is missing"};
+  std::uint16_t read_masked_close_code(connection& conn) {
+    auto header = conn.read_bytes(2);
+    auto first_byte = static_cast<std::uint8_t>(header[0]);
+    auto second_byte = static_cast<std::uint8_t>(header[1]);
+
+    if ((first_byte & 0x0FU) != 0x08U) {
+      throw std::runtime_error{"expected a close frame"};
+    }
+
+    auto payload_length = static_cast<std::size_t>(second_byte & 0x7FU);
+    if ((second_byte & 0x80U) == 0U || payload_length < 2U) {
+      throw std::runtime_error{"expected a masked close frame carrying a close code"};
+    }
+
+    auto mask = conn.read_bytes(4);
+    auto payload = conn.read_bytes(payload_length);
+    auto unmasked = [&](std::size_t index) {
+      return static_cast<std::uint8_t>(static_cast<std::uint8_t>(payload[index]) ^ static_cast<std::uint8_t>(mask[index % 4U]));
+    };
+
+    return static_cast<std::uint16_t>((unmasked(0) << 8U) | unmasked(1));
   }
 
-  return std::string{*key};
-}
-
-std::string make_websocket_switching_response(std::string_view request_str, std::string_view extra_headers = {}) {
-  auto accept = websocket::detail::compute_sec_websocket_accept(extract_sec_websocket_key(request_str));
-
-  std::string response;
-  response.append("HTTP/1.1 101 Switching Protocols\r\n");
-  response.append("Upgrade: websocket\r\n");
-  response.append("Connection: Upgrade\r\n");
-  response.append("Sec-WebSocket-Accept: ").append(accept).append(http::detail::crlf);
-  response.append(extra_headers);
-  response.append(http::detail::crlf);
-
-  return response;
-}
+} // namespace
 
 int main() {
   tcp_server server;
@@ -239,6 +277,35 @@ int main() {
 
       expect(connect_ec == aero::urls::url_error::authority_invalid);
     };
+
+    "read returns message_too_big and fails the connection with close code 1009 when a message exceeds max_message_size"_test =
+      [&] {
+        aero::final_action cleanup{[&] { server.close_last_conn(); }};
+
+        constexpr std::size_t max_message_size = 16;
+        std::uint16_t received_close_code = 0;
+
+        server.on_accept([&](std::shared_ptr<connection> conn) {
+          auto raw_request = conn->read_request();
+          conn->write_response(make_websocket_switching_response(raw_request));
+
+          std::vector<std::byte> oversized(max_message_size + 1);
+          conn->write_response(to_string(serialize_unmasked_frame(opcode::binary, true, oversized)));
+
+          received_close_code = read_masked_close_code(*conn);
+          conn->close();
+        });
+
+        websocket::client client{websocket::connection_options{.max_message_size = max_message_size}};
+        auto [connect_ec, response] = client.connect(url_str);
+        expect(not static_cast<bool>(connect_ec));
+
+        auto message = client.read();
+        expect(!message.has_value() && message.error() == websocket::message_reader_error::message_too_big);
+        expect(client.is_closed()) << "an oversized message must fail the connection, not leave it open for reuse";
+        expect(received_close_code == 1009U)
+          << "close frame should carry close code 1009 (message too big), got: " << received_close_code;
+      };
 
     "test server handled all requests without throwing"_test = [&] {
       expect(server.exception() == nullptr);
