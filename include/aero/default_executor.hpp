@@ -7,7 +7,7 @@
 namespace aero {
 
   [[nodiscard]] inline aero::io_runtime& get_default_runtime() {
-    // \todo: In the future, we definitely need to move away from this
+    // TODO: In the future, we definitely need to move away from this
     // approach; it might be worth implementing our own thread pool with
     // a dynamic number of threads to support high-load scenarios.
     // The current default runtime is only suitable for clients without
