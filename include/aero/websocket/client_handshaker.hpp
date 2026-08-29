@@ -5,7 +5,6 @@
 #include <system_error>
 #include <vector>
 
-#include "aero/http/detail/line_endings.hpp"
 #include "aero/http/headers.hpp"
 #include "aero/http/method.hpp"
 #include "aero/http/request_line.hpp"
@@ -207,7 +206,7 @@ namespace aero::websocket {
       std::string host_str{url.host()};
       auto url_port = url.port_number();
       auto default_port = websocket::get_default_port(url.scheme());
-      if (url_port != 0 && url_port != default_port) {
+      if (url_port && url_port != 0 && url_port != default_port) {
         host_str += (':' + std::to_string(*url_port));
       }
 
