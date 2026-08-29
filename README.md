@@ -553,7 +553,7 @@ Please note that all references to functions apply to both synchronous and async
 
 |Operation|Contract|
 |-|-|
-|`async_connect`|No other `async_connect` should be outstanding and no read/close is active. Exclusive phase, concurrent usage with `async_connect`, `async_read`, `async_close` is forbidden.|
+|`async_connect`|Allowed only on a closed connection. When called while the connection is open, connecting or closing, it returns `websocket::protocol_error::connection_not_closed` and leaves the current session untouched. When `async_connect` is called twice concurrently, the second call gets `connection_not_closed`. Any running `async_read`/`async_close` must have completed before reconnecting.|
 |`async_send_text`, `async_send_binary`, `async_ping`, `async_pong`|Can be called concurrently with any operation except `async_connect`. Transport layer should serialize all write operations using strand/mutex/etc. Not meaningful concurrently with `async_connect` before open, because it returns `websocket::protocol_error::connection_closed`. Can be called concurrently with `async_close`, but the result depends on strand ordering - once in closing, it will return `websocket::protocol_error::connection_closed`.|
 |`async_close`|Threadsafe, but correct usage is only one close at a time. A second concurrent call returns `websocket::protocol_error::already_closing`. Forbidden concurrently with `async_connect` (possible competing reads). Allowed to use with `async_read` concurrently, and if `async_close` starts first, it may start reading and an external `async_read` will return `websocket::protocol_error::already_reading`|
 |`async_force_close`|Threadsafe, cancels all running operations|
