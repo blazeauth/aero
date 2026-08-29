@@ -18,11 +18,25 @@ namespace aero::tls::detail {
     std::uint8_t description;
   };
 
-  // NOLINTBEGIN(*-magic-numbers)
-
   class alert_capture final {
+    constexpr static std::uint32_t received_from_peer_mask = 1U << 16U;
+
    public:
+    alert_capture() = default;
+    alert_capture(const alert_capture&) = delete;
+    alert_capture& operator=(const alert_capture&) = delete;
+    alert_capture(alert_capture&&) = delete;
+    alert_capture& operator=(alert_capture&&) = delete;
+
+    ~alert_capture() {
+      if (ssl_ != nullptr) {
+        ::SSL_set_msg_callback(ssl_, nullptr);
+        ::SSL_set_msg_callback_arg(ssl_, nullptr);
+      }
+    }
+
     void install(SSL* ssl) noexcept {
+      ssl_ = ssl;
       ::SSL_set_msg_callback(ssl, alert_capture::message_callback);
       ::SSL_set_msg_callback_arg(ssl, this);
     }
@@ -45,7 +59,7 @@ namespace aero::tls::detail {
     }
 
    private:
-    constexpr static std::uint32_t received_from_peer_mask = 1U << 16U;
+    SSL* ssl_{nullptr};
 
     static void message_callback(int write_p, int, int content_type, const void* buffer, std::size_t length, SSL*,
       void* callback_argument) {
@@ -66,8 +80,6 @@ namespace aero::tls::detail {
 
     std::atomic<std::uint32_t> packed_{0};
   };
-
-  // NOLINTEND(*-magic-numbers)
 
   inline std::optional<std::error_code> tls_alert_to_error_code(const tls::detail::alert& alert) {
     using tls::certificate_error;
