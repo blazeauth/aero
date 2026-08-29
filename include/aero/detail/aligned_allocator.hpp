@@ -15,8 +15,10 @@ namespace aero::detail {
 
     aligned_allocator() noexcept = default;
 
+    // Implicit by the allocator requirements. asio's any_completion_handler
+    // rebinds and converts the associated allocator through copy-init
     template <typename OtherT>
-    explicit aligned_allocator(const aligned_allocator<OtherT, Alignment>&) noexcept {}
+    explicit(false) aligned_allocator(const aligned_allocator<OtherT, Alignment>&) noexcept {}
 
     template <typename OtherT>
     struct rebind {
