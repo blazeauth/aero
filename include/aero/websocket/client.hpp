@@ -1,12 +1,12 @@
 #pragma once
 
-#include "aero/net/tcp_transport.hpp"
-#include "aero/websocket/basic_client.hpp"
+#include "aero/websocket/basic_connection.hpp"
 #include "aero/websocket/detail/concepts.hpp"
+#include "aero/websocket/role.hpp"
 
 namespace aero::websocket {
 
-  using client = websocket::basic_client<aero::net::tcp_transport<>>;
+  using client = websocket::basic_connection<websocket::role::client>;
 
   static_assert(websocket::concepts::websocket_client<client>);
 

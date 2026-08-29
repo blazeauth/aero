@@ -12,8 +12,8 @@
 #include "aero/tls/system_context.hpp"
 #include "aero/tls/version.hpp"
 #include "aero/util/io_runtime.hpp"
+#include "aero/websocket/client.hpp"
 #include "aero/websocket/close_code.hpp"
-#include "aero/websocket/tls/client.hpp"
 
 using namespace std::chrono_literals;
 namespace websocket = aero::websocket;
@@ -30,7 +30,7 @@ void print_headers(const aero::http::headers& headers) {
   std::println("[HEADERS] Done");
 }
 
-asio::awaitable<std::error_code> async_run_echo_client(websocket::tls::client& client) {
+asio::awaitable<std::error_code> async_run_echo_client(websocket::client& client) {
   // https://blog.postman.com/introducing-postman-websocket-echo-service/
   auto [connect_ec, response] =
     co_await client.async_connect("wss://ws.postman-echo.com/raw", asio::as_tuple(asio::use_awaitable));
@@ -73,7 +73,7 @@ int main() {
   aero::tls::system_context tls_context{aero::tls::version::tlsv1_2};
   tls_context.disable_deprecated_versions();
 
-  websocket::tls::client client{runtime.get_executor(), tls_context};
+  websocket::client client{runtime.get_executor(), tls_context.context()};
 
   try {
     // All coroutines should use client executor to serialize all

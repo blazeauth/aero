@@ -4,9 +4,9 @@
 #include "aero/tls/system_context.hpp"
 #include "aero/tls/version.hpp"
 #include "aero/util/deadline.hpp"
+#include "aero/websocket/client.hpp"
 #include "aero/websocket/close_code.hpp"
 #include "aero/websocket/message.hpp"
-#include "aero/websocket/tls/client.hpp"
 
 namespace websocket = aero::websocket;
 namespace tls = aero::tls;
@@ -32,7 +32,7 @@ int main() {
   tls::system_context tls_ctx{tls::version::tlsv1_2};
   tls_ctx.disable_deprecated_versions();
 
-  websocket::tls::client client{tls_ctx.context()};
+  websocket::client client{tls_ctx.context()};
 
   auto [connect_ec, handshake_resp] = client.connect("wss://stream.binance.com:9443/ws/btcusdt@trade", 5s);
   if (connect_ec) {

@@ -6,6 +6,7 @@
 
 #include "aero/http.hpp"
 #include "aero/net.hpp"
+#include "aero/urls.hpp"
 #include "aero/websocket.hpp"
 
 #include "aero/default_executor.hpp"

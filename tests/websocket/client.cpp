@@ -63,7 +63,7 @@ int main() {
   std::string port_str = std::to_string(server.port());
   std::string url_str = "ws://127.0.0.1:" + port_str + "/socket";
 
-  suite websocket_basic_client = [&] {
+  suite websocket_client = [&] {
     "connect completes a valid handshake and returns the parsed 101 response"_test = [&] {
       aero::final_action cleanup{[&] { server.close_last_conn(); }};
 
@@ -240,7 +240,7 @@ int main() {
       expect(connect_ec == aero::urls::url_error::authority_invalid);
     };
 
-    "the test server handled all requests without throwing"_test = [&] {
+    "test server handled all requests without throwing"_test = [&] {
       expect(server.exception() == nullptr);
     };
   };

@@ -21,6 +21,8 @@
 #include <asio/co_composed.hpp>
 #include <asio/co_spawn.hpp>
 #include <asio/error.hpp>
+#include <asio/ip/tcp.hpp>
+#include <asio/read_until.hpp>
 #include <asio/steady_timer.hpp>
 #include <asio/strand.hpp>
 #include <asio/use_awaitable.hpp>
@@ -31,127 +33,124 @@
 #include "aero/error.hpp"
 #include "aero/http/detail/line_endings.hpp"
 #include "aero/http/response.hpp"
-#include "aero/net/detail/concepts.hpp"
+#include "aero/net/transport.hpp"
+#include "aero/tls/error.hpp"
 #include "aero/urls/error.hpp"
 #include "aero/urls/url.hpp"
 #include "aero/util/deadline.hpp"
 #include "aero/util/final_action.hpp"
 #include "aero/util/string.hpp"
 #include "aero/websocket/client_handshaker.hpp"
-#include "aero/websocket/client_options.hpp"
 #include "aero/websocket/close_code.hpp"
+#include "aero/websocket/connection_options.hpp"
 #include "aero/websocket/detail/client_frame_builder.hpp"
-#include "aero/websocket/detail/frame.hpp"
 #include "aero/websocket/detail/message_reader.hpp"
 #include "aero/websocket/error.hpp"
 #include "aero/websocket/message.hpp"
 #include "aero/websocket/port.hpp"
+#include "aero/websocket/role.hpp"
 #include "aero/websocket/state.hpp"
+
+#if AERO_USE_TLS
+#include "aero/tls/detail/default_context.hpp"
+#include <asio/ssl/context.hpp>
+#endif
 
 namespace aero::websocket {
 
-  template <net::concepts::transport Transport>
-  class basic_client {
+  template <websocket::role Role>
+  class basic_connection {
     using protocol_error = websocket::protocol_error;
     constexpr static std::span<const std::byte> null_bytes{};
     constexpr static std::chrono::seconds default_close_timeout{5};
 
    public:
-    using transport_type = Transport;
+    using transport_type = aero::net::transport;
     using duration = std::chrono::steady_clock::duration;
     using executor_type = typename transport_type::executor_type;
 
-    basic_client(): transport_(aero::get_default_executor()) {}
+    basic_connection(): strand_(asio::make_strand(aero::get_default_executor())) {}
 
-    explicit basic_client(executor_type executor): transport_(executor) {}
-    explicit basic_client(asio::strand<executor_type> strand): transport_(std::move(strand)) {}
+#if AERO_USE_TLS
+    explicit basic_connection(asio::ssl::context& ssl_ctx)
+      : strand_(asio::make_strand(aero::get_default_executor())), ssl_ctx_(std::addressof(ssl_ctx)) {}
+#endif
 
-    explicit basic_client(client_options options)
-      : client_frame_builder_({
-          .validate_utf8 = options.validate_outcoming_utf8,
-        }),
+    explicit basic_connection(executor_type executor): strand_(asio::make_strand(executor)) {}
+
+#if AERO_USE_TLS
+    explicit basic_connection(executor_type executor, asio::ssl::context& ssl_ctx)
+      : strand_(asio::make_strand(executor)), ssl_ctx_(std::addressof(ssl_ctx)) {}
+#endif
+
+    explicit basic_connection(connection_options options)
+      : strand_(asio::make_strand(aero::get_default_executor())),
+        client_frame_builder_({.validate_utf8 = options.validate_outgoing_utf8}),
+        message_reader_({.max_message_size = options.max_message_size}),
         client_handshaker_(options.client_handshaker),
-        transport_(aero::get_default_executor(), options.max_message_size + detail::frame::max_header_size) {}
+        max_read_buffer_size_(options.read_buffer_size) {}
 
-    explicit basic_client(executor_type executor, client_options options)
-      : client_frame_builder_({
-          .validate_utf8 = options.validate_outcoming_utf8,
-        }),
+#if AERO_USE_TLS
+    explicit basic_connection(connection_options options, asio::ssl::context& ssl_ctx)
+      : strand_(asio::make_strand(aero::get_default_executor())),
+        client_frame_builder_({.validate_utf8 = options.validate_outgoing_utf8}),
+        message_reader_({.max_message_size = options.max_message_size}),
         client_handshaker_(options.client_handshaker),
-        transport_(executor, options.max_message_size + detail::frame::max_header_size) {}
+        max_read_buffer_size_(options.read_buffer_size),
+        ssl_ctx_(std::addressof(ssl_ctx)) {}
+#endif
 
-    explicit basic_client(asio::strand<executor_type> strand, client_options options)
-      : client_frame_builder_({
-          .validate_utf8 = options.validate_outcoming_utf8,
-        }),
+    explicit basic_connection(executor_type executor, connection_options options)
+      : strand_(asio::make_strand(executor)),
+        client_frame_builder_({.validate_utf8 = options.validate_outgoing_utf8}),
+        message_reader_({.max_message_size = options.max_message_size}),
         client_handshaker_(options.client_handshaker),
-        transport_(std::move(strand), options.max_message_size + detail::frame::max_header_size) {}
+        max_read_buffer_size_(options.read_buffer_size) {}
 
-    template <typename... TransportArgs>
-    explicit basic_client(std::in_place_type_t<transport_type>, TransportArgs&&... transport_args)
-      : transport_(aero::get_default_executor(), std::forward<TransportArgs>(transport_args)...) {}
-
-    template <typename... TransportArgs>
-    explicit basic_client(client_options options, std::in_place_type_t<transport_type>, TransportArgs&&... transport_args)
-      : client_frame_builder_({
-          .validate_utf8 = options.validate_outcoming_utf8,
-        }),
+#if AERO_USE_TLS
+    explicit basic_connection(executor_type executor, connection_options options, asio::ssl::context& ssl_ctx)
+      : strand_(asio::make_strand(executor)),
+        client_frame_builder_({.validate_utf8 = options.validate_outgoing_utf8}),
+        message_reader_({.max_message_size = options.max_message_size}),
         client_handshaker_(options.client_handshaker),
-        transport_(aero::get_default_executor(), std::forward<TransportArgs>(transport_args)...,
-          options.max_message_size + detail::frame::max_header_size) {}
-
-    template <typename... TransportArgs>
-    explicit basic_client(executor_type executor, std::in_place_type_t<transport_type>, TransportArgs&&... transport_args)
-      : transport_(executor, std::forward<TransportArgs>(transport_args)...) {}
-
-    template <typename... TransportArgs>
-    explicit basic_client(asio::strand<executor_type> strand, std::in_place_type_t<transport_type>,
-      TransportArgs&&... transport_args)
-      : transport_(std::move(strand), std::forward<TransportArgs>(transport_args)...) {}
-
-    template <typename... TransportArgs>
-    explicit basic_client(executor_type executor, client_options options, std::in_place_type_t<transport_type>,
-      TransportArgs&&... transport_args)
-      : client_frame_builder_({
-          .validate_utf8 = options.validate_outcoming_utf8,
-        }),
-        client_handshaker_(options.client_handshaker),
-        transport_(executor, std::forward<TransportArgs>(transport_args)...,
-          options.max_message_size + detail::frame::max_header_size) {}
-
-    template <typename... TransportArgs>
-    explicit basic_client(asio::strand<executor_type> strand, client_options options, std::in_place_type_t<transport_type>,
-      TransportArgs&&... transport_args)
-      : client_frame_builder_({
-          .validate_utf8 = options.validate_outcoming_utf8,
-        }),
-        client_handshaker_(options.client_handshaker),
-        transport_(std::move(strand), std::forward<TransportArgs>(transport_args)...,
-          options.max_message_size + detail::frame::max_header_size) {}
+        max_read_buffer_size_(options.read_buffer_size),
+        ssl_ctx_(std::addressof(ssl_ctx)) {}
+#endif
 
     template <typename CompletionToken>
-    auto async_connect(urls::url url, http::headers headers, CompletionToken&& token) {
+    auto async_connect(std::expected<urls::url, std::error_code> parsed_url, http::headers headers, CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
         asio::co_composed<void(std::error_code, http::response)>(
-          [this](auto, urls::url url, http::headers headers) -> void {
+          [this](auto, std::expected<urls::url, std::error_code> parsed_url, http::headers headers) -> void {
+            if (!parsed_url.has_value()) {
+              co_return {parsed_url.error(), http::response{}};
+            }
+
+            const urls::url& url = *parsed_url;
+
             if (!url.has_authority() || url.host().empty()) {
               co_return {urls::url_error::authority_invalid, http::response{}};
             }
 
-            if (!aero::striequal(url.scheme(), "ws") && !aero::striequal(url.scheme(), "wss")) {
+            bool is_using_secure_transport = aero::striequal(url.scheme(), "wss");
+            if (!aero::striequal(url.scheme(), "ws") && !is_using_secure_transport) {
               co_return {urls::url_error::scheme_invalid, http::response{}};
             }
 
-            auto port = websocket::get_port(url);
+            auto port = websocket::get_port_for_scheme(*parsed_url);
             if (!port) {
               co_return {port.error(), http::response{}};
             }
 
+            if (auto ec = construct_transport(is_using_secure_transport); ec) {
+              co_return {ec, http::response{}};
+            }
+
             reset_connection_state(state::connecting);
 
-            auto [connect_ec] = co_await transport_.async_connect(std::string{url.host()}, *port, return_as_deferred_tuple());
+            auto [connect_ec] = co_await transport_->async_connect(std::string{url.host()}, *port, return_as_deferred_tuple());
             if (connect_ec) {
               co_await async_finalize_session({}, return_as_deferred_tuple());
               co_return {connect_ec, http::response{}};
@@ -164,7 +163,7 @@ namespace aero::websocket {
               co_return {handshake.error(), http::response{}};
             }
 
-            auto [write_ec, bytes_written] = co_await transport_.async_write(handshake->bytes(), return_as_deferred_tuple());
+            auto [write_ec, bytes_written] = co_await transport_->async_write(handshake->bytes(), return_as_deferred_tuple());
             if (write_ec) {
               co_await async_finalize_session({}, return_as_deferred_tuple());
               co_return {write_ec, http::response{}};
@@ -173,8 +172,10 @@ namespace aero::websocket {
             std::vector<std::byte> response_buffer;
 
             // Read server response until "\r\n\r\n"
-            auto [read_ec, bytes_read] =
-              co_await transport_.async_read_until(response_buffer, http::detail::double_crlf, return_as_deferred_tuple());
+            auto [read_ec, bytes_read] = co_await asio::async_read_until(*transport_,
+              asio::dynamic_buffer(response_buffer),
+              http::detail::double_crlf,
+              return_as_deferred_tuple());
             if (read_ec) {
               co_await async_finalize_session({}, return_as_deferred_tuple());
               co_return {read_ec, http::response{}};
@@ -225,29 +226,17 @@ namespace aero::websocket {
             set_connection_state(state::open);
             co_return {std::error_code{}, std::move(server_response)};
           },
-          transport_.get_strand()),
+          strand_),
         bound_token,
-        std::move(url),
+        std::move(parsed_url),
         std::move(headers));
     }
 
     template <typename CompletionToken>
-    auto async_connect(std::expected<urls::url, std::error_code> parsed_url, http::headers headers, CompletionToken&& token) {
-      auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
-
-      return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
-        asio::co_composed<void(std::error_code, http::response)>(
-          [this](auto, std::expected<urls::url, std::error_code> parsed_url, http::headers headers) -> void {
-            if (!parsed_url.has_value()) {
-              co_return {parsed_url.error(), http::response{}};
-            }
-
-            co_return co_await this->async_connect(std::move(*parsed_url), std::move(headers), return_as_deferred_tuple());
-          },
-          transport_.get_strand()),
-        bound_token,
-        std::move(parsed_url),
-        std::move(headers));
+    auto async_connect(urls::url url, http::headers headers, CompletionToken&& token) {
+      return async_connect(std::expected<urls::url, std::error_code>{std::move(url)},
+        std::move(headers),
+        std::forward<CompletionToken>(token));
     }
 
     template <typename CompletionToken>
@@ -289,7 +278,7 @@ namespace aero::websocket {
 
             co_return co_await async_write_bytes(*frame, return_as_deferred_tuple());
           },
-          transport_.get_strand()),
+          strand_),
         bound_token,
         text);
     }
@@ -313,7 +302,7 @@ namespace aero::websocket {
 
             co_return co_await async_write_bytes(*frame, return_as_deferred_tuple());
           },
-          transport_.get_strand()),
+          strand_),
         bound_token,
         data);
     }
@@ -347,7 +336,7 @@ namespace aero::websocket {
 
             co_return co_await async_write_bytes(*frame, return_as_deferred_tuple());
           },
-          transport_.get_strand()),
+          strand_),
         bound_token,
         data);
     }
@@ -370,7 +359,7 @@ namespace aero::websocket {
 
             co_return co_await async_write_bytes(*frame, return_as_deferred_tuple());
           },
-          transport_.get_strand()),
+          strand_),
         bound_token,
         data);
     }
@@ -469,13 +458,13 @@ namespace aero::websocket {
                 co_return co_await async_finalize_session(read_ec, return_as_deferred_tuple());
               }
 
-              // Received peer's close response – handshake complete
+              // Received peer's close response - handshake complete
               if (message.is_close()) {
                 co_return co_await async_finalize_session(std::error_code{}, return_as_deferred_tuple());
               }
             }
           },
-          transport_.get_strand()),
+          strand_),
         bound_token,
         code,
         reason);
@@ -499,6 +488,10 @@ namespace aero::websocket {
       return asio::async_initiate<decltype(bound_token), void(std::error_code, websocket::message)>(
         asio::co_composed<void(std::error_code, websocket::message)>(
           [this](auto) -> void {
+            if (read_buffer_.capacity() == 0) {
+              read_buffer_.resize(max_read_buffer_size_);
+            }
+
             // Prevent concurrent async_read operations (one read at a time)
             if (is_read_loop_active()) {
               co_return {protocol_error::already_reading, websocket::message{}};
@@ -524,7 +517,7 @@ namespace aero::websocket {
                     co_return {response_ec, websocket::message{}};
                   }
 
-                  // Received a close frame – send close reply (if not sent) and finalize session
+                  // Received a close frame - send close reply (if not sent) and finalize session
                   // Also wakes up any pending async_close waiting on a timer
                   if (message->is_close()) {
                     auto [final_ec] = co_await async_finalize_session(std::error_code{}, return_as_deferred_tuple());
@@ -556,14 +549,15 @@ namespace aero::websocket {
                 co_return {deferred_read_ec, websocket::message{}};
               }
 
-              auto [read_ec, read_buffer] = co_await transport_.async_read_some(return_as_deferred_tuple());
+              auto [read_ec, bytes_read] =
+                co_await transport_->async_read_some(get_mutable_read_buffer(), return_as_deferred_tuple());
               if (read_ec) {
                 // The read was canceled (possibly by async_close or timeout)
                 if (is_canceled(read_ec)) {
                   co_return {read_ec, websocket::message{}};
                 }
 
-                // Unexpected transport error – fail the WebSocket connection (RFC 6455 7.2.1)
+                // Unexpected transport error - fail the WebSocket connection (RFC 6455 7.2.1)
                 auto [final_ec] = co_await async_finalize_session(read_ec, return_as_deferred_tuple());
 
                 // Forward unexpected transport errors to a caller for better
@@ -573,7 +567,7 @@ namespace aero::websocket {
               }
 
               // Consume incoming bytes into WebSocket frames/messages
-              auto consume_ec = message_reader_.consume(read_buffer);
+              auto consume_ec = message_reader_.consume(std::span{read_buffer_}.first(bytes_read));
               if (consume_ec && !deferred_read_ec_) {
                 // Store the first error to report after delivering any remaining message
                 deferred_read_ec_ = consume_ec;
@@ -582,7 +576,7 @@ namespace aero::websocket {
               // Loop continues to check for assembled messages or handle errors
             }
           },
-          transport_.get_strand()),
+          strand_),
         bound_token);
     }
 
@@ -730,16 +724,16 @@ namespace aero::websocket {
       return is_current_state(state::closing);
     }
 
+    [[nodiscard]] bool is_transport_secure() const noexcept {
+      return using_secure_transport_.load(std::memory_order::acquire);
+    }
+
     [[nodiscard]] executor_type get_executor() const noexcept {
-      return transport_.get_executor();
+      return strand_;
     }
 
     [[nodiscard]] asio::strand<executor_type> get_strand() const noexcept {
-      return transport_.get_strand();
-    }
-
-    [[nodiscard]] transport_type& transport() {
-      return transport_;
+      return strand_;
     }
 
    private:
@@ -789,7 +783,7 @@ namespace aero::websocket {
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto, std::span<const std::byte> frame) -> void {
-            auto [write_ec, bytes_written] = co_await transport_.async_write(frame, return_as_deferred_tuple());
+            auto [write_ec, bytes_written] = co_await transport_->async_write(frame, return_as_deferred_tuple());
             if (!write_ec) {
               co_return std::error_code{};
             }
@@ -808,7 +802,7 @@ namespace aero::websocket {
             // unexpectedly lost, the client MUST _Fail the WebSocket Connection_.
             co_return co_await async_finalize_session(write_ec, return_as_deferred_tuple());
           },
-          transport_.get_strand()),
+          strand_),
         bound_token,
         frame);
     }
@@ -837,7 +831,7 @@ namespace aero::websocket {
             set_close_sent_flag(true);
             co_return std::error_code{};
           },
-          transport_.get_strand()),
+          strand_),
         bound_token,
         code,
         std::move(reason));
@@ -859,13 +853,19 @@ namespace aero::websocket {
               set_connection_state(state::closing);
             }
 
-            co_await async_send_close(close_code_for_error(fatal_ec), std::nullopt, return_as_deferred_tuple());
-
-            for (;;) {
-              auto [read_ec, read_buffer] =
-                co_await transport_.async_read_some(asio::cancel_after(1s, return_as_deferred_tuple()));
-              if (read_ec) {
-                break;
+            auto [send_close_ec] =
+              co_await async_send_close(close_code_for_error(fatal_ec), std::nullopt, return_as_deferred_tuple());
+            if (!send_close_ec) {
+              // RFC 6455, Section 7.1.1:
+              // An endpoint SHOULD use a method that cleanly closes the TCP
+              // connection, as well as the TLS session, if applicable,
+              // discarding any trailing bytes that may have been received.
+              for (;;) {
+                auto [read_ec, bytes_read] = co_await transport_->async_read_some(get_mutable_read_buffer(),
+                  asio::cancel_after(1s, return_as_deferred_tuple()));
+                if (read_ec) {
+                  break;
+                }
               }
             }
 
@@ -879,15 +879,16 @@ namespace aero::websocket {
 
             co_return {};
           },
-          transport_.get_strand()),
+          strand_),
         bound_token,
         fatal_ec);
     }
 
-    // Graceful connection finalization path
-    // Use after a normal close handshake (or any non-fatal error) to move the client to
-    // 'closed' state. Stops all further reads/writes, shutdowns the transport, and resets
-    // internal state. This does not initiate a protocol failure, only finalizes/cleans up
+    // Graceful connection finalization path.
+    // Use after a normal close handshake (or any non-fatal error) to move the
+    // client to 'closed' state. Stops all further reads/writes, shutdowns the
+    // transport, and resets internal state. This does not initiate a protocol
+    // failure, only finalizes/cleans up
     template <typename CompletionToken>
     auto async_finalize_session(std::error_code final_ec, CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
@@ -895,12 +896,13 @@ namespace aero::websocket {
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
           [this](auto state, std::error_code final_ec) -> void {
-            // Disable cancellation via the coroutine associated cancellation slot for cleanup path.
-            // Imagine a situation where we enter 'async_finalize_session' and cancellation
-            // has already been signalled through the associated cancellation slot. It means
-            // that when we call 'transport_.async_shutdown', the shutdown operation could be
-            // cancelled immediately and return 'operation_aborted', potentially leaving the
-            // underlying websocket transport still open
+            // Disable cancellation via the coroutine associated cancellation
+            // slot for cleanup path. Imagine a situation where we enter
+            // 'async_finalize_session' and cancellation has already been
+            // signalled through the associated cancellation slot. It means that
+            // when we call 'transport_.async_shutdown', the shutdown operation
+            // could be cancelled immediately and return 'operation_aborted',
+            // potentially leaving the underlying websocket transport still open
             state.reset_cancellation_state(asio::disable_cancellation());
 
             if (is_current_state(state::closed)) {
@@ -910,14 +912,15 @@ namespace aero::websocket {
 
             reset_connection_state(state::closed);
 
-            auto [shutdown_ec] = co_await transport_.async_shutdown(return_as_deferred_tuple());
+            auto [shutdown_ec] = co_await transport_->async_shutdown(return_as_deferred_tuple());
+
             std::error_code result_ec = final_ec ? final_ec : shutdown_ec;
 
             // Wake up any pending close operation
             signal_close_completion(result_ec);
             co_return result_ec;
           },
-          transport_.get_strand()),
+          strand_),
         bound_token,
         final_ec);
     }
@@ -942,7 +945,7 @@ namespace aero::websocket {
 
             co_return std::error_code{};
           },
-          transport_.get_strand()),
+          strand_),
         bound_token,
         message);
     }
@@ -952,45 +955,78 @@ namespace aero::websocket {
     [[nodiscard]] bool is_current_state(States... state) const noexcept
       requires(sizeof...(state) > 0)
     {
-      auto current_state = state_.load(std::memory_order_acquire);
+      auto current_state = state_.load(std::memory_order::acquire);
       return ((current_state == state) || ...);
     }
 
     [[nodiscard]] bool is_close_received() const noexcept {
-      return close_received_.load(std::memory_order_acquire);
+      return close_received_.load(std::memory_order::acquire);
     }
 
     [[nodiscard]] bool is_close_sent() const noexcept {
-      return close_sent_.load(std::memory_order_acquire);
+      return close_sent_.load(std::memory_order::acquire);
     }
 
     [[nodiscard]] bool is_read_loop_active() const noexcept {
-      return read_loop_active_.load(std::memory_order_acquire);
+      return read_loop_active_.load(std::memory_order::acquire);
     }
 
-    void set_close_received_flag(bool value) {
-      close_received_.store(value, std::memory_order_release);
+    void set_close_received_flag(bool value) noexcept {
+      close_received_.store(value, std::memory_order::release);
     }
 
-    void set_close_sent_flag(bool value) {
-      close_sent_.store(value, std::memory_order_release);
+    void set_close_sent_flag(bool value) noexcept {
+      close_sent_.store(value, std::memory_order::release);
     }
 
-    void set_read_loop_active_flag(bool value) {
-      read_loop_active_.store(value, std::memory_order_release);
+    void set_read_loop_active_flag(bool value) noexcept {
+      read_loop_active_.store(value, std::memory_order::release);
     }
 
-    void set_connection_state(websocket::state state) {
-      state_.store(state, std::memory_order_release);
+    void set_secure_transport_flag(bool value) noexcept {
+      using_secure_transport_.store(value, std::memory_order::release);
     }
 
-    void reset_connection_state(websocket::state state) {
+    void set_connection_state(websocket::state state) noexcept {
+      state_.store(state, std::memory_order::release);
+    }
+
+    void reset_connection_state(websocket::state state) noexcept {
+      if (state == websocket::state::closed) {
+        set_secure_transport_flag(false);
+      }
+
       set_connection_state(state);
       set_close_received_flag(false);
       set_close_sent_flag(false);
       deferred_read_ec_.reset();
       data_received_in_handshake_.reset();
       message_reader_.reset();
+    }
+
+    std::error_code construct_transport(bool is_secure) {
+      if (!is_secure) {
+        transport_.emplace(strand_);
+        set_secure_transport_flag(false);
+        return {};
+      }
+
+#if AERO_USE_TLS
+      asio::ssl::context* ctx = ssl_ctx_;
+      if (ctx == nullptr) {
+        auto& default_ctx = tls::detail::default_context();
+        if (!default_ctx) {
+          return default_ctx.error();
+        }
+        ctx = std::addressof(default_ctx->context());
+      }
+
+      transport_.emplace(strand_, *ctx);
+      set_secure_transport_flag(true);
+      return {};
+#else
+      return tls::backend_error::unavailable;
+#endif
     }
 
     void signal_close_completion(std::error_code result_ec) {
@@ -1007,15 +1043,19 @@ namespace aero::websocket {
       return result;
     }
 
+    asio::mutable_buffer get_mutable_read_buffer() {
+      return {read_buffer_.data(), read_buffer_.size()};
+    }
+
     template <typename ResultT, typename F>
       requires(not std::same_as<ResultT, std::error_code>)
     std::tuple<std::error_code, ResultT> synchronize_awaitable(F&& awaitable) {
-      if (transport_.get_strand().running_in_this_thread()) {
+      if (strand_.running_in_this_thread()) {
         return {aero::basic_error::deadlock_would_occur, {}};
       }
 
       try {
-        return asio::co_spawn(transport_.get_strand(), std::forward<F>(awaitable), asio::use_future).get();
+        return asio::co_spawn(strand_, std::forward<F>(awaitable), asio::use_future).get();
       } catch (const std::system_error& e) {
         return {e.code(), {}};
       } catch (const std::future_error& e) {
@@ -1028,12 +1068,12 @@ namespace aero::websocket {
     template <typename ResultT, typename F>
       requires(std::same_as<ResultT, std::error_code>)
     std::error_code synchronize_awaitable(F&& awaitable) {
-      if (transport_.get_strand().running_in_this_thread()) {
+      if (strand_.running_in_this_thread()) {
         return aero::basic_error::deadlock_would_occur;
       }
 
       try {
-        auto [ec] = asio::co_spawn(transport_.get_strand(), std::forward<F>(awaitable), asio::use_future).get();
+        auto [ec] = asio::co_spawn(strand_, std::forward<F>(awaitable), asio::use_future).get();
         return ec;
       } catch (const std::system_error& e) {
         return e.code();
@@ -1044,11 +1084,24 @@ namespace aero::websocket {
       }
     }
 
+    asio::strand<executor_type> strand_;
     websocket::detail::client_frame_builder<> client_frame_builder_;
     websocket::detail::message_reader message_reader_;
     websocket::client_handshaker client_handshaker_;
-    transport_type transport_;
-    asio::steady_timer close_timer_{transport_.get_strand()};
+
+    // Store this as a separate variable to avoid allocating
+    // extra memory for the connections that will never read
+    std::size_t max_read_buffer_size_{websocket::default_read_buffer_size};
+
+    // Lazy-allocated on the first read call
+    std::vector<std::byte> read_buffer_;
+    std::atomic<bool> using_secure_transport_{false};
+    std::optional<transport_type> transport_;
+#if AERO_USE_TLS
+    asio::ssl::context* ssl_ctx_{nullptr};
+#endif
+
+    asio::steady_timer close_timer_{strand_};
     std::optional<std::error_code> close_result_ec_;
     std::optional<std::vector<std::byte>> data_received_in_handshake_;
     std::atomic<websocket::state> state_{state::closed};

@@ -1,5 +1,5 @@
 aero_add_unit_test(aero_websocket_accept_challenge accept_challenge.cpp)
-aero_add_unit_test(aero_websocket_basic_client basic_client.cpp)
+aero_add_unit_test(aero_websocket_client client.cpp)
 aero_add_unit_test(aero_websocket_client_completion_tokens client_completion_tokens.cpp)
 aero_add_unit_test(aero_websocket_client_frame_builder client_frame_builder.cpp)
 aero_add_unit_test(aero_websocket_client_handshaker client_handshaker.cpp)
