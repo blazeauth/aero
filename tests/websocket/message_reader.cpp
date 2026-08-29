@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -48,7 +49,10 @@ std::vector<message> poll_all(message_reader& reader) {
   return messages;
 }
 
-void expect_buffers_truncated_payload_until_complete(std::uint64_t payload_length, std::size_t first_payload_length) {
+// Helper to imitate TCP cutting a frame in the middle of its payload.
+// Payload reader expects payload_length bytes, but only first_payload_length
+// of them arrive first. The message must appear only after the rest is fed
+void expect_produces_message_only_after_payload_completes(std::uint64_t payload_length, std::size_t first_payload_length) {
   message_reader reader;
 
   const auto first_payload = make_payload_bytes(first_payload_length);
@@ -64,7 +68,7 @@ void expect_buffers_truncated_payload_until_complete(std::uint64_t payload_lengt
 
   expect(reader.consume(frame_prefix) == std::error_code{});
   expect(not poll_one(reader).has_value());
-  expect(reader.buffered_bytes() == frame_prefix.size());
+  expect(reader.buffered_bytes() == 0U);
 
   const auto remaining_payload_length = static_cast<std::size_t>(payload_length) - first_payload_length;
   const auto remaining_payload = make_payload_bytes(remaining_payload_length);
@@ -384,7 +388,7 @@ int main() {
       expect(reader.consume(std::span<const std::byte>{text_frame.data() + 4, 1}) == protocol_error::payload_text_invalid_utf8);
     };
 
-    "buffers truncated frame until complete"_test = [] {
+    "produces message only after the truncated frame completes"_test = [] {
       message_reader reader;
 
       auto full_frame = serialize_unmasked_frame(opcode::text, true, to_bytes("Hi"));
@@ -395,11 +399,9 @@ int main() {
 
       expect(reader.consume(std::span<const std::byte>{full_frame.data(), 1}) == std::error_code{});
       expect(not poll_one(reader).has_value());
-      expect(reader.buffered_bytes() == 1U);
 
       expect(reader.consume(std::span<const std::byte>{full_frame.data() + 1, 1}) == std::error_code{});
       expect(not poll_one(reader).has_value());
-      expect(reader.buffered_bytes() == 2U);
 
       expect(reader.consume(std::span<const std::byte>{full_frame.data() + 2, full_frame.size() - 2}) == std::error_code{});
 
@@ -414,16 +416,41 @@ int main() {
       expect(reader.buffered_bytes() == 0U);
     };
 
-    "buffers truncated payload for 7-bit length until complete"_test = [] {
-      expect_buffers_truncated_payload_until_complete(5U, 2U);
+    "produces message only after truncated payload for 7-bit length completes"_test = [] {
+      expect_produces_message_only_after_payload_completes(5U, 2U);
     };
 
-    "buffers truncated payload for 16-bit length until complete"_test = [] {
-      expect_buffers_truncated_payload_until_complete(50000U, 10U);
+    "produces message only after truncated payload for 16-bit length completes"_test = [] {
+      expect_produces_message_only_after_payload_completes(50000U, 10U);
     };
 
-    "buffers truncated payload for 64-bit length until complete"_test = [] {
-      expect_buffers_truncated_payload_until_complete(100000U, 10U);
+    "produces message only after truncated payload for 64-bit length completes"_test = [] {
+      expect_produces_message_only_after_payload_completes(100000U, 10U);
+    };
+
+    "does not retain partial data frame payload in the buffer"_test = [] {
+      message_reader reader;
+
+      const auto payload = make_payload_bytes(50000U, std::byte{0x42});
+      const auto frame = serialize_unmasked_frame(opcode::binary, true, payload);
+
+      constexpr std::size_t chunk_size = 4096U;
+      for (std::size_t offset = 0; offset < frame.size(); offset += chunk_size) {
+        const auto part = std::span{frame}.subspan(offset, (std::min)(chunk_size, frame.size() - offset));
+        expect(reader.consume(part) == std::error_code{});
+        expect(reader.buffered_bytes() == 0U)
+          << "payload must move into the message as it arrives, not accumulate; " << reader.buffered_bytes()
+          << " bytes retained after " << (offset + part.size()) << " bytes fed";
+      }
+
+      auto produced = poll_one(reader);
+      expect(produced.has_value());
+      if (not produced.has_value()) {
+        return;
+      }
+
+      expect(produced->kind == message_kind::binary);
+      expect(produced->payload == payload);
     };
 
     "resets state and allows reuse"_test = [] {

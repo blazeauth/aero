@@ -135,28 +135,24 @@ namespace aero::websocket::detail {
       message_.reset();
     }
 
-    [[nodiscard]] std::error_code validate_next_frame(const frame& frame) const {
-      // Control frames are single-frame messages, so they cannot expect
-      // the continuation, meaning that no interleaving is possible
+    [[nodiscard]] std::error_code validate_frame(const frame& frame) const {
+      // Control frames are single-frame messages, so they cannot expect the
+      // continuation, meaning that no interleaving is possible
       if (frame.is_control()) {
         return {};
       }
 
       if (frame.is_continuation()) {
-        // Received continuation frame without previously receiving
-        // initiation frame (with FIN=0): unexpected continuation
+        // Received continuation frame without previously receiving initiation
+        // frame (with FIN=0): unexpected continuation
         if (!message_) {
           return message_reader_error::unexpected_continuation;
         }
         return {};
       }
 
-      if (!frame.is_text() && !frame.is_binary()) {
-        return protocol_error::opcode_invalid;
-      }
-
-      // Received non-control & non-continuation frame while
-      // expecting continuation frame for current message
+      // Received non-control & non-continuation frame while expecting
+      // continuation frame for current message
       if (message_) {
         return message_reader_error::interleaved_data_frame;
       }
@@ -167,7 +163,7 @@ namespace aero::websocket::detail {
     void begin_frame(const frame& frame) {
       assert(!frame.is_control());
       assert(!frame.is_continuation());
-      assert(!validate_next_frame(frame));
+      assert(!validate_frame(frame));
 
       message_.emplace(message_in_progress{
         .opcode = frame.opcode,
@@ -178,8 +174,8 @@ namespace aero::websocket::detail {
       assert(!frame.is_control());
       assert(message_);
 
-      if (auto validation_ec = validate_utf8_chunk(frame, chunk); validation_ec) {
-        return validation_ec;
+      if (auto ec = validate_utf8_chunk(frame, chunk); ec) {
+        return ec;
       }
 
       if (config_.max_message_size.has_value() && message_->payload.size() + chunk.size() > *config_.max_message_size) {
@@ -330,11 +326,7 @@ namespace aero::websocket::detail {
    private:
     struct frame_in_progress {
       frame header;
-      std::size_t payload_bytes_processed{0};
-
-      [[nodiscard]] std::size_t frame_size() const noexcept {
-        return header.header_size() + static_cast<std::size_t>(header.payload_length);
-      }
+      std::size_t payload_bytes_remaining{0};
     };
 
     [[nodiscard]] read_result try_read_one() {
@@ -351,27 +343,30 @@ namespace aero::websocket::detail {
     }
 
     [[nodiscard]] read_result try_read_frame_header() {
-      assert(state_ == reader_state::waiting_for_frame_header);
-
-      // Ask transport to read more bytes from the socket
-      // before trying to parse frame header
+      // At least 2 bytes are required to parse WebSocket frame header. If
+      // socket read provided less than that, just ask transport for more bytes
       if (receive_buffer_.size() < frame::min_header_size) {
         return read_progress::need_more_bytes;
       }
 
       auto decoded_header = decoder_.decode_header(receive_buffer_.available_bytes());
       if (!decoded_header) {
+        // WebSocket frame header can take up to 14 bytes. When we have 2
+        // decoded bytes that are telling the decoder enough information to
+        // understand that available bytes are not enough to parse full frame
+        // header - we request more bytes from the transport
         if (decoded_header.error() == protocol_error::buffer_truncated) {
           return read_progress::need_more_bytes;
         }
+
         return std::unexpected(decoded_header.error());
       }
 
-      // This check is actually needed. By RFC6455, message can carry up to
-      // 0x7FFF'FFFF'FFFF'FFFF bytes, but this does not mean that the vector
-      // can store this much bytes on any platform. On the 32-bit platforms,
-      // size_type will have a maximum capacity of 0xFFFFFFFF, meaning that
-      // the vector::max_size will be outgrown by any message bigger than than.
+      // By RFC6455, message can carry up to 0x7FFF'FFFF'FFFF'FFFF bytes, but
+      // this does not mean that the vector can store this much bytes on any
+      // platform. On the 32-bit platforms, size_type will have a maximum
+      // capacity of 0xFFFFFFFF, meaning that the vector::max_size will be
+      // outgrown by any message bigger than than.
       //
       // This is kind of an edge-case, but if there will be any issues with
       // this, we can add up multiple std::vector's when one of them is full
@@ -379,14 +374,25 @@ namespace aero::websocket::detail {
         return std::unexpected(protocol_error::payload_length_too_big);
       }
 
-      if (auto validation_ec = data_message_.validate_next_frame(*decoded_header); validation_ec) {
-        return std::unexpected(validation_ec);
+      // Check if the received frame can be part of the current message
+      // (continuation frames) or if it's independent (control frames)
+      if (auto ec = data_message_.validate_frame(*decoded_header); ec) {
+        return std::unexpected(ec);
       }
 
-      active_frame_ = frame_in_progress{.header = *decoded_header};
+      // Remember which frame reader should expect to arrive
+      active_frame_ = frame_in_progress{
+        .header = *decoded_header,
+        .payload_bytes_remaining = static_cast<std::size_t>(decoded_header->payload_length),
+      };
       if (!decoded_header->is_control() && !decoded_header->is_continuation()) {
         data_message_.begin_frame(*decoded_header);
       }
+
+      // The header bytes are no longer needed, since everything from them is
+      // already saved in active_frame_. Drop them from the buffer, so the
+      // payload reader will take bytes from the buffer front
+      receive_buffer_.consume(decoded_header->header_size());
       state_ = reader_state::reading_frame_payload;
 
       return read_progress::made_progress;
@@ -407,15 +413,14 @@ namespace aero::websocket::detail {
       assert(active_frame_.has_value());
       assert(active_frame_->header.is_control());
 
-      const auto bytes = receive_buffer_.available_bytes();
-      const auto buffered_payload_len = buffered_payload_length(*active_frame_, bytes);
-      if (buffered_payload_len < active_frame_->header.payload_length) {
+      const auto available_bytes = receive_buffer_.available_bytes();
+      if (available_bytes.size() < active_frame_->header.payload_length) {
         receive_buffer_.discard_consumed_if_needed();
         return read_progress::need_more_bytes;
       }
 
-      if (auto finish_ec = finish_control_frame(bytes); finish_ec) {
-        return std::unexpected(finish_ec);
+      if (auto ec = finish_control_frame(available_bytes); ec) {
+        return std::unexpected(ec);
       }
 
       return read_progress::made_progress;
@@ -427,45 +432,26 @@ namespace aero::websocket::detail {
 
       auto& active_frame = *active_frame_;
       const auto bytes = receive_buffer_.available_bytes();
-      const auto buffered_payload_len = buffered_payload_length(active_frame, bytes);
+      const auto chunk_size = (std::min)(bytes.size(), active_frame.payload_bytes_remaining);
 
-      if (buffered_payload_len > active_frame.payload_bytes_processed) {
-        auto payload_chunk = next_payload_chunk(active_frame, bytes, buffered_payload_len);
-        if (auto append_ec = data_message_.append_payload(active_frame.header, payload_chunk); append_ec) {
-          return std::unexpected(append_ec);
+      if (chunk_size > 0) {
+        if (auto ec = data_message_.append_payload(active_frame.header, bytes.first(chunk_size)); ec) {
+          return std::unexpected(ec);
         }
 
-        active_frame.payload_bytes_processed = buffered_payload_len;
+        receive_buffer_.consume(chunk_size);
+        active_frame.payload_bytes_remaining -= chunk_size;
       }
 
-      if (buffered_payload_len < active_frame.header.payload_length) {
-        receive_buffer_.discard_consumed_if_needed();
+      if (active_frame.payload_bytes_remaining > 0) {
         return read_progress::need_more_bytes;
       }
 
-      if (auto finish_ec = finish_data_frame(); finish_ec) {
-        return std::unexpected(finish_ec);
+      if (auto ec = finish_data_frame(); ec) {
+        return std::unexpected(ec);
       }
 
       return read_progress::made_progress;
-    }
-
-    [[nodiscard]] static std::size_t buffered_payload_length(const frame_in_progress& active_frame,
-      std::span<const std::byte> bytes) noexcept {
-      const auto header_size = active_frame.header.header_size();
-      if (bytes.size() <= header_size) {
-        return 0;
-      }
-
-      const auto visible_payload_bytes = bytes.size() - header_size;
-      return (std::min<std::size_t>)(visible_payload_bytes, active_frame.header.payload_length);
-    }
-
-    [[nodiscard]] static std::span<const std::byte> next_payload_chunk(const frame_in_progress& active_frame,
-      std::span<const std::byte> bytes, std::size_t payload_length_in_buffer) noexcept {
-      const auto new_payload_bytes = payload_length_in_buffer - active_frame.payload_bytes_processed;
-      const auto payload_offset = active_frame.header.header_size() + active_frame.payload_bytes_processed;
-      return bytes.subspan(payload_offset, new_payload_bytes);
     }
 
     [[nodiscard]] std::error_code finish_data_frame() {
@@ -490,17 +476,17 @@ namespace aero::websocket::detail {
       assert(active_frame_->header.is_control());
 
       auto completed_frame = active_frame_->header;
-      const auto frame_size = active_frame_->frame_size();
-      auto payload = std::vector(std::from_range, bytes.subspan(completed_frame.header_size(), completed_frame.payload_length));
+      const auto payload_size = static_cast<std::size_t>(completed_frame.payload_length);
+      auto payload = std::vector(std::from_range, bytes.first(payload_size));
       completed_frame.payload_data = std::span<const std::byte>{payload};
       completed_frame.application_data = completed_frame.payload_data;
 
-      if (auto validate_ec = completed_frame.validate(); validate_ec) {
-        return validate_ec;
+      if (auto ec = completed_frame.validate(); ec) {
+        return ec;
       }
 
-      if (auto dispatch_ec = dispatch_control_frame(completed_frame); dispatch_ec) {
-        return dispatch_ec;
+      if (auto ec = dispatch_control_frame(completed_frame); ec) {
+        return ec;
       }
 
       const auto next_state = completed_frame.is_close() ? reader_state::closed : reader_state::waiting_for_frame_header;
@@ -508,17 +494,13 @@ namespace aero::websocket::detail {
         data_message_.reset();
       }
 
-      finish_active_frame(next_state, frame_size);
+      receive_buffer_.consume(payload_size);
+      finish_active_frame(next_state);
       return {};
     }
 
     void finish_active_frame(reader_state next_state) {
       assert(active_frame_.has_value());
-      finish_active_frame(next_state, active_frame_->frame_size());
-    }
-
-    void finish_active_frame(reader_state next_state, std::size_t frame_size) {
-      receive_buffer_.consume(frame_size);
       active_frame_.reset();
       state_ = next_state;
     }
