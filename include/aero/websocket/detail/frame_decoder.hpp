@@ -10,12 +10,12 @@
 #include "aero/util/bytes.hpp"
 #include "aero/websocket/detail/frame.hpp"
 #include "aero/websocket/detail/opcode.hpp"
-#include "aero/websocket/detail/role.hpp"
 #include "aero/websocket/error.hpp"
+#include "aero/websocket/role.hpp"
 
 namespace aero::websocket::detail {
 
-  template <websocket::detail::role ReceiverRole>
+  template <websocket::role ReceiverRole>
   class frame_decoder {
    public:
     [[nodiscard]] std::expected<frame, std::error_code> decode_header(std::span<const std::byte> buf) const {
