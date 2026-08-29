@@ -6,6 +6,10 @@
 
 namespace aero::tls {
 
+  enum class backend_error : std::uint8_t {
+    unavailable = 1,
+  };
+
   enum class handshake_error : std::uint8_t {
     sni_setup_failed = 1,
     hostname_setup_failed,
@@ -29,9 +33,27 @@ namespace aero::tls {
 
   enum class context_error : std::uint8_t {
     cannot_disable_active_tls_version = 1,
+    system_trust_store_unavailable
   };
 
   namespace detail {
+
+    class backend_error_category : public std::error_category {
+     public:
+      [[nodiscard]] const char* name() const noexcept override {
+        return "aero.tls.backend_error";
+      }
+
+      [[nodiscard]] std::string message(int value) const override {
+        using aero::tls::backend_error;
+        switch (static_cast<backend_error>(value)) {
+        case backend_error::unavailable:
+          return "TLS is unavailable: aero was built without a TLS backend";
+        default:
+          return "unknown TLS library error";
+        }
+      }
+    };
 
     class handshake_error_category : public std::error_category {
      public:
@@ -104,6 +126,8 @@ namespace aero::tls {
         switch (static_cast<context_error>(value)) {
         case context_error::cannot_disable_active_tls_version:
           return "cannot disable active TLS version";
+        case context_error::system_trust_store_unavailable:
+          return "system trust store is unavailable";
         default:
           return "unknown context error";
         }
@@ -111,6 +135,11 @@ namespace aero::tls {
     };
 
   } // namespace detail
+
+  const inline std::error_category& backend_error_category() noexcept {
+    static const detail::backend_error_category category;
+    return category;
+  }
 
   const inline std::error_category& handshake_error_category() noexcept {
     static const detail::handshake_error_category category;
@@ -127,6 +156,10 @@ namespace aero::tls {
     return category;
   }
 
+  inline std::error_code make_error_code(backend_error value) {
+    return {static_cast<int>(value), backend_error_category()};
+  }
+
   inline std::error_code make_error_code(handshake_error value) {
     return {static_cast<int>(value), handshake_error_category()};
   }
@@ -141,6 +174,8 @@ namespace aero::tls {
 
 } // namespace aero::tls
 
+template <>
+struct std::is_error_code_enum<aero::tls::backend_error> : std::true_type {};
 template <>
 struct std::is_error_code_enum<aero::tls::handshake_error> : std::true_type {};
 template <>
