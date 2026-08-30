@@ -15,6 +15,7 @@
 #include <asio/co_composed.hpp>
 #include <asio/connect.hpp>
 #include <asio/deferred.hpp>
+#include <asio/error.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/redirect_error.hpp>
 #include <asio/strand.hpp>
@@ -219,6 +220,10 @@ namespace aero::net {
 #endif
     }
 
+    [[nodiscard]] bool is_open() const noexcept {
+      return socket_.is_open();
+    }
+
    private:
     static bool is_ignorable_close_error(std::error_code ec) {
       return ec == asio::error::not_connected || ec == asio::error::eof || ec == asio::error::bad_descriptor;
@@ -342,7 +347,21 @@ namespace aero::net {
                                    std::size_t bytes_transferred) mutable {
         pending_writes_.front().cancellation_slot.clear();
         pending_writes_.pop_front();
-        start_write_loop();
+
+        // asio::async_write is a composed operation that invokes
+        // .async_write_some() N times, where N is usually unknown
+        // (depends on the OS and TCP stack). If this operation fails or is
+        // cancelled mid-flight - the stream is considered broken, since by
+        // the non-copying aero contract, caller no longer has to provide a
+        // write buffer, so we can't continue writing data after recovering
+        // from an error
+        if (ec) {
+          std::error_code ignored_ec;
+          static_cast<void>(socket_.close(ignored_ec));
+          complete_all_queued_writes_with_error(asio::error::operation_aborted);
+        } else {
+          start_write_loop();
+        }
 
         std::move(completion)(ec, bytes_transferred);
       };
@@ -363,6 +382,18 @@ namespace aero::net {
 
     void pop_cancelled_front_writes_from_queue() {
       while (!pending_writes_.empty() && pending_writes_.front().cancelled) {
+        pending_writes_.front().cancellation_slot.clear();
+        pending_writes_.pop_front();
+      }
+    }
+
+    void complete_all_queued_writes_with_error(std::error_code ec) {
+      while (!pending_writes_.empty()) {
+        auto& pending = pending_writes_.front();
+        if (!pending.cancelled) {
+          asio::post(strand_, [ec, completion = std::move(pending.completion)]() mutable { std::move(completion)(ec, 0); });
+        }
+
         pending_writes_.front().cancellation_slot.clear();
         pending_writes_.pop_front();
       }

@@ -44,6 +44,7 @@ namespace {
     std::error_code ec;
     std::size_t bytes = 0;
     bool finished = false;
+    bool is_socket_open = true;
   };
 
   struct loopback_transport {
@@ -68,7 +69,7 @@ namespace {
         transport.get_executor(),
         [this, payload, &result]() -> asio::awaitable<void> {
           auto [ec, bytes] = co_await transport.async_write(payload, asio::as_tuple(asio::deferred));
-          result = write_result{.ec = ec, .bytes = bytes, .finished = true};
+          result = write_result{.ec = ec, .bytes = bytes, .finished = true, .is_socket_open = transport.is_open()};
         },
         asio::detached);
     }
@@ -79,7 +80,7 @@ namespace {
         [this, payload, cancel_after, &result]() -> asio::awaitable<void> {
           auto [ec, bytes] =
             co_await transport.async_write(payload, asio::cancel_after(cancel_after, asio::as_tuple(asio::deferred)));
-          result = write_result{.ec = ec, .bytes = bytes, .finished = true};
+          result = write_result{.ec = ec, .bytes = bytes, .finished = true, .is_socket_open = transport.is_open()};
         },
         asio::detached);
     }
@@ -136,9 +137,10 @@ int main() {
       expect(queued.finished && queued.ec == asio::error::operation_aborted)
         << "queued write should complete with operation_aborted, got: " << queued.ec.message();
       expect(in_flight.finished && in_flight.ec) << "in-flight write should fail only once the peer closes the connection";
+      expect(queued.is_socket_open) << "transport socket should still be open after queued write cancellation";
     };
 
-    "cancelling the in-flight write does not drop the queued write"_test = [] {
+    "cancelling the in-flight write completes the queued write with operation_aborted and closes the socket"_test = [] {
       loopback_transport loopback;
       write_result in_flight;
       write_result queued;
@@ -157,8 +159,10 @@ int main() {
 
       expect(in_flight.finished && in_flight.ec == asio::error::operation_aborted)
         << "in-flight write should complete with operation_aborted, got: " << in_flight.ec.message();
-      expect(queued.finished && not queued.ec && queued.bytes == small_payload().size())
-        << "queued write should still reach the peer after the in-flight one is cancelled, got: " << queued.ec.message();
+      expect(queued.finished && queued.ec == asio::error::operation_aborted)
+        << "queued write should complete with operation_aborted, got: " << queued.ec.message();
+      expect(not in_flight.is_socket_open && not queued.is_socket_open)
+        << "transport should close its socket after in-flight write cancellation";
     };
   };
 }

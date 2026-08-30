@@ -790,20 +790,40 @@ namespace aero::websocket {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
-          [this](auto, std::span<const std::byte> frame) -> void {
+          [this](auto state, std::span<const std::byte> frame) -> void {
             auto [write_ec, bytes_written] = co_await transport_->async_write(frame, return_as_deferred_tuple());
             if (!write_ec) {
               co_return std::error_code{};
             }
 
-            if (is_canceled(write_ec)) {
-              co_return write_ec;
+            // Filtering cancellation errors only partially, because after
+            // cancelling composed asio::async_write, the transport stream
+            // may contain partially written WebSocket frame, in cases when
+            // one or more calls to .async_write_some() were done before the
+            // cancellation.
+            //
+            // Imagine sending binary with 1MB payload and timeout of 50ms,
+            // surely, some data, including WebSocket frame header, will be
+            // sent to a peer. Peer received WebSocket frame header, expects
+            // payload with size equal to 1MB, but the caller is cancelling
+            // composed write operation after sending a couple of chunks to a
+            // peer. This means that the connection is broken and all that
+            // aero can do is a force shutdown
+            //
+            // But! There is also an edge-case in current aero transport
+            // architecture: write queue. Everything said above applies only
+            // to the in-flight write cancellation. If write was enqueued and
+            // hasn't yet started, we can safely cancel the operation. In
+            // cases when in-flight write was cancelled, transport closes a
+            // socket, so we can decide whether caller has canceled in-flight
+            // operation or not by simply checking if socket is still open.
+            if (is_canceled(write_ec) && transport_->is_open()) {
+              co_return {write_ec};
             }
 
-            // async_write returned an error that was not a cancellation,
-            // so we consider the failed write to be a transport loss
-            // P.S. In the future, we may need to add more detailed error
-            // checks, depending on what asio::async_write_some might return
+            // Allow co_await-ing async_finalize_session even if the current
+            // co_composed received cancellation
+            state.reset_cancellation_state(asio::disable_cancellation());
 
             // RFC6455 - 7.2.1. Client-Initiated Closure:
             // If at any point the underlying transport layer connection is

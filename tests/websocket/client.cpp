@@ -13,6 +13,10 @@
 #include <vector>
 
 #include <asio/as_tuple.hpp>
+#include <asio/bind_cancellation_slot.hpp>
+#include <asio/cancellation_signal.hpp>
+#include <asio/error.hpp>
+#include <asio/post.hpp>
 #include <asio/use_future.hpp>
 
 #include <ut/ut.hpp>
@@ -354,6 +358,37 @@ int main() {
       expect(reconnect_ec == websocket::protocol_error::connection_not_closed)
         << "second connect must be refused without touching the open connection, got: " << reconnect_ec.message();
       expect(client.is_open_for_writing()) << "refused connect must leave the open connection usable";
+    };
+
+    "cancelled in-flight send fails the connection"_test = [&] {
+      aero::final_action cleanup{[&] { server.close_last_conn(); }};
+
+      std::latch frame_reached_peer{1};
+
+      server.on_accept([&](std::shared_ptr<connection> conn) {
+        auto raw_request = conn->read_request();
+        conn->write_response(make_websocket_switching_response(raw_request));
+        std::ignore = conn->read_bytes(2);
+        frame_reached_peer.count_down();
+      });
+
+      websocket::client client;
+      auto [connect_ec, response] = client.connect(url_str);
+      expect(not static_cast<bool>(connect_ec));
+
+      std::vector<std::byte> unflushable(64ULL * 1024 * 1024);
+      asio::cancellation_signal cancel_signal;
+      auto send_future = client.async_send_binary(unflushable,
+        asio::bind_cancellation_slot(cancel_signal.slot(), asio::as_tuple(asio::use_future)));
+
+      frame_reached_peer.wait();
+      asio::post(client.get_executor(), [&] { cancel_signal.emit(asio::cancellation_type::terminal); });
+      auto [send_ec] = send_future.get();
+
+      expect(send_ec == asio::error::operation_aborted)
+        << "cancelled send should complete with operation_aborted, got: " << send_ec.message();
+      expect(not client.is_open_for_writing()) << "connection with a partially written frame must not accept further writes";
+      expect(client.is_closed()) << "cancelled in-flight send must fail the connection, not leave it open";
     };
 
     "test server handled all requests without throwing"_test = [&] {
