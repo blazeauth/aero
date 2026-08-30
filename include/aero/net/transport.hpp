@@ -48,12 +48,12 @@ namespace aero::net {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
-          [this](auto) -> void {
+          [](auto, transport* self) -> void {
             using tls::detail::x509_verify_error;
             tls::detail::alert_capture tls_alerts;
-            tls_alerts.install(tls_stream_->native_handle());
+            tls_alerts.install(self->tls_stream_->native_handle());
 
-            auto [handshake_ec] = co_await tls_stream_->async_handshake(asio::ssl::stream_base::client);
+            auto [handshake_ec] = co_await self->tls_stream_->async_handshake(asio::ssl::stream_base::client);
 
             auto alert = tls_alerts.get_last_tls_alert();
             if (alert) {
@@ -63,7 +63,7 @@ namespace aero::net {
               }
             }
 
-            auto verify_result = static_cast<x509_verify_error>(::SSL_get_verify_result(tls_stream_->native_handle()));
+            auto verify_result = static_cast<x509_verify_error>(::SSL_get_verify_result(self->tls_stream_->native_handle()));
             if (verify_result != x509_verify_error::ok) {
               auto cert_error = tls::detail::verify_error_to_cert_error(verify_result);
               if (cert_error) {
@@ -74,7 +74,8 @@ namespace aero::net {
             co_return handshake_ec;
           },
           strand_),
-        bound_token);
+        bound_token,
+        this);
     }
 #endif
 
@@ -94,7 +95,7 @@ namespace aero::net {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
-          [this](auto, std::string host, asio::ip::port_type port) -> void {
+          [](auto, transport* self, std::string host, asio::ip::port_type port) -> void {
             using net::connect_error;
 
             std::error_code address_parse_ec;
@@ -105,9 +106,9 @@ namespace aero::net {
 
             if (using_address) {
               asio::ip::tcp::endpoint endpoint(address, port);
-              std::tie(connect_ec) = co_await socket_.async_connect(endpoint);
+              std::tie(connect_ec) = co_await self->socket_.async_connect(endpoint);
             } else {
-              deferred_tcp_resolver resolver{strand_};
+              deferred_tcp_resolver resolver{self->strand_};
               auto service = std::to_string(port);
 
               auto [resolve_ec, resolved_endpoints] = co_await resolver.async_resolve(host, service);
@@ -122,7 +123,8 @@ namespace aero::net {
                 co_return connect_error::host_resolve_failed;
               }
 
-              std::tie(connect_ec, std::ignore) = co_await asio::async_connect(socket_.lowest_layer(), resolved_endpoints);
+              std::tie(connect_ec, std::ignore) =
+                co_await asio::async_connect(self->socket_.lowest_layer(), resolved_endpoints);
             }
 
             if (connect_ec) {
@@ -130,18 +132,18 @@ namespace aero::net {
             }
 
 #if AERO_USE_TLS
-            if (is_using_tls_stream()) {
+            if (self->is_using_tls_stream()) {
               if (!using_address) {
-                if (auto ec = tls::set_sni(tls_stream_->native_handle(), host); ec) {
+                if (auto ec = tls::set_sni(self->tls_stream_->native_handle(), host); ec) {
                   co_return ec;
                 }
 
-                if (auto ec = tls::set_expected_peer_host(tls_stream_->native_handle(), host); ec) {
+                if (auto ec = tls::set_expected_peer_host(self->tls_stream_->native_handle(), host); ec) {
                   co_return ec;
                 }
               }
 
-              co_return co_await async_handshake(asio::as_tuple(asio::deferred));
+              co_return co_await self->async_handshake(asio::as_tuple(asio::deferred));
             }
 #endif
 
@@ -149,6 +151,7 @@ namespace aero::net {
           },
           strand_),
         bound_token,
+        this,
         std::move(host),
         port);
     }
@@ -158,20 +161,20 @@ namespace aero::net {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
-          [this](auto) -> void {
+          [](auto, transport* self) -> void {
             std::error_code shutdown_ec;
             std::error_code close_ec;
 
 #if AERO_USE_TLS
-            if (is_using_tls_stream()) {
-              std::tie(shutdown_ec) = co_await tls_stream_->async_shutdown();
+            if (self->is_using_tls_stream()) {
+              std::tie(shutdown_ec) = co_await self->tls_stream_->async_shutdown();
               if (is_ignorable_close_error(shutdown_ec)) {
                 shutdown_ec.clear();
               }
             }
 #endif
 
-            static_cast<void>(lowest_layer().close(close_ec));
+            static_cast<void>(self->lowest_layer().close(close_ec));
             if (is_ignorable_close_error(close_ec)) {
               close_ec.clear();
             }
@@ -179,7 +182,8 @@ namespace aero::net {
             co_return shutdown_ec ? shutdown_ec : close_ec;
           },
           strand_),
-        bound_token);
+        bound_token,
+        this);
     }
 
     template <typename MutableBuffersSequence, typename CompletionToken>

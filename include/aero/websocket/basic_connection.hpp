@@ -123,8 +123,9 @@ namespace aero::websocket {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code, http::response)>(
         asio::co_composed<void(std::error_code, http::response)>(
-          [this](auto, std::expected<urls::url, std::error_code> parsed_url, http::headers headers) -> void {
-            if (!is_current_state(state::closed)) {
+          [](auto, basic_connection* self, std::expected<urls::url, std::error_code> parsed_url, http::headers headers)
+            -> void {
+            if (!self->is_current_state(state::closed)) {
               co_return {protocol_error::connection_not_closed, http::response{}};
             }
 
@@ -148,40 +149,42 @@ namespace aero::websocket {
               co_return {port.error(), http::response{}};
             }
 
-            if (auto ec = construct_transport(is_using_secure_transport); ec) {
+            if (auto ec = self->construct_transport(is_using_secure_transport); ec) {
               co_return {ec, http::response{}};
             }
 
-            reset_connection_state(state::connecting);
+            self->reset_connection_state(state::connecting);
 
-            auto [connect_ec] = co_await transport_->async_connect(std::string{url.host()}, *port, return_as_deferred_tuple());
+            auto [connect_ec] =
+              co_await self->transport_->async_connect(std::string{url.host()}, *port, return_as_deferred_tuple());
             if (connect_ec) {
-              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_await self->async_finalize_session({}, return_as_deferred_tuple());
               co_return {connect_ec, http::response{}};
             }
 
             // Build bodyless HTTP websocket upgrade request
-            auto handshake = client_handshaker_.build_request(url, std::move(headers));
+            auto handshake = self->client_handshaker_.build_request(url, std::move(headers));
             if (!handshake) {
-              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_await self->async_finalize_session({}, return_as_deferred_tuple());
               co_return {handshake.error(), http::response{}};
             }
 
-            auto [write_ec, bytes_written] = co_await transport_->async_write(handshake->bytes(), return_as_deferred_tuple());
+            auto [write_ec, bytes_written] =
+              co_await self->transport_->async_write(handshake->bytes(), return_as_deferred_tuple());
             if (write_ec) {
-              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_await self->async_finalize_session({}, return_as_deferred_tuple());
               co_return {write_ec, http::response{}};
             }
 
             std::vector<std::byte> response_buffer;
 
             // Read server response until "\r\n\r\n"
-            auto [read_ec, bytes_read] = co_await asio::async_read_until(*transport_,
+            auto [read_ec, bytes_read] = co_await asio::async_read_until(*self->transport_,
               asio::dynamic_buffer(response_buffer),
               http::detail::double_crlf,
               return_as_deferred_tuple());
             if (read_ec) {
-              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_await self->async_finalize_session({}, return_as_deferred_tuple());
               co_return {read_ec, http::response{}};
             }
 
@@ -191,7 +194,7 @@ namespace aero::websocket {
             const bool buffer_has_data_after_delimiter = response_buffer.size() > bytes_read;
             if (buffer_has_data_after_delimiter) {
               auto data_after_handshake = std::span{response_buffer}.subspan(bytes_read);
-              data_received_in_handshake_ = std::vector{std::from_range, data_after_handshake};
+              self->data_received_in_handshake_ = std::vector{std::from_range, data_after_handshake};
             }
 
             http::response server_response;
@@ -199,13 +202,13 @@ namespace aero::websocket {
 
             auto status_line_end = handshake_response.find(http::detail::crlf);
             if (status_line_end == std::string_view::npos) {
-              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_await self->async_finalize_session({}, return_as_deferred_tuple());
               co_return {http::protocol_error::status_line_invalid, http::response{}};
             }
 
             auto status_line = http::status_line::parse(handshake_response.substr(0, status_line_end));
             if (!status_line) {
-              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_await self->async_finalize_session({}, return_as_deferred_tuple());
               co_return {status_line.error(), http::response{}};
             }
 
@@ -214,24 +217,26 @@ namespace aero::websocket {
             auto headers_section_start = status_line_end + http::detail::crlf.size();
             auto response_headers = http::headers::parse(handshake_response.substr(headers_section_start));
             if (!response_headers) {
-              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_await self->async_finalize_session({}, return_as_deferred_tuple());
               co_return {response_headers.error(), std::move(server_response)};
             }
 
             server_response.headers = *response_headers;
 
             // Perform upgrade challenge with server handshake response
-            auto challenge_ec = client_handshaker_.validate_server_handshake(server_response, handshake->sec_websocket_key);
+            auto challenge_ec =
+              self->client_handshaker_.validate_server_handshake(server_response, handshake->sec_websocket_key);
             if (challenge_ec) {
-              co_await async_finalize_session({}, return_as_deferred_tuple());
+              co_await self->async_finalize_session({}, return_as_deferred_tuple());
               co_return {challenge_ec, std::move(server_response)};
             }
 
-            set_connection_state(state::open);
+            self->set_connection_state(state::open);
             co_return {std::error_code{}, std::move(server_response)};
           },
           strand_),
         bound_token,
+        this,
         std::move(parsed_url),
         std::move(headers));
     }
@@ -270,20 +275,21 @@ namespace aero::websocket {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
-          [this](auto, std::string_view text) -> void {
-            if (!is_current_state(state::open) || is_close_received()) {
+          [](auto, basic_connection* self, std::string_view text) -> void {
+            if (!self->is_current_state(state::open) || self->is_close_received()) {
               co_return protocol_error::connection_closed;
             }
 
-            auto frame = client_frame_builder_.build_text_frame(text);
+            auto frame = self->client_frame_builder_.build_text_frame(text);
             if (!frame) {
               co_return frame.error();
             }
 
-            co_return co_await async_write_bytes(*frame, return_as_deferred_tuple());
+            co_return co_await self->async_write_bytes(*frame, return_as_deferred_tuple());
           },
           strand_),
         bound_token,
+        this,
         text);
     }
 
@@ -294,20 +300,21 @@ namespace aero::websocket {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
-          [this](auto, std::span<const std::byte> data) -> void {
-            if (!is_current_state(state::open) || is_close_received()) {
+          [](auto, basic_connection* self, std::span<const std::byte> data) -> void {
+            if (!self->is_current_state(state::open) || self->is_close_received()) {
               co_return protocol_error::connection_closed;
             }
 
-            auto frame = client_frame_builder_.build_binary_frame(data);
+            auto frame = self->client_frame_builder_.build_binary_frame(data);
             if (!frame) {
               co_return frame.error();
             }
 
-            co_return co_await async_write_bytes(*frame, return_as_deferred_tuple());
+            co_return co_await self->async_write_bytes(*frame, return_as_deferred_tuple());
           },
           strand_),
         bound_token,
+        this,
         data);
     }
 
@@ -328,20 +335,21 @@ namespace aero::websocket {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
-          [this](auto, std::span<const std::byte> data) -> void {
-            if (!is_current_state(state::open) || is_close_received()) {
+          [](auto, basic_connection* self, std::span<const std::byte> data) -> void {
+            if (!self->is_current_state(state::open) || self->is_close_received()) {
               co_return protocol_error::connection_closed;
             }
 
-            auto frame = client_frame_builder_.build_ping_frame(data);
+            auto frame = self->client_frame_builder_.build_ping_frame(data);
             if (!frame) {
               co_return frame.error();
             }
 
-            co_return co_await async_write_bytes(*frame, return_as_deferred_tuple());
+            co_return co_await self->async_write_bytes(*frame, return_as_deferred_tuple());
           },
           strand_),
         bound_token,
+        this,
         data);
     }
 
@@ -351,20 +359,21 @@ namespace aero::websocket {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
-          [this](auto, std::span<const std::byte> data) -> void {
-            if (!is_current_state(state::open, state::closing) || is_close_received()) {
+          [](auto, basic_connection* self, std::span<const std::byte> data) -> void {
+            if (!self->is_current_state(state::open, state::closing) || self->is_close_received()) {
               co_return protocol_error::connection_closed;
             }
 
-            auto frame = client_frame_builder_.build_pong_frame(data);
+            auto frame = self->client_frame_builder_.build_pong_frame(data);
             if (!frame) {
               co_return frame.error();
             }
 
-            co_return co_await async_write_bytes(*frame, return_as_deferred_tuple());
+            co_return co_await self->async_write_bytes(*frame, return_as_deferred_tuple());
           },
           strand_),
         bound_token,
+        this,
         data);
     }
 
@@ -385,91 +394,92 @@ namespace aero::websocket {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
-          [this](auto, websocket::close_code close_code, std::string_view close_reason) -> void {
+          [](auto, basic_connection* self, websocket::close_code close_code, std::string_view close_reason) -> void {
             if (is_close_code_server_only(close_code)) {
               co_return protocol_error::close_code_server_only;
             }
 
-            if (is_current_state(state::closed)) {
+            if (self->is_current_state(state::closed)) {
               co_return protocol_error::connection_closed;
             }
 
-            if (is_current_state(state::closing)) {
+            if (self->is_current_state(state::closing)) {
               co_return protocol_error::already_closing;
             }
 
-            close_result_ec_.reset();
-            set_connection_state(state::closing);
+            self->close_result_ec_.reset();
+            self->set_connection_state(state::closing);
 
-            auto [send_close_ec] = co_await async_send_close(close_code, close_reason, return_as_deferred_tuple());
+            auto [send_close_ec] = co_await self->async_send_close(close_code, close_reason, return_as_deferred_tuple());
             if (send_close_ec) {
-              co_return co_await async_finalize_session(send_close_ec, return_as_deferred_tuple());
+              co_return co_await self->async_finalize_session(send_close_ec, return_as_deferred_tuple());
             }
 
             aero::deadline close_deadline{default_close_timeout};
-            consume_data_received_in_handshake_if_present();
+            self->consume_data_received_in_handshake_if_present();
 
             // Avoid "lost wakeup" problem
-            if (auto result = take_close_result()) {
+            if (auto result = self->take_close_result()) {
               co_return *result;
             }
 
             // An async_read is in progress, we wait for it to receive
             // the close frame response from peer (or to timeout)
-            if (is_read_loop_active()) {
-              close_timer_.expires_after(close_deadline.remaining());
+            if (self->is_read_loop_active()) {
+              self->close_timer_.expires_after(close_deadline.remaining());
 
               // Avoid "lost wakeup" problem
-              if (auto result = take_close_result()) {
+              if (auto result = self->take_close_result()) {
                 co_return *result;
               }
 
-              auto [wait_ec] = co_await close_timer_.async_wait(asio::as_tuple(asio::deferred));
+              auto [wait_ec] = co_await self->close_timer_.async_wait(asio::as_tuple(asio::deferred));
               if (!wait_ec) {
                 // Peer close response was not received, timed out
-                co_return co_await async_finalize_session(asio::error::timed_out, return_as_deferred_tuple());
+                co_return co_await self->async_finalize_session(asio::error::timed_out, return_as_deferred_tuple());
               }
 
               // Close response was received in read loop and it woke up our 'close_timer_'
               if (is_canceled(wait_ec)) {
-                if (auto result = take_close_result()) {
+                if (auto result = self->take_close_result()) {
                   co_return *result;
                 }
                 co_return std::error_code{};
               }
 
               // Unexpected error from timer
-              co_return co_await async_finalize_session(wait_ec, return_as_deferred_tuple());
+              co_return co_await self->async_finalize_session(wait_ec, return_as_deferred_tuple());
             }
 
             // If no read loop active, then start our own read-loop
             // until close frame is received or timeout expires
             for (;;) {
               if (close_deadline.expired()) {
-                co_return co_await async_finalize_session(asio::error::timed_out, return_as_deferred_tuple());
+                co_return co_await self->async_finalize_session(asio::error::timed_out, return_as_deferred_tuple());
               }
 
               auto [read_ec, message] =
-                co_await async_read(asio::cancel_after(close_deadline.remaining(), return_as_deferred_tuple()));
+                co_await self->async_read(asio::cancel_after(close_deadline.remaining(), return_as_deferred_tuple()));
 
               if (read_ec) {
                 // Read was canceled due to timeout expiring
                 if (is_canceled(read_ec) && close_deadline.expired()) {
-                  co_return co_await async_finalize_session(asio::error::timed_out, return_as_deferred_tuple());
+                  co_return co_await self->async_finalize_session(asio::error::timed_out, return_as_deferred_tuple());
                 }
 
                 // Consider any other error as transport fail
-                co_return co_await async_finalize_session(read_ec, return_as_deferred_tuple());
+                co_return co_await self->async_finalize_session(read_ec, return_as_deferred_tuple());
               }
 
               // Received peer's close response - handshake complete
               if (message.is_close()) {
-                co_return co_await async_finalize_session(std::error_code{}, return_as_deferred_tuple());
+                co_return co_await self->async_finalize_session(std::error_code{}, return_as_deferred_tuple());
               }
             }
           },
           strand_),
         bound_token,
+        this,
         code,
         reason);
     }
@@ -491,32 +501,32 @@ namespace aero::websocket {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code, websocket::message)>(
         asio::co_composed<void(std::error_code, websocket::message)>(
-          [this](auto) -> void {
-            if (read_buffer_.capacity() == 0) {
-              read_buffer_.resize(max_read_buffer_size_);
+          [](auto, basic_connection* self) -> void {
+            if (self->read_buffer_.capacity() == 0) {
+              self->read_buffer_.resize(self->max_read_buffer_size_);
             }
 
             // Prevent concurrent async_read operations (one read at a time)
-            if (is_read_loop_active()) {
+            if (self->is_read_loop_active()) {
               co_return {protocol_error::already_reading, websocket::message{}};
             }
 
-            set_read_loop_active_flag(true);
-            auto _ = aero::finally([this] { set_read_loop_active_flag(false); });
+            self->set_read_loop_active_flag(true);
+            auto _ = aero::finally([self] { self->set_read_loop_active_flag(false); });
 
             for (;;) {
               // If a close handshake is in progress or connection is closed, stop reading
-              if (is_current_state(state::closed) || is_close_received()) {
+              if (self->is_current_state(state::closed) || self->is_close_received()) {
                 co_return {protocol_error::connection_closed, websocket::message{}};
               }
 
-              consume_data_received_in_handshake_if_present();
+              self->consume_data_received_in_handshake_if_present();
 
               // Deliver next assembled message if available
-              if (auto message = message_reader_.poll()) {
+              if (auto message = self->message_reader_.poll()) {
                 if (message->is_control()) {
                   // Auto-respond to control frames
-                  auto [response_ec] = co_await async_respond_to_control_message(*message, return_as_deferred_tuple());
+                  auto [response_ec] = co_await self->async_respond_to_control_message(*message, return_as_deferred_tuple());
                   if (response_ec) {
                     co_return {response_ec, websocket::message{}};
                   }
@@ -524,7 +534,7 @@ namespace aero::websocket {
                   // Received a close frame - send close reply (if not sent) and finalize session
                   // Also wakes up any pending async_close waiting on a timer
                   if (message->is_close()) {
-                    auto [final_ec] = co_await async_finalize_session(std::error_code{}, return_as_deferred_tuple());
+                    auto [final_ec] = co_await self->async_finalize_session(std::error_code{}, return_as_deferred_tuple());
                     if (final_ec) {
                       co_return {final_ec, websocket::message{}};
                     }
@@ -535,7 +545,7 @@ namespace aero::websocket {
                   co_return {std::error_code{}, std::move(*message)};
                 }
 
-                if (is_current_state(state::closing) || is_close_sent()) {
+                if (self->is_current_state(state::closing) || self->is_close_sent()) {
                   continue;
                 }
 
@@ -544,17 +554,17 @@ namespace aero::websocket {
               }
 
               // If a deferred error was stored (e.g. from a previous consume), handle it now
-              if (deferred_read_ec_) {
-                auto deferred_read_ec = *deferred_read_ec_;
-                deferred_read_ec_.reset();
+              if (self->deferred_read_ec_) {
+                auto deferred_read_ec = *self->deferred_read_ec_;
+                self->deferred_read_ec_.reset();
                 if (is_fatal_websocket_error(deferred_read_ec)) {
-                  co_await async_fail_connection(deferred_read_ec, return_as_deferred_tuple());
+                  co_await self->async_fail_connection(deferred_read_ec, return_as_deferred_tuple());
                 }
                 co_return {deferred_read_ec, websocket::message{}};
               }
 
               auto [read_ec, bytes_read] =
-                co_await transport_->async_read_some(get_mutable_read_buffer(), return_as_deferred_tuple());
+                co_await self->transport_->async_read_some(self->get_mutable_read_buffer(), return_as_deferred_tuple());
               if (read_ec) {
                 // The read was canceled (possibly by async_close or timeout)
                 if (is_canceled(read_ec)) {
@@ -562,7 +572,7 @@ namespace aero::websocket {
                 }
 
                 // Unexpected transport error - fail the WebSocket connection (RFC 6455 7.2.1)
-                auto [final_ec] = co_await async_finalize_session(read_ec, return_as_deferred_tuple());
+                auto [final_ec] = co_await self->async_finalize_session(read_ec, return_as_deferred_tuple());
 
                 // Forward unexpected transport errors to a caller for better
                 // understanding of why the transport was closed, who initiated
@@ -571,17 +581,18 @@ namespace aero::websocket {
               }
 
               // Consume incoming bytes into WebSocket frames/messages
-              auto consume_ec = message_reader_.consume(std::span{read_buffer_}.first(bytes_read));
-              if (consume_ec && !deferred_read_ec_) {
+              auto consume_ec = self->message_reader_.consume(std::span{self->read_buffer_}.first(bytes_read));
+              if (consume_ec && !self->deferred_read_ec_) {
                 // Store the first error to report after delivering any remaining message
-                deferred_read_ec_ = consume_ec;
+                self->deferred_read_ec_ = consume_ec;
               }
 
               // Loop continues to check for assembled messages or handle errors
             }
           },
           strand_),
-        bound_token);
+        bound_token,
+        this);
     }
 
     std::tuple<std::error_code, http::response> connect(urls::url url, http::headers headers) {
@@ -790,8 +801,8 @@ namespace aero::websocket {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
-          [this](auto state, std::span<const std::byte> frame) -> void {
-            auto [write_ec, bytes_written] = co_await transport_->async_write(frame, return_as_deferred_tuple());
+          [](auto state, basic_connection* self, std::span<const std::byte> frame) -> void {
+            auto [write_ec, bytes_written] = co_await self->transport_->async_write(frame, return_as_deferred_tuple());
             if (!write_ec) {
               co_return std::error_code{};
             }
@@ -817,7 +828,7 @@ namespace aero::websocket {
             // cases when in-flight write was cancelled, transport closes a
             // socket, so we can decide whether caller has canceled in-flight
             // operation or not by simply checking if socket is still open.
-            if (is_canceled(write_ec) && transport_->is_open()) {
+            if (is_canceled(write_ec) && self->transport_->is_open()) {
               co_return {write_ec};
             }
 
@@ -828,10 +839,11 @@ namespace aero::websocket {
             // RFC6455 - 7.2.1. Client-Initiated Closure:
             // If at any point the underlying transport layer connection is
             // unexpectedly lost, the client MUST _Fail the WebSocket Connection_.
-            co_return co_await async_finalize_session(write_ec, return_as_deferred_tuple());
+            co_return co_await self->async_finalize_session(write_ec, return_as_deferred_tuple());
           },
           strand_),
         bound_token,
+        this,
         frame);
     }
 
@@ -841,26 +853,27 @@ namespace aero::websocket {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
-          [this](auto, close_code code, std::optional<std::string_view> reason) -> void {
-            if (is_close_sent()) {
+          [](auto, basic_connection* self, close_code code, std::optional<std::string_view> reason) -> void {
+            if (self->is_close_sent()) {
               co_return std::error_code{};
             }
 
-            auto close_frame = client_frame_builder_.build_close_frame(code, reason);
+            auto close_frame = self->client_frame_builder_.build_close_frame(code, reason);
             if (!close_frame) {
               co_return close_frame.error();
             }
 
-            auto [write_ec] = co_await async_write_bytes(*close_frame, return_as_deferred_tuple());
+            auto [write_ec] = co_await self->async_write_bytes(*close_frame, return_as_deferred_tuple());
             if (write_ec) {
               co_return write_ec;
             }
 
-            set_close_sent_flag(true);
+            self->set_close_sent_flag(true);
             co_return std::error_code{};
           },
           strand_),
         bound_token,
+        this,
         code,
         std::move(reason));
     }
@@ -875,21 +888,21 @@ namespace aero::websocket {
 
       return asio::async_initiate<decltype(bound_token), void()>(
         asio::co_composed<void()>(
-          [this](auto, std::error_code fatal_ec) -> void {
+          [](auto, basic_connection* self, std::error_code fatal_ec) -> void {
             using namespace std::chrono_literals;
-            if (!is_current_state(state::closed)) {
-              set_connection_state(state::closing);
+            if (!self->is_current_state(state::closed)) {
+              self->set_connection_state(state::closing);
             }
 
             auto [send_close_ec] =
-              co_await async_send_close(close_code_for_error(fatal_ec), std::nullopt, return_as_deferred_tuple());
+              co_await self->async_send_close(close_code_for_error(fatal_ec), std::nullopt, return_as_deferred_tuple());
             if (!send_close_ec) {
               // RFC 6455, Section 7.1.1:
               // An endpoint SHOULD use a method that cleanly closes the TCP
               // connection, as well as the TLS session, if applicable,
               // discarding any trailing bytes that may have been received.
               for (;;) {
-                auto [read_ec, bytes_read] = co_await transport_->async_read_some(get_mutable_read_buffer(),
+                auto [read_ec, bytes_read] = co_await self->transport_->async_read_some(self->get_mutable_read_buffer(),
                   asio::cancel_after(1s, return_as_deferred_tuple()));
                 if (read_ec) {
                   break;
@@ -897,18 +910,19 @@ namespace aero::websocket {
               }
             }
 
-            set_close_received_flag(true);
-            deferred_read_ec_.reset();
-            data_received_in_handshake_.reset();
-            message_reader_.reset();
+            self->set_close_received_flag(true);
+            self->deferred_read_ec_.reset();
+            self->data_received_in_handshake_.reset();
+            self->message_reader_.reset();
 
             // We don't care whether force-shutdown returned an error or not
-            std::ignore = co_await async_finalize_session(fatal_ec, return_as_deferred_tuple());
+            std::ignore = co_await self->async_finalize_session(fatal_ec, return_as_deferred_tuple());
 
             co_return {};
           },
           strand_),
         bound_token,
+        this,
         fatal_ec);
     }
 
@@ -923,7 +937,7 @@ namespace aero::websocket {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
-          [this](auto state, std::error_code final_ec) -> void {
+          [](auto state, basic_connection* self, std::error_code final_ec) -> void {
             // Disable cancellation via the coroutine associated cancellation
             // slot for cleanup path. Imagine a situation where we enter
             // 'async_finalize_session' and cancellation has already been
@@ -933,23 +947,24 @@ namespace aero::websocket {
             // potentially leaving the underlying websocket transport still open
             state.reset_cancellation_state(asio::disable_cancellation());
 
-            if (is_current_state(state::closed)) {
-              signal_close_completion(final_ec);
+            if (self->is_current_state(state::closed)) {
+              self->signal_close_completion(final_ec);
               co_return final_ec;
             }
 
-            reset_connection_state(state::closed);
+            self->reset_connection_state(state::closed);
 
-            auto [shutdown_ec] = co_await transport_->async_shutdown(return_as_deferred_tuple());
+            auto [shutdown_ec] = co_await self->transport_->async_shutdown(return_as_deferred_tuple());
 
             std::error_code result_ec = final_ec ? final_ec : shutdown_ec;
 
             // Wake up any pending close operation
-            signal_close_completion(result_ec);
+            self->signal_close_completion(result_ec);
             co_return result_ec;
           },
           strand_),
         bound_token,
+        this,
         final_ec);
     }
 
@@ -959,22 +974,23 @@ namespace aero::websocket {
 
       return asio::async_initiate<decltype(bound_token), void(std::error_code)>(
         asio::co_composed<void(std::error_code)>(
-          [this](auto, const websocket::message& message) -> void {
+          [](auto, basic_connection* self, const websocket::message& message) -> void {
             if (message.is_ping()) {
-              co_return co_await async_pong(message.payload, return_as_deferred_tuple());
+              co_return co_await self->async_pong(message.payload, return_as_deferred_tuple());
             }
 
             if (message.is_close()) {
-              set_close_received_flag(true);
+              self->set_close_received_flag(true);
 
               auto reply_close_code = message.close_code().value_or(close_code::normal);
-              co_return co_await async_send_close(reply_close_code, message.close_reason(), return_as_deferred_tuple());
+              co_return co_await self->async_send_close(reply_close_code, message.close_reason(), return_as_deferred_tuple());
             }
 
             co_return std::error_code{};
           },
           strand_),
         bound_token,
+        this,
         message);
     }
 
