@@ -27,6 +27,7 @@
 #include "aero/tls/detail/x509_verify_error.hpp"
 #include "aero/tls/peer_identity.hpp"
 #include <asio/ssl.hpp>
+#include <asio/ssl/error.hpp>
 #include <asio/ssl/stream.hpp>
 #endif
 
@@ -230,7 +231,11 @@ namespace aero::net {
 
    private:
     static bool is_ignorable_close_error(std::error_code ec) {
-      return ec == asio::error::not_connected || ec == asio::error::eof || ec == asio::error::bad_descriptor;
+      return ec == asio::error::not_connected || ec == asio::error::eof || ec == asio::error::bad_descriptor
+#if AERO_USE_TLS
+             || ec == asio::ssl::error::stream_truncated
+#endif
+        ;
     }
 
     // Timeout adapters use executor exposed by the operation's initiation,
