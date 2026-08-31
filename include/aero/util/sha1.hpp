@@ -26,8 +26,13 @@ namespace aero {
       std::array<std::byte, sha1_digest_size> result{};
       SHA_CTX context{};
 
+#if defined(__clang__) || defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable:4996)
+#endif
 
       if (SHA1_Init(&context) != 1) {
         return {};
@@ -41,7 +46,11 @@ namespace aero {
         return {};
       }
 
+#if defined(__clang__) || defined(__GNUC__)
 #pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
       return result;
     }
