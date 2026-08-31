@@ -45,7 +45,7 @@ jobs:
       - name: Install wolfSSL (vcpkg)
         if: matrix.tls.use_vcpkg
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install "wolfssl[asio]" --triplet "$env:VCPKG_DEFAULT_TRIPLET"
+          & "$env:VCPKG_ROOT\vcpkg.exe" install "wolfssl[asio]" --triplet "$env:VCPKG_DEFAULT_TRIPLET" --overlay-triplets "$env:GITHUB_WORKSPACE/cmake/vcpkg-triplets"
 
       - name: Configure CMake
         shell: pwsh

@@ -52,7 +52,7 @@ jobs:
         if: matrix.tls.use_vcpkg
         shell: pwsh
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install "wolfssl[asio]" --triplet "${{ matrix.arch.vcpkg_triplet }}"
+          & "$env:VCPKG_ROOT\vcpkg.exe" install "wolfssl[asio]" --triplet "${{ matrix.arch.vcpkg_triplet }}" --overlay-triplets "$env:GITHUB_WORKSPACE/cmake/vcpkg-triplets"
 
       - name: Configure CMake
         shell: pwsh
