@@ -860,10 +860,11 @@ namespace aero::websocket {
         std::move(reason));
     }
 
-    // Fail fast websocket termination path
-    // Use when we detected a fatal websocket violation (protocol error, invalid payload etc.)
-    // and must actively fail the connection. Sends a 'close' frame with the appropriate error
-    // code, drains a little, then force-shutdowns the transport and resets all internal state
+    // Fail fast websocket termination path. Use when we detected a fatal
+    // websocket violation (protocol error, invalid payload etc.) and must
+    // actively fail the connection. Sends a close frame with the appropriate
+    // error code to the peer, drains a little, then force-shutdowns the
+    // transport and resets all internal state
     template <typename CompletionToken>
     auto async_fail_connection(std::error_code fatal_ec, CompletionToken&& token) {
       auto bound_token = asio::bind_allocator(aero::detail::aligned_allocator<>{}, std::forward<CompletionToken>(token));
@@ -883,9 +884,11 @@ namespace aero::websocket {
               // An endpoint SHOULD use a method that cleanly closes the TCP
               // connection, as well as the TLS session, if applicable,
               // discarding any trailing bytes that may have been received.
-              for (;;) {
+              aero::deadline drain_deadline{1s};
+
+              while (!drain_deadline.expired()) {
                 auto [read_ec, bytes_read] = co_await self->transport_->async_read_some(self->get_mutable_read_buffer(),
-                  asio::cancel_after(1s, return_as_deferred_tuple()));
+                  asio::cancel_after(drain_deadline.remaining(), return_as_deferred_tuple()));
                 if (read_ec) {
                   break;
                 }
