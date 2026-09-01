@@ -69,52 +69,31 @@ namespace aero::websocket {
     using duration = std::chrono::steady_clock::duration;
     using executor_type = typename transport_type::executor_type;
 
-    basic_connection(): strand_(asio::make_strand(aero::get_default_executor())) {}
-
-#if AERO_USE_TLS
-    explicit basic_connection(asio::ssl::context& ssl_ctx)
-      : strand_(asio::make_strand(aero::get_default_executor())), ssl_ctx_(std::addressof(ssl_ctx)) {}
-#endif
-
-    explicit basic_connection(executor_type executor): strand_(asio::make_strand(executor)) {}
-
-#if AERO_USE_TLS
-    explicit basic_connection(executor_type executor, asio::ssl::context& ssl_ctx)
-      : strand_(asio::make_strand(executor)), ssl_ctx_(std::addressof(ssl_ctx)) {}
-#endif
-
-    explicit basic_connection(connection_options options)
+    explicit basic_connection(connection_options options = {})
       : strand_(asio::make_strand(aero::get_default_executor())),
         client_frame_builder_({.validate_utf8 = options.validate_outgoing_utf8}),
         message_reader_({.max_message_size = options.max_message_size}),
         client_handshaker_(options.client_handshaker),
         max_read_buffer_size_(options.read_buffer_size) {}
 
+    explicit basic_connection(executor_type executor, connection_options options = {})
+      : strand_(asio::make_strand(executor)),
+        client_frame_builder_({.validate_utf8 = options.validate_outgoing_utf8}),
+        message_reader_({.max_message_size = options.max_message_size}),
+        client_handshaker_(options.client_handshaker),
+        max_read_buffer_size_(options.read_buffer_size) {}
+
 #if AERO_USE_TLS
+    explicit basic_connection(asio::ssl::context& ssl_ctx): basic_connection(connection_options{}, ssl_ctx) {}
+
     explicit basic_connection(connection_options options, asio::ssl::context& ssl_ctx)
-      : strand_(asio::make_strand(aero::get_default_executor())),
-        client_frame_builder_({.validate_utf8 = options.validate_outgoing_utf8}),
-        message_reader_({.max_message_size = options.max_message_size}),
-        client_handshaker_(options.client_handshaker),
-        max_read_buffer_size_(options.read_buffer_size),
-        ssl_ctx_(std::addressof(ssl_ctx)) {}
-#endif
+      : basic_connection(std::move(options)), ssl_ctx_(std::addressof(ssl_ctx)) {}
 
-    explicit basic_connection(executor_type executor, connection_options options)
-      : strand_(asio::make_strand(executor)),
-        client_frame_builder_({.validate_utf8 = options.validate_outgoing_utf8}),
-        message_reader_({.max_message_size = options.max_message_size}),
-        client_handshaker_(options.client_handshaker),
-        max_read_buffer_size_(options.read_buffer_size) {}
+    explicit basic_connection(executor_type executor, asio::ssl::context& ssl_ctx)
+      : basic_connection(executor, connection_options{}, ssl_ctx) {}
 
-#if AERO_USE_TLS
     explicit basic_connection(executor_type executor, connection_options options, asio::ssl::context& ssl_ctx)
-      : strand_(asio::make_strand(executor)),
-        client_frame_builder_({.validate_utf8 = options.validate_outgoing_utf8}),
-        message_reader_({.max_message_size = options.max_message_size}),
-        client_handshaker_(options.client_handshaker),
-        max_read_buffer_size_(options.read_buffer_size),
-        ssl_ctx_(std::addressof(ssl_ctx)) {}
+      : basic_connection(executor, std::move(options)), ssl_ctx_(std::addressof(ssl_ctx)) {}
 #endif
 
     template <typename CompletionToken>
