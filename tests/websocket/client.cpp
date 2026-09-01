@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -9,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -26,10 +28,12 @@
 #include "aero/http/headers.hpp"
 #include "aero/http/status.hpp"
 #include "aero/http/status_line.hpp"
+#include "aero/util/deadline.hpp"
 #include "aero/util/final_action.hpp"
 #include "aero/websocket/client.hpp"
 #include "aero/websocket/connection_options.hpp"
 #include "aero/websocket/detail/accept_challenge.hpp"
+#include "aero/websocket/detail/client_frame_builder.hpp"
 #include "aero/websocket/detail/opcode.hpp"
 #include "aero/websocket/error.hpp"
 
@@ -44,6 +48,7 @@ namespace websocket = aero::websocket;
 using aero::tests::websocket::serialize_unmasked_frame;
 using aero::tests::websocket::to_string;
 using aero::websocket::detail::opcode;
+using namespace std::chrono_literals;
 
 namespace {
 
@@ -389,6 +394,56 @@ int main() {
         << "cancelled send should complete with operation_aborted, got: " << send_ec.message();
       expect(not client.is_open_for_writing()) << "connection with a partially written frame must not accept further writes";
       expect(client.is_closed()) << "cancelled in-flight send must fail the connection, not leave it open";
+    };
+
+    "transport drain in async_fail_connection shares a single deadline across multiple reads"_test = [&] {
+      aero::final_action cleanup{[&] { server.close_last_conn(); }};
+
+      std::latch small_packets_sent{1};
+
+      websocket::detail::client_frame_builder frame_builder;
+
+      server.on_accept([&](std::shared_ptr<connection> conn) {
+        auto request = conn->read_request();
+
+        conn->write_response(make_websocket_switching_response(request));
+
+        auto text_frame = frame_builder.build_text_frame("lol");
+        expect(text_frame.has_value());
+        if (not text_frame.has_value()) {
+          return;
+        }
+
+        conn->write_response(to_string(*text_frame));
+
+        aero::deadline deadline{3s};
+
+        while (not deadline.expired()) {
+          try {
+            conn->write_response("lool");
+          } catch (...) {
+            break;
+          }
+          std::this_thread::sleep_for(10ms);
+        }
+
+        small_packets_sent.count_down();
+      });
+
+      websocket::client client;
+      auto [connect_ec, response] = client.connect(url_str);
+      expect(not static_cast<bool>(connect_ec));
+
+      client.async_read([&](std::error_code ec, auto) {
+        // Frame that came from server was built with client_frame_builder,
+        // so it will be masked, and client MUST refuse masked frames
+        expect(ec == websocket::protocol_error::masked_frame_from_server);
+      });
+
+      small_packets_sent.wait();
+
+      expect(client.is_closed()) << "connection should be closed after 3 seconds of server sending small packets while client "
+                                    "was draining its transport";
     };
 
     "test server handled all requests without throwing"_test = [&] {
