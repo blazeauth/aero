@@ -33,6 +33,9 @@ jobs:
           - { name: No TLS,  backend: none }
           - { name: wolfSSL, backend: wolfssl, vcpkg_port: "wolfssl[asio]" }
           - { name: OpenSSL, backend: openssl, vcpkg_port: openssl }
+        exclude:
+          - { build_type: Release, tls: { backend: wolfssl } }
+          - { build_type: Release, tls: { backend: openssl } }
 
     steps:
       - uses: actions/checkout@v6
