@@ -86,14 +86,17 @@ namespace aero::websocket {
 #if AERO_USE_TLS
     explicit basic_connection(asio::ssl::context& ssl_ctx): basic_connection(connection_options{}, ssl_ctx) {}
 
-    explicit basic_connection(connection_options options, asio::ssl::context& ssl_ctx)
-      : basic_connection(std::move(options)), ssl_ctx_(std::addressof(ssl_ctx)) {}
+    explicit basic_connection(connection_options options, asio::ssl::context& ssl_ctx): basic_connection(std::move(options)) {
+      ssl_ctx_ = std::addressof(ssl_ctx); // NOLINT(cppcoreguidelines-prefer-member-initializer)
+    }
 
     explicit basic_connection(executor_type executor, asio::ssl::context& ssl_ctx)
       : basic_connection(executor, connection_options{}, ssl_ctx) {}
 
     explicit basic_connection(executor_type executor, connection_options options, asio::ssl::context& ssl_ctx)
-      : basic_connection(executor, std::move(options)), ssl_ctx_(std::addressof(ssl_ctx)) {}
+      : basic_connection(executor, std::move(options)) {
+      ssl_ctx_ = std::addressof(ssl_ctx); // NOLINT(cppcoreguidelines-prefer-member-initializer)
+    }
 #endif
 
     template <typename CompletionToken>
