@@ -63,12 +63,10 @@ int main() {
       deliver_alert(client);
 
       auto alert = capture.get_last_tls_alert();
-      expect(alert.has_value()) << "alert record never reached the message callback";
-      if (alert.has_value()) {
-        expect(alert->received_from_peer);
-        expect(alert->level == 2);
-        expect(alert->description == 40);
-      }
+      require(alert.has_value()) << "alert record never reached the message callback";
+      expect(alert->received_from_peer);
+      expect(alert->level == 2);
+      expect(alert->description == 40);
     };
 
     "destructor uninstalls the SSL message callback"_test = [] {

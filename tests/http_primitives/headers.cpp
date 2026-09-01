@@ -96,11 +96,9 @@ suite http_headers = [] {
 
     expect(fields.size() == 5U);
 
-    expect(repeated_record_values.size() == 2U);
-    if (repeated_record_values.size() == 2U) {
-      expect(repeated_record_values[0] == "1");
-      expect(repeated_record_values[1] == "11");
-    }
+    require(repeated_record_values.size() == 2U);
+    expect(repeated_record_values[0] == "1");
+    expect(repeated_record_values[1] == "11");
 
     expect(fields.first_value("B") == "2");
     expect(fields.first_value("C") == "3");
@@ -115,15 +113,13 @@ suite http_headers = [] {
 
     std::vector<http::headers::value_type> all_fields(fields.begin(), fields.end());
 
-    expect(all_fields.size() == 3U);
-    if (all_fields.size() == 3U) {
-      expect(all_fields[0].name == "A");
-      expect(all_fields[0].value == "1");
-      expect(all_fields[1].name == "B");
-      expect(all_fields[1].value == "2");
-      expect(all_fields[2].name == "C");
-      expect(all_fields[2].value == "3");
-    }
+    require(all_fields.size() == 3U);
+    expect(all_fields[0].name == "A");
+    expect(all_fields[0].value == "1");
+    expect(all_fields[1].name == "B");
+    expect(all_fields[1].value == "2");
+    expect(all_fields[2].name == "C");
+    expect(all_fields[2].value == "3");
   };
 
   "contains and find are case-insensitive"_test = [] {
@@ -136,10 +132,8 @@ suite http_headers = [] {
     expect(not fields.contains("Connection"));
 
     const auto it = fields.find("CONTENT-length");
-    expect(it != fields.end());
-    if (it != fields.end()) {
-      expect(it->value == "123");
-    }
+    require(it != fields.end());
+    expect(it->value == "123");
   };
 
   "contains_token matches a single token case-insensitively"_test = [] {
@@ -279,19 +273,15 @@ suite http_headers = [] {
       collected_values.emplace_back(value);
     }
 
-    expect(collected_values.size() == 3U);
-    if (collected_values.size() == 3U) {
-      expect(collected_values[0] == "a=1");
-      expect(collected_values[1] == "b=2");
-      expect(collected_values[2] == "c=3");
-    }
+    require(collected_values.size() == 3U);
+    expect(collected_values[0] == "a=1");
+    expect(collected_values[1] == "b=2");
+    expect(collected_values[2] == "c=3");
 
-    expect(collected_names.size() == 3U);
-    if (collected_names.size() == 3U) {
-      expect(collected_names[0] == "Set-Cookie");
-      expect(collected_names[1] == "set-cookie");
-      expect(collected_names[2] == "SET-COOKIE");
-    }
+    require(collected_names.size() == 3U);
+    expect(collected_names[0] == "Set-Cookie");
+    expect(collected_names[1] == "set-cookie");
+    expect(collected_names[2] == "SET-COOKIE");
   };
 
   "fields view on const works and is case-insensitive"_test = [] {
@@ -308,11 +298,9 @@ suite http_headers = [] {
       collected_values.emplace_back(field.value);
     }
 
-    expect(collected_values.size() == 2U);
-    if (collected_values.size() == 2U) {
-      expect(collected_values[0] == "a=1");
-      expect(collected_values[1] == "b=2");
-    }
+    require(collected_values.size() == 2U);
+    expect(collected_values[0] == "a=1");
+    expect(collected_values[1] == "b=2");
   };
 
   "fields view is empty when key does not exist"_test = [] {
@@ -336,12 +324,10 @@ suite http_headers = [] {
 
     auto collected_values = reversed_values_of(fields, "set-cookie");
 
-    expect(collected_values.size() == 3U);
-    if (collected_values.size() == 3U) {
-      expect(collected_values[0] == "c=3");
-      expect(collected_values[1] == "b=2");
-      expect(collected_values[2] == "a=1");
-    }
+    require(collected_values.size() == 3U);
+    expect(collected_values[0] == "c=3");
+    expect(collected_values[1] == "b=2");
+    expect(collected_values[2] == "a=1");
   };
 
   "fields view on const iterates in reverse order"_test = [] {
@@ -354,11 +340,9 @@ suite http_headers = [] {
 
     auto collected_values = reversed_values_of(fields, "SET-COOKIE");
 
-    expect(collected_values.size() == 2U);
-    if (collected_values.size() == 2U) {
-      expect(collected_values[0] == "b=2");
-      expect(collected_values[1] == "a=1");
-    }
+    require(collected_values.size() == 2U);
+    expect(collected_values[0] == "b=2");
+    expect(collected_values[1] == "a=1");
   };
 
   "fields iterator decrements from end to the last match"_test = [] {
@@ -405,10 +389,8 @@ suite http_headers = [] {
 
     auto collected_values = reversed_values_of(fields, "set-cookie");
 
-    expect(collected_values.size() == 1U);
-    if (collected_values.size() == 1U) {
-      expect(collected_values[0] == "a=1");
-    }
+    require(collected_values.size() == 1U);
+    expect(collected_values[0] == "a=1");
   };
 
   "values view iterates matching values in reverse order"_test = [] {
@@ -419,11 +401,9 @@ suite http_headers = [] {
       collected_values.emplace_back(value);
     }
 
-    expect(collected_values.size() == 2U);
-    if (collected_values.size() == 2U) {
-      expect(collected_values[0] == "b=2");
-      expect(collected_values[1] == "a=1");
-    }
+    require(collected_values.size() == 2U);
+    expect(collected_values[0] == "b=2");
+    expect(collected_values[1] == "a=1");
   };
 
   "names view returns every name in insertion order"_test = [] {
@@ -434,12 +414,10 @@ suite http_headers = [] {
       names.emplace_back(name);
     }
 
-    expect(names.size() == 3U);
-    if (names.size() == 3U) {
-      expect(names[0] == "A");
-      expect(names[1] == "b");
-      expect(names[2] == "A");
-    }
+    require(names.size() == 3U);
+    expect(names[0] == "A");
+    expect(names[1] == "b");
+    expect(names[2] == "A");
   };
 
   "values view without a name returns every value in insertion order"_test = [] {
@@ -450,12 +428,10 @@ suite http_headers = [] {
       values.emplace_back(value);
     }
 
-    expect(values.size() == 3U);
-    if (values.size() == 3U) {
-      expect(values[0] == "1");
-      expect(values[1] == "2");
-      expect(values[2] == "3");
-    }
+    require(values.size() == 3U);
+    expect(values[0] == "1");
+    expect(values[1] == "2");
+    expect(values[2] == "3");
   };
 
   "values view returns only values in insertion order"_test = [] {
@@ -467,12 +443,10 @@ suite http_headers = [] {
 
     auto cookies = values_of(fields, "set-cookie");
 
-    expect(cookies.size() == 3U);
-    if (cookies.size() == 3U) {
-      expect(cookies[0] == "a=1");
-      expect(cookies[1] == "b=2");
-      expect(cookies[2] == "c=3");
-    }
+    require(cookies.size() == 3U);
+    expect(cookies[0] == "a=1");
+    expect(cookies[1] == "b=2");
+    expect(cookies[2] == "c=3");
   };
 
   "values view on const returns only values"_test = [] {
@@ -484,11 +458,9 @@ suite http_headers = [] {
     const auto& fields = mutable_fields;
     auto cookies = values_of(fields, "SET-COOKIE");
 
-    expect(cookies.size() == 2U);
-    if (cookies.size() == 2U) {
-      expect(cookies[0] == "a=1");
-      expect(cookies[1] == "b=2");
-    }
+    require(cookies.size() == 2U);
+    expect(cookies[0] == "a=1");
+    expect(cookies[1] == "b=2");
   };
 
   "value views on const are compatible with ranges algorithms"_test = [] {
@@ -598,13 +570,11 @@ suite http_headers = [] {
 
     std::vector<http::headers::value_type> all_fields(fields.begin(), fields.end());
 
-    expect(all_fields.size() == 3U);
-    if (all_fields.size() == 3U) {
-      expect(all_fields[0].name == "A");
-      expect(all_fields[1].name == "Set-Cookie");
-      expect(all_fields[1].value == "c=3");
-      expect(all_fields[2].name == "B");
-    }
+    require(all_fields.size() == 3U);
+    expect(all_fields[0].name == "A");
+    expect(all_fields[1].name == "Set-Cookie");
+    expect(all_fields[1].value == "c=3");
+    expect(all_fields[2].name == "B");
   };
 
   "set replaces the stored name casing"_test = [] {
@@ -646,12 +616,10 @@ suite http_headers = [] {
 
     std::vector<http::headers::value_type> all_fields(fields.begin(), fields.end());
 
-    expect(all_fields.size() == 2U);
-    if (all_fields.size() == 2U) {
-      expect(all_fields[0].name == "Set-Cookie");
-      expect(all_fields[0].value == "c=3");
-      expect(all_fields[1].name == "X");
-    }
+    require(all_fields.size() == 2U);
+    expect(all_fields[0].name == "Set-Cookie");
+    expect(all_fields[0].value == "c=3");
+    expect(all_fields[1].name == "X");
   };
 
   "set matches case-insensitively and stores the new spelling"_test = [] {
@@ -682,11 +650,9 @@ suite http_headers = [] {
       values.emplace_back(value);
     }
 
-    expect(values.size() == 2U);
-    if (values.size() == 2U) {
-      expect(values[0] == "websocket");
-      expect(values[1] == "h2c");
-    }
+    require(values.size() == 2U);
+    expect(values[0] == "websocket");
+    expect(values[1] == "h2c");
   };
 
   "first_value returns the field value"_test = [] {
@@ -814,11 +780,9 @@ suite http_headers = [] {
 
     auto cookies = values_of(fields, "Set-Cookie");
 
-    expect(cookies.size() == 2U);
-    if (cookies.size() == 2U) {
-      expect(cookies[0] == "a=1");
-      expect(cookies[1] == "b=2");
-    }
+    require(cookies.size() == 2U);
+    expect(cookies[0] == "a=1");
+    expect(cookies[1] == "b=2");
 
     expect(contains_value(other_fields, "Set-Cookie", "b=2"));
     expect(other_fields.size() == 1U);
@@ -841,11 +805,9 @@ suite http_headers = [] {
 
     auto cookies = values_of(fields, "Set-Cookie");
 
-    expect(cookies.size() == 2U);
-    if (cookies.size() == 2U) {
-      expect(cookies[0] == "a=1");
-      expect(cookies[1] == "b=2");
-    }
+    require(cookies.size() == 2U);
+    expect(cookies[0] == "a=1");
+    expect(cookies[1] == "b=2");
 
     expect(other_fields.empty());
   };
@@ -866,11 +828,9 @@ suite http_headers = [] {
 
     auto host_values = values_of(fields, "HOST");
 
-    expect(host_values.size() == 2U);
-    if (host_values.size() == 2U) {
-      expect(host_values[0] == "example.com");
-      expect(host_values[1] == "example.org");
-    }
+    require(host_values.size() == 2U);
+    expect(host_values[0] == "example.com");
+    expect(host_values[1] == "example.org");
   };
 
   "append keeps first value from existing fields when appending"_test = [] {
@@ -904,17 +864,15 @@ suite http_headers = [] {
 
     std::vector<http::headers::value_type> all_fields(fields.begin(), fields.end());
 
-    expect(all_fields.size() == 4U);
-    if (all_fields.size() == 4U) {
-      expect(all_fields[0].name == "A");
-      expect(all_fields[0].value == "1");
-      expect(all_fields[1].name == "B");
-      expect(all_fields[1].value == "2");
-      expect(all_fields[2].name == "C");
-      expect(all_fields[2].value == "3");
-      expect(all_fields[3].name == "D");
-      expect(all_fields[3].value == "4");
-    }
+    require(all_fields.size() == 4U);
+    expect(all_fields[0].name == "A");
+    expect(all_fields[0].value == "1");
+    expect(all_fields[1].name == "B");
+    expect(all_fields[1].value == "2");
+    expect(all_fields[2].name == "C");
+    expect(all_fields[2].value == "3");
+    expect(all_fields[3].name == "D");
+    expect(all_fields[3].value == "4");
   };
 
   "self append does nothing on copy"_test = [] {
