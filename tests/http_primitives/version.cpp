@@ -28,18 +28,14 @@ int main() {
 
     "rejects wrong prefix"_test = [] {
       auto parsed = http::parse_version("HTP/1.1");
-      expect(not parsed.has_value());
-      if (not parsed) {
-        expect(parsed.error() == protocol_error::version_invalid);
-      }
+      require(not parsed.has_value());
+      expect(parsed.error() == protocol_error::version_invalid);
     };
 
     "rejects wrong separator"_test = [] {
       auto parsed = http::parse_version("HTTP-1.1");
-      expect(not parsed.has_value());
-      if (not parsed) {
-        expect(parsed.error() == protocol_error::version_invalid);
-      }
+      require(not parsed.has_value());
+      expect(parsed.error() == protocol_error::version_invalid);
     };
 
     "rejects unsupported minor or major"_test = [] {

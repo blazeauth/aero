@@ -151,14 +151,12 @@ int main() {
       expect(raw_request.substr(0, request_line_end) == "GET /socket HTTP/1.1");
 
       auto request_headers = http::headers::parse(raw_request.substr(request_line_end + http::detail::crlf.size()));
-      expect(request_headers.has_value());
-      if (request_headers.has_value()) {
-        expect(request_headers->first_value("host") == "127.0.0.1:" + port_str);
-        expect(request_headers->contains_token("upgrade", "websocket"));
-        expect(request_headers->contains_token("connection", "upgrade"));
-        expect(request_headers->first_value("sec-websocket-version") == "13");
-        expect(request_headers->first_value("sec-websocket-key").value_or("").size() == 24U);
-      }
+      require(request_headers.has_value());
+      expect(request_headers->first_value("host") == "127.0.0.1:" + port_str);
+      expect(request_headers->contains_token("upgrade", "websocket"));
+      expect(request_headers->contains_token("connection", "upgrade"));
+      expect(request_headers->first_value("sec-websocket-version") == "13");
+      expect(request_headers->first_value("sec-websocket-key").value_or("").size() == 24U);
     };
 
     "connect reports the status line parse error for a malformed response status line"_test = [&] {

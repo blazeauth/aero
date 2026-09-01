@@ -24,11 +24,7 @@ int main() {
   suite path_parser = [] {
     "keeps the input as the parsed text"_test = [] {
       auto parsed = urls::detail::parse_hier_part_path("/over/there", true);
-      expect(parsed.has_value());
-
-      if (not parsed.has_value()) {
-        return;
-      }
+      require(parsed.has_value());
 
       expect(parsed->text == "/over/there");
     };

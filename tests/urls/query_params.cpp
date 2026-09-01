@@ -129,11 +129,7 @@ int main() {
       constexpr std::string_view query = "key1=value1&key2=value2&key3&key4=";
 
       auto parsed = urls::query_params::parse(query);
-      expect(parsed.has_value());
-
-      if (not parsed.has_value()) {
-        return;
-      }
+      require(parsed.has_value());
 
       std::string serialized = parsed->to_string();
       expect(serialized == query) << "expected" << std::quoted(query) << "got" << std::quoted(serialized);
@@ -141,11 +137,7 @@ int main() {
 
     "re-encodes lowercase percent escapes in uppercase"_test = [] {
       auto parsed = urls::query_params::parse("k=%d0%bf");
-      expect(parsed.has_value());
-
-      if (not parsed.has_value()) {
-        return;
-      }
+      require(parsed.has_value());
 
       params_are(*parsed, "k=%D0%BF");
     };
@@ -324,10 +316,7 @@ int main() {
       std::vector<std::optional<std::string_view>> values;
       std::ranges::copy(params.values(), std::back_inserter(values));
 
-      expect(values.size() == 2U);
-      if (values.size() != 2U) {
-        return;
-      }
+      require(values.size() == 2U);
 
       expect(values.at(0) == "1");
       expect(values.at(1) == std::nullopt);

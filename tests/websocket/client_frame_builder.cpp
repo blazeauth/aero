@@ -144,10 +144,7 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       auto built_text_frame = builder.build_text_frame("Hi");
-      expect(built_text_frame.has_value());
-      if (not built_text_frame.has_value()) {
-        return;
-      }
+      require(built_text_frame.has_value());
 
       auto text_frame = built_text_frame.value();
 
@@ -177,10 +174,7 @@ int main() {
 
       const auto payload = to_bytes("abcd");
       auto built_text_frame = builder.build_text_frame("abcd");
-      expect(built_text_frame.has_value());
-      if (not built_text_frame.has_value()) {
-        return;
-      }
+      require(built_text_frame.has_value());
 
       auto text_frame = built_text_frame.value();
 
@@ -192,12 +186,9 @@ int main() {
 
       const auto masked_payload = payload_bytes(text_frame);
       const auto expected_masked = mask_payload(payload, key);
-      expect(masked_payload.size() == expected_masked.size());
-
-      if (masked_payload.size() == expected_masked.size()) {
-        for (std::size_t i{}; i < expected_masked.size(); ++i) {
-          expect(masked_payload[i] == expected_masked[i]);
-        }
+      require(masked_payload.size() == expected_masked.size());
+      for (std::size_t i{}; i < expected_masked.size(); ++i) {
+        expect(masked_payload[i] == expected_masked[i]);
       }
     };
 
@@ -207,10 +198,7 @@ int main() {
 
       std::string payload(125, 'x');
       auto built_text_frame = builder.build_text_frame(payload);
-      expect(built_text_frame.has_value());
-      if (not built_text_frame.has_value()) {
-        return;
-      }
+      require(built_text_frame.has_value());
 
       auto text_frame = built_text_frame.value();
 
@@ -228,10 +216,7 @@ int main() {
 
       std::string payload(126, 'y');
       auto built_text_frame = builder.build_text_frame(payload);
-      expect(built_text_frame.has_value());
-      if (not built_text_frame.has_value()) {
-        return;
-      }
+      require(built_text_frame.has_value());
 
       auto text_frame = built_text_frame.value();
 
@@ -253,10 +238,7 @@ int main() {
 
       std::string payload(65536, 'z');
       auto built_text_frame = builder.build_text_frame(payload);
-      expect(built_text_frame.has_value());
-      if (not built_text_frame.has_value()) {
-        return;
-      }
+      require(built_text_frame.has_value());
 
       auto text_frame = built_text_frame.value();
 
@@ -279,10 +261,7 @@ int main() {
 
       std::vector<std::byte> payload{std::byte{0x00}, std::byte{0xFF}, std::byte{0x10}, std::byte{0x20}, std::byte{0x30}};
       auto built_binary_frame = builder.build_binary_frame(payload);
-      expect(built_binary_frame.has_value());
-      if (not built_binary_frame.has_value()) {
-        return;
-      }
+      require(built_binary_frame.has_value());
 
       auto binary_frame = built_binary_frame.value();
 
@@ -305,16 +284,10 @@ int main() {
       client_frame_builder<sequence_masking_key_source> builder{source};
 
       auto built_first_frame = builder.build_text_frame("a");
-      expect(built_first_frame.has_value());
-      if (not built_first_frame.has_value()) {
-        return;
-      }
+      require(built_first_frame.has_value());
 
       auto built_second_frame = builder.build_text_frame("b");
-      expect(built_second_frame.has_value());
-      if (not built_second_frame.has_value()) {
-        return;
-      }
+      require(built_second_frame.has_value());
 
       const auto first_key = extract_masking_key(built_first_frame.value());
       const auto second_key = extract_masking_key(built_second_frame.value());
@@ -329,10 +302,8 @@ int main() {
       client_frame_builder<failing_masking_key_source> builder{source};
       auto built_text_frame = builder.build_text_frame("x");
 
-      expect(not built_text_frame.has_value());
-      if (not built_text_frame.has_value()) {
-        expect(built_text_frame.error() == protocol_error::masking_key_generation_failed);
-      }
+      require(not built_text_frame.has_value());
+      expect(built_text_frame.error() == protocol_error::masking_key_generation_failed);
     };
 
     "builds ping frame as final masked control frame"_test = [] {
@@ -341,10 +312,7 @@ int main() {
 
       auto payload = to_bytes("p");
       auto built_ping_frame = builder.build_ping_frame(std::span<const std::byte>{payload});
-      expect(built_ping_frame.has_value());
-      if (not built_ping_frame.has_value()) {
-        return;
-      }
+      require(built_ping_frame.has_value());
 
       auto ping_frame = built_ping_frame.value();
 
@@ -369,10 +337,8 @@ int main() {
       auto payload = make_payload_bytes(126, std::byte{0x11});
       auto built_ping_frame = builder.build_ping_frame(std::span<const std::byte>{payload});
 
-      expect(not built_ping_frame.has_value());
-      if (not built_ping_frame.has_value()) {
-        expect(built_ping_frame.error() == protocol_error::control_frame_payload_too_big);
-      }
+      require(not built_ping_frame.has_value());
+      expect(built_ping_frame.error() == protocol_error::control_frame_payload_too_big);
     };
 
     "rejects pong payload longer than 125 bytes with control frame error"_test = [] {
@@ -382,10 +348,8 @@ int main() {
       auto payload = make_payload_bytes(126, std::byte{0x22});
       auto built_pong_frame = builder.build_pong_frame(std::span<const std::byte>{payload});
 
-      expect(not built_pong_frame.has_value());
-      if (not built_pong_frame.has_value()) {
-        expect(built_pong_frame.error() == protocol_error::control_frame_payload_too_big);
-      }
+      require(not built_pong_frame.has_value());
+      expect(built_pong_frame.error() == protocol_error::control_frame_payload_too_big);
     };
 
     "builds pong frame as final masked control frame"_test = [] {
@@ -394,10 +358,7 @@ int main() {
 
       auto payload = make_payload_bytes(125, std::byte{0x33});
       auto built_pong_frame = builder.build_pong_frame(std::span<const std::byte>{payload});
-      expect(built_pong_frame.has_value());
-      if (not built_pong_frame.has_value()) {
-        return;
-      }
+      require(built_pong_frame.has_value());
 
       auto pong_frame = built_pong_frame.value();
 
@@ -418,10 +379,7 @@ int main() {
       client_frame_builder<fixed_masking_key_source> builder{fixed_masking_key_source{key}};
 
       auto built_close_frame = builder.build_close_frame(close_code::normal, std::nullopt);
-      expect(built_close_frame.has_value());
-      if (not built_close_frame.has_value()) {
-        return;
-      }
+      require(built_close_frame.has_value());
 
       auto close_frame = built_close_frame.value();
 
@@ -433,11 +391,9 @@ int main() {
       const auto unmasked = unmask_payload(masked, key);
 
       const auto expected_code = big_endian_bytes<2>(std::to_underlying(close_code::normal));
-      expect(unmasked.size() == 2U);
-      if (unmasked.size() == 2U) {
-        expect(unmasked[0] == expected_code[0]);
-        expect(unmasked[1] == expected_code[1]);
-      }
+      require(unmasked.size() == 2U);
+      expect(unmasked[0] == expected_code[0]);
+      expect(unmasked[1] == expected_code[1]);
     };
 
     "builds close frame with reason without padding or duplication"_test = [] {
@@ -446,10 +402,7 @@ int main() {
 
       constexpr std::string_view reason = "bye";
       auto built_close_frame = builder.build_close_frame(close_code::normal, reason);
-      expect(built_close_frame.has_value());
-      if (not built_close_frame.has_value()) {
-        return;
-      }
+      require(built_close_frame.has_value());
 
       auto close_frame = built_close_frame.value();
 
@@ -459,15 +412,13 @@ int main() {
       expect(close_frame.size() == expected_prefix.size() + payload_length);
 
       const auto unmasked = unmask_payload(payload_bytes(close_frame), key);
-      expect(unmasked.size() == payload_length);
-      if (unmasked.size() == payload_length) {
-        const auto expected_code = big_endian_bytes<2>(std::to_underlying(close_code::normal));
-        expect(unmasked[0] == expected_code[0]);
-        expect(unmasked[1] == expected_code[1]);
+      require(unmasked.size() == payload_length);
+      const auto expected_code = big_endian_bytes<2>(std::to_underlying(close_code::normal));
+      expect(unmasked[0] == expected_code[0]);
+      expect(unmasked[1] == expected_code[1]);
 
-        const std::string recovered_reason = to_string(std::span<const std::byte>{unmasked}.subspan(2));
-        expect(recovered_reason == reason);
-      }
+      const std::string recovered_reason = to_string(std::span<const std::byte>{unmasked}.subspan(2));
+      expect(recovered_reason == reason);
     };
 
     "rejects close reason that is not valid utf8"_test = [] {
@@ -479,10 +430,8 @@ int main() {
       invalid_utf8.push_back(static_cast<char>(0x28));
 
       auto built_close_frame = builder.build_close_frame(close_code::normal, invalid_utf8);
-      expect(not built_close_frame.has_value());
-      if (not built_close_frame.has_value()) {
-        expect(built_close_frame.error() == protocol_error::close_reason_invalid_utf8);
-      }
+      require(not built_close_frame.has_value());
+      expect(built_close_frame.error() == protocol_error::close_reason_invalid_utf8);
     };
 
     "rejects text payload that is not valid utf8"_test = [] {
@@ -494,10 +443,8 @@ int main() {
       invalid_utf8.push_back(static_cast<char>(0x28));
 
       auto built_text_frame = builder.build_text_frame(invalid_utf8);
-      expect(not built_text_frame.has_value());
-      if (not built_text_frame.has_value()) {
-        expect(built_text_frame.error() == protocol_error::payload_text_invalid_utf8);
-      }
+      require(not built_text_frame.has_value());
+      expect(built_text_frame.error() == protocol_error::payload_text_invalid_utf8);
     };
 
     "ignores invalid utf8 when validation is disabled via config"_test = [] {
@@ -521,10 +468,7 @@ int main() {
 
       std::string reason(123, 'r');
       auto built_close_frame = builder.build_close_frame(close_code::normal, reason);
-      expect(built_close_frame.has_value());
-      if (not built_close_frame.has_value()) {
-        return;
-      }
+      require(built_close_frame.has_value());
 
       auto close_frame = built_close_frame.value();
 
@@ -540,10 +484,8 @@ int main() {
 
       std::string reason(124, 'r');
       auto built_close_frame = builder.build_close_frame(close_code::normal, reason);
-      expect(not built_close_frame.has_value());
-      if (not built_close_frame.has_value()) {
-        expect(built_close_frame.error() == protocol_error::control_frame_payload_too_big);
-      }
+      require(not built_close_frame.has_value());
+      expect(built_close_frame.error() == protocol_error::control_frame_payload_too_big);
     };
   };
 }

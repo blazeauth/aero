@@ -55,11 +55,7 @@ int main() {
       socket.connect(server.endpoint());
       asio::write(socket, asio::buffer(request_buf));
 
-      bool is_ready = future.wait_for(5s) == std::future_status::ready;
-      expect(is_ready);
-      if (not is_ready) {
-        return;
-      }
+      require(future.wait_for(5s) == std::future_status::ready);
 
       auto request = future.get();
 
@@ -98,11 +94,7 @@ int main() {
       socket.connect(server.endpoint());
       asio::write(socket, asio::buffer(request_buf));
 
-      bool is_ready = future.wait_for(5s) == std::future_status::ready;
-      expect(is_ready);
-      if (not is_ready) {
-        return;
-      }
+      require(future.wait_for(5s) == std::future_status::ready);
 
       expect(future.get() == "second");
       expect(first_handler_calls.load() == 0);

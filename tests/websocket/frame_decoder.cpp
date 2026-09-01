@@ -66,10 +66,7 @@ void expect_rejected(std::span<const std::byte> bytes) {
 template <typename ErrorEnum>
 void expect_rejected_with(std::span<const std::byte> bytes, ErrorEnum expected_error) {
   auto decoded = client_frame_decoder{}.decode_header(bytes);
-  expect(not decoded.has_value());
-  if (decoded) {
-    return;
-  }
+  require(not decoded.has_value());
 
   expect(decoded.error() == expected_error);
 }
@@ -253,10 +250,8 @@ int main() {
       }
 
       auto decoded = client_frame_decoder{}.decode_header(header_only);
-      expect(not decoded);
-      if (not decoded) {
-        expect(decoded.error() == protocol_error::payload_length_too_big);
-      }
+      require(not decoded);
+      expect(decoded.error() == protocol_error::payload_length_too_big);
     };
 
     "client rejects masked frames"_test = [] {

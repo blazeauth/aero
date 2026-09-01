@@ -1,12 +1,12 @@
 include(FetchContent)
 include(AeroUseMagicEnum)
 
-FetchContent_Declare(openalgz_ut
-  GIT_REPOSITORY  https://github.com/openalgz/ut
-  GIT_TAG         v1.2.0
+FetchContent_Declare(annihilatorq_ut
+  GIT_REPOSITORY  https://github.com/annihilatorq/ut
+  GIT_TAG         v1.0.0
   GIT_SHALLOW     TRUE
 )
-FetchContent_MakeAvailable(openalgz_ut)
+FetchContent_MakeAvailable(annihilatorq_ut)
 
 add_library(aero_test_common INTERFACE)
 aero_use_magic_enum(aero_test_common)
