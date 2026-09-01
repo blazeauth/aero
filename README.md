@@ -85,12 +85,13 @@ int main() {
 ```cpp
 #include <print>
 
-#include "aero/util/deadline.hpp"
 #include "aero/error.hpp"
 #include "aero/tls/system_context.hpp"
 #include "aero/tls/version.hpp"
+#include "aero/util/deadline.hpp"
+#include "aero/websocket/client.hpp"
 #include "aero/websocket/close_code.hpp"
-#include "aero/websocket/tls/client.hpp"
+#include "aero/websocket/message.hpp"
 
 namespace websocket = aero::websocket;
 namespace tls = aero::tls;
@@ -116,7 +117,7 @@ int main() {
   tls::system_context tls_ctx{tls::version::tlsv1_2};
   tls_ctx.disable_deprecated_versions();
 
-  websocket::tls::client client{tls_ctx.context()};
+  websocket::client client{tls_ctx.context()};
 
   auto [connect_ec, handshake_response] = client.connect("wss://stream.binance.com:9443/ws/btcusdt@trade", 5s);
   if (connect_ec) {
@@ -177,13 +178,12 @@ int main() {
 #include <asio/use_future.hpp>
 
 #include "aero/http/headers.hpp"
-#include "aero/util/io_runtime.hpp"
 #include "aero/tls/initialize.hpp"
 #include "aero/tls/system_context.hpp"
 #include "aero/tls/version.hpp"
 #include "aero/util/io_runtime.hpp"
+#include "aero/websocket/client.hpp"
 #include "aero/websocket/close_code.hpp"
-#include "aero/websocket/tls/client.hpp"
 
 using namespace std::chrono_literals;
 namespace websocket = aero::websocket;
@@ -200,7 +200,7 @@ void print_headers(const aero::http::headers& headers) {
   std::println("[HEADERS] Done");
 }
 
-asio::awaitable<std::error_code> async_run_echo_client(websocket::tls::client& client) {
+asio::awaitable<std::error_code> async_run_echo_client(websocket::client& client) {
   // https://blog.postman.com/introducing-postman-websocket-echo-service/
   auto [connect_ec, handshake_response] =
     co_await client.async_connect("wss://ws.postman-echo.com/raw", asio::as_tuple(asio::use_awaitable));
@@ -243,7 +243,7 @@ int main() {
   aero::tls::system_context tls_context{aero::tls::version::tlsv1_2};
   tls_context.disable_deprecated_versions();
 
-  websocket::tls::client client{runtime.get_executor(), tls_context};
+  websocket::client client{runtime.get_executor(), tls_context.context()};
 
   try {
     // All coroutines should use client executor to serialize all
@@ -401,16 +401,23 @@ that data must stay alive until the completion handler is called.
 
 ## WebSocket interface
 
-Websocket client `aero::websocket::basic_client`:
+Websocket connection `aero::websocket::basic_connection`):
 ```cpp
-template <net::concepts::transport Transport>
-class basic_client {
+template <websocket::role Role>
+class basic_connection {
  public:
-  using transport_type = Transport;
+  using transport_type = aero::net::transport;
   using duration = std::chrono::steady_clock::duration;
   using executor_type = typename transport_type::executor_type;
 
-  ...
+  explicit basic_connection(connection_options options = {});
+  explicit basic_connection(executor_type executor, connection_options options = {});
+
+  // Available only in TLS builds
+  explicit basic_connection(asio::ssl::context& ssl_ctx);
+  explicit basic_connection(connection_options options, asio::ssl::context& ssl_ctx);
+  explicit basic_connection(executor_type executor, asio::ssl::context& ssl_ctx);
+  explicit basic_connection(executor_type executor, connection_options options, asio::ssl::context& ssl_ctx);
 
   auto async_connect(urls::url url, CompletionToken&& token);
   auto async_connect(std::expected<urls::url, std::error_code> parsed_url, CompletionToken&& token);
@@ -473,16 +480,18 @@ class basic_client {
   [[nodiscard]] bool is_connecting() const noexcept;
   [[nodiscard]] bool is_closed() const noexcept;
   [[nodiscard]] bool is_closing() const noexcept;
+  [[nodiscard]] bool is_transport_secure() const noexcept;
   [[nodiscard]] executor_type get_executor() const noexcept;
   [[nodiscard]] asio::strand<executor_type> get_strand() const noexcept;
-  [[nodiscard]] transport_type& transport();
 };
 ```
 
 The synchronous API uses `std::error_code`, `std::expected` or `std::tuple` depending on the amount of data an operation needs to return. `async_connect(...)` completes with `http::response`, and `connect(...)` returns `std::tuple<std::error_code, http::response>`. When the HTTP status line and headers were parsed but WebSocket challenge validation failed, `ec` is non-zero and the returned response still contains the parsed peer response. By design, the API cannot throw exceptions (although exceptions possibly can be thrown by asio).
 
-- `aero::websocket::client` is simply an alias to `aero::websocket::basic_client<aero::net::tcp_transport<>>`
-- `aero::websocket::tls::client` is a class (not an alias since it requires storing and processing the TLS context) that wraps `aero::websocket::basic_client<aero::net::tls_transport<>>`, it has identical interface to `aero::websocket::client`
+### TLS
+- The transport is selected from the URL scheme on every `connect(...)`. `ws://` selects a plain TCP transport, `wss://` - TLS.
+- A TLS transport uses the `asio::ssl::context` passed to the constructor. In cases when no `asio::ssl::context` was provided by the user, it uses a shared default `tls::system_context`.
+- Builds without a TLS backend (no OpenSSL or wolfSSL), will get `tls::backend_error::unavailable` when trying to connect via `wss://`.
 
 
 Websocket message `aero::websocket::message`:
