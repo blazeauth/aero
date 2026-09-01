@@ -135,13 +135,14 @@ namespace aero::websocket::concepts {
       { client.read() } -> std::same_as<std::expected<websocket::message, std::error_code>>;
       { client.read(timeout) } -> std::same_as<std::expected<websocket::message, std::error_code>>;
 
-      { client.get_executor() } -> std::same_as<typename Client::executor_type>;
-      { client.get_strand() } -> std::same_as<asio::strand<typename Client::executor_type>>;
       { client.is_open_for_writing() } -> std::same_as<bool>;
       { client.is_connecting() } -> std::same_as<bool>;
       { client.is_closed() } -> std::same_as<bool>;
       { client.is_closing() } -> std::same_as<bool>;
-      { client.transport() } -> std::same_as<typename Client::transport_type&>;
+      { client.is_transport_secure() } -> std::same_as<bool>;
+
+      { client.get_executor() } -> std::same_as<typename Client::executor_type>;
+      { client.get_strand() } -> std::same_as<asio::strand<typename Client::executor_type>>;
     };
 
 } // namespace aero::websocket::concepts

@@ -8,8 +8,8 @@
 #include "aero/websocket/detail/frame.hpp"
 #include "aero/websocket/detail/frame_decoder.hpp"
 #include "aero/websocket/detail/opcode.hpp"
-#include "aero/websocket/detail/role.hpp"
 #include "aero/websocket/error.hpp"
+#include "aero/websocket/role.hpp"
 
 #include "websocket/test_helpers.hpp"
 
@@ -24,10 +24,10 @@ constexpr std::uint8_t payload_len_16_indicator = 126U;
 constexpr std::uint8_t payload_len_64_indicator = 127U;
 
 using aero::websocket::protocol_error;
+using aero::websocket::role;
 using aero::websocket::detail::frame;
 using aero::websocket::detail::masking_key;
 using aero::websocket::detail::opcode;
-using aero::websocket::detail::role;
 
 using client_frame_decoder = aero::websocket::detail::frame_decoder<role::client>;
 using server_frame_decoder = aero::websocket::detail::frame_decoder<role::server>;

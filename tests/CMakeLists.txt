@@ -25,6 +25,12 @@ function(aero_add_unit_test target_name source_file)
   add_dependencies(aero_tests ${target_name})
 endfunction()
 
+function(aero_add_tls_unit_test target_name source_file)
+  if(AERO_USE_TLS)
+    aero_add_unit_test(${target_name} ${source_file})
+  endif()
+endfunction()
+
 aero_add_unit_test(aero_error_code error_code.cpp)
 
 add_subdirectory(util)
@@ -35,5 +41,6 @@ endif()
 
 add_subdirectory(http_primitives)
 add_subdirectory(http_server)
+add_subdirectory(net)
 add_subdirectory(urls)
 add_subdirectory(websocket)

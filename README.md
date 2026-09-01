@@ -5,7 +5,7 @@
 <p align="center">
   <strong>Networking that feels just right.</strong>
   <br />
-  C++23 WebSocket-first library with HTTP/1.x support
+  C++23 WebSocket-first library. HTTP/1.x server support coming soon.
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@ Aero is a lightweight, header-only networking library for modern C++.
 
 Library provides an API for working with a WebSocket client, with optional TLS support. We plan to add HTTP/1.0 and HTTP/1.1 server support in the near future, and to further develop the library so that it can simultaneously offer a lightweight client component and a feature-rich, high-performance server framework.
 
-The library compiles with both OpenSSL and wolfSSL. The asynchronous model is built on asio completion tokens and feels like an extension of asio rather than part of a different library, in other words, the library is designed to feel like a pleasant addition to asio, but it doesn't adhere to the asio style as strictly as, say, Boost-Beast.
+The library compiles with either OpenSSL or wolfSSL. The asynchronous model is built on asio completion tokens and feels like an extension of asio rather than part of a different library, in other words, the library is designed to feel like a pleasant addition to asio, but it doesn't adhere to the asio style as strictly as, say, Boost-Beast.
 
 > [!WARNING]
 >
@@ -85,12 +85,13 @@ int main() {
 ```cpp
 #include <print>
 
-#include "aero/util/deadline.hpp"
 #include "aero/error.hpp"
 #include "aero/tls/system_context.hpp"
 #include "aero/tls/version.hpp"
+#include "aero/util/deadline.hpp"
+#include "aero/websocket/client.hpp"
 #include "aero/websocket/close_code.hpp"
-#include "aero/websocket/tls/client.hpp"
+#include "aero/websocket/message.hpp"
 
 namespace websocket = aero::websocket;
 namespace tls = aero::tls;
@@ -116,7 +117,7 @@ int main() {
   tls::system_context tls_ctx{tls::version::tlsv1_2};
   tls_ctx.disable_deprecated_versions();
 
-  websocket::tls::client client{tls_ctx.context()};
+  websocket::client client{tls_ctx.context()};
 
   auto [connect_ec, handshake_response] = client.connect("wss://stream.binance.com:9443/ws/btcusdt@trade", 5s);
   if (connect_ec) {
@@ -177,13 +178,12 @@ int main() {
 #include <asio/use_future.hpp>
 
 #include "aero/http/headers.hpp"
-#include "aero/util/io_runtime.hpp"
 #include "aero/tls/initialize.hpp"
 #include "aero/tls/system_context.hpp"
 #include "aero/tls/version.hpp"
 #include "aero/util/io_runtime.hpp"
+#include "aero/websocket/client.hpp"
 #include "aero/websocket/close_code.hpp"
-#include "aero/websocket/tls/client.hpp"
 
 using namespace std::chrono_literals;
 namespace websocket = aero::websocket;
@@ -200,7 +200,7 @@ void print_headers(const aero::http::headers& headers) {
   std::println("[HEADERS] Done");
 }
 
-asio::awaitable<std::error_code> async_run_echo_client(websocket::tls::client& client) {
+asio::awaitable<std::error_code> async_run_echo_client(websocket::client& client) {
   // https://blog.postman.com/introducing-postman-websocket-echo-service/
   auto [connect_ec, handshake_response] =
     co_await client.async_connect("wss://ws.postman-echo.com/raw", asio::as_tuple(asio::use_awaitable));
@@ -243,7 +243,7 @@ int main() {
   aero::tls::system_context tls_context{aero::tls::version::tlsv1_2};
   tls_context.disable_deprecated_versions();
 
-  websocket::tls::client client{runtime.get_executor(), tls_context};
+  websocket::client client{runtime.get_executor(), tls_context.context()};
 
   try {
     // All coroutines should use client executor to serialize all
@@ -378,7 +378,7 @@ Aero can be built without TLS when you want the lightest possible setup, or with
 Supported configurations include:
 
 - OpenSSL
-- WolfSSL[asio]
+- wolfSSL (needs the OpenSSL compatibility layer)
 - no TLS
 
 ## Important API contract notes
@@ -401,16 +401,23 @@ that data must stay alive until the completion handler is called.
 
 ## WebSocket interface
 
-Websocket client `aero::websocket::basic_client`:
+Websocket connection `aero::websocket::basic_connection`:
 ```cpp
-template <net::concepts::transport Transport>
-class basic_client {
+template <websocket::role Role>
+class basic_connection {
  public:
-  using transport_type = Transport;
+  using transport_type = aero::net::transport;
   using duration = std::chrono::steady_clock::duration;
   using executor_type = typename transport_type::executor_type;
 
-  ...
+  explicit basic_connection(connection_options options = {});
+  explicit basic_connection(executor_type executor, connection_options options = {});
+
+  // Available only in TLS builds
+  explicit basic_connection(asio::ssl::context& ssl_ctx);
+  explicit basic_connection(connection_options options, asio::ssl::context& ssl_ctx);
+  explicit basic_connection(executor_type executor, asio::ssl::context& ssl_ctx);
+  explicit basic_connection(executor_type executor, connection_options options, asio::ssl::context& ssl_ctx);
 
   auto async_connect(urls::url url, CompletionToken&& token);
   auto async_connect(std::expected<urls::url, std::error_code> parsed_url, CompletionToken&& token);
@@ -473,16 +480,18 @@ class basic_client {
   [[nodiscard]] bool is_connecting() const noexcept;
   [[nodiscard]] bool is_closed() const noexcept;
   [[nodiscard]] bool is_closing() const noexcept;
+  [[nodiscard]] bool is_transport_secure() const noexcept;
   [[nodiscard]] executor_type get_executor() const noexcept;
   [[nodiscard]] asio::strand<executor_type> get_strand() const noexcept;
-  [[nodiscard]] transport_type& transport();
 };
 ```
 
 The synchronous API uses `std::error_code`, `std::expected` or `std::tuple` depending on the amount of data an operation needs to return. `async_connect(...)` completes with `http::response`, and `connect(...)` returns `std::tuple<std::error_code, http::response>`. When the HTTP status line and headers were parsed but WebSocket challenge validation failed, `ec` is non-zero and the returned response still contains the parsed peer response. By design, the API cannot throw exceptions (although exceptions possibly can be thrown by asio).
 
-- `aero::websocket::client` is simply an alias to `aero::websocket::basic_client<aero::net::tcp_transport<>>`
-- `aero::websocket::tls::client` is a class (not an alias since it requires storing and processing the TLS context) that wraps `aero::websocket::basic_client<aero::net::tls_transport<>>`, it has identical interface to `aero::websocket::client`
+### TLS
+- The transport is selected from the URL scheme on every `connect(...)`. `ws://` selects a plain TCP transport, `wss://` - TLS.
+- A TLS transport uses the `asio::ssl::context` passed to the constructor. In cases when no `asio::ssl::context` was provided by the user, it uses a shared default `tls::system_context`.
+- Builds without a TLS backend (no OpenSSL or wolfSSL), will get `tls::backend_error::unavailable` when trying to connect via `wss://`.
 
 
 Websocket message `aero::websocket::message`:
@@ -544,17 +553,13 @@ auto completion_future = client.async_connect("ws://example.com/", asio::use_fut
 |`async_force_close(...)`|void(std::error_code)|
 |`async_read(...)`|void(std::error_code, aero::websocket::message)|
 
-> [!NOTE]
->
-> Aero implements a non-copying API, which means that the caller must ensure that the buffer passed to `async_send_text(text)`, `async_send_binary(data)`, `async_ping(data)`, `async_pong(data)`, `async_close(..., close_reason)` remains valid until the operation is complete.
-
 ### Threadsafety
 Please note that all references to functions apply to both synchronous and asynchronous variants. For example, if `async_connect` is mentioned, this implies all overloads of this function and its synchronous variant `connect`.
 
 |Operation|Contract|
 |-|-|
-|`async_connect`|No other `async_connect` should be outstanding and no read/close is active. Exclusive phase, concurrent usage with `async_connect`, `async_read`, `async_close` is forbidden.|
-|`async_send_text`, `async_send_binary`, `async_ping`, `async_pong`|Can be called concurrently with any operation except `async_connect`. Transport layer should serialize all write operations using strand/mutex/etc. Not meaningful concurrently with `async_connect` before open, because it returns `websocket::protocol_error::connection_closed`. Can be called concurrently with `async_close`, but the result depends on strand ordering - once in closing, it will return `websocket::protocol_error::connection_closed`.|
+|`async_connect`|Allowed only on a closed connection. When called while the connection is open, connecting or closing, it returns `websocket::protocol_error::connection_not_closed` and leaves the current session untouched. When `async_connect` is called twice concurrently, the second call gets `connection_not_closed`. Any running `async_read`/`async_close` must have completed before reconnecting.|
+|`async_send_text`, `async_send_binary`, `async_ping`, `async_pong`|Can be called concurrently with any operation except `async_connect`. The connection serializes all writes internally on its strand. A write issued before the connection is open returns `websocket::protocol_error::connection_closed`. Can be called concurrently with `async_close`, but the result depends on strand ordering - once in closing, it will return `websocket::protocol_error::connection_closed`.|
 |`async_close`|Threadsafe, but correct usage is only one close at a time. A second concurrent call returns `websocket::protocol_error::already_closing`. Forbidden concurrently with `async_connect` (possible competing reads). Allowed to use with `async_read` concurrently, and if `async_close` starts first, it may start reading and an external `async_read` will return `websocket::protocol_error::already_reading`|
 |`async_force_close`|Threadsafe, cancels all running operations|
 |`is_open_for_writing`, `is_connecting`, `is_closed`, `is_closing`, `get_executor`|Threadsafe getters|
@@ -590,6 +595,16 @@ target_link_libraries(my_app PRIVATE aero)
 
 # set(AERO_USE_BUNDLED_ASIO ON) # "Fetch ASIO using FetchContent if not found on system or in targets"
 ```
+
+### wolfSSL via vcpkg
+
+Install the port with the `asio` feature. When building on Windows, you also need to pass the overlay triplets provided by this repository, since they enable the wolfSSL error queue, without which certificate loading fails.
+
+```
+vcpkg install "wolfssl[asio]" --overlay-triplets path/to/aero/cmake/vcpkg-triplets
+```
+
+See the TODO in `cmake/vcpkg-triplets/` for details.
 
 ## Tests
 Actions build and test Aero on:

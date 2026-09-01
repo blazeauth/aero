@@ -37,6 +37,20 @@ struct connection {
     asio::write(socket, asio::buffer(response.data(), response.size()));
   }
 
+  [[nodiscard]] std::string read_bytes(std::size_t count) {
+    if (buffer.size() < count) {
+      std::error_code error;
+      asio::read(socket, asio::dynamic_buffer(buffer), asio::transfer_exactly(count - buffer.size()), error);
+      if (error) {
+        throw std::system_error{error};
+      }
+    }
+
+    auto bytes = buffer.substr(0, count);
+    buffer.erase(0, count);
+    return bytes;
+  }
+
   void close() {
     std::error_code ec;
     static_cast<void>(socket.shutdown(asio::socket_base::shutdown_both, ec));

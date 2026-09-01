@@ -14,6 +14,10 @@
 #include <wincrypt.h>
 #pragma comment(lib, "crypt32.lib")
 
+// wincrypt.h defines these OpenSSL type names
+#undef X509_NAME
+#undef ASN1_INTEGER
+
 namespace aero::tls::detail {
 
   inline std::wstring utf8_to_utf16(const char* utf8_text) {

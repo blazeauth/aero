@@ -30,7 +30,7 @@ namespace aero::websocket {
     return std::nullopt;
   }
 
-  [[nodiscard]] constexpr std::expected<std::uint16_t, std::error_code> get_port(const urls::url& url) noexcept {
+  [[nodiscard]] inline std::expected<std::uint16_t, std::error_code> get_port_for_scheme(const urls::url& url) noexcept {
     std::string_view scheme = url.scheme();
     if (scheme != "ws" && scheme != "wss") {
       return std::unexpected(urls::url_error::scheme_invalid);
