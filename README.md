@@ -5,7 +5,7 @@
 <p align="center">
   <strong>Networking that feels just right.</strong>
   <br />
-  C++23 WebSocket-first library with HTTP/1.x support
+  C++23 WebSocket-first library. HTTP/1.x server support coming soon.
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@ Aero is a lightweight, header-only networking library for modern C++.
 
 Library provides an API for working with a WebSocket client, with optional TLS support. We plan to add HTTP/1.0 and HTTP/1.1 server support in the near future, and to further develop the library so that it can simultaneously offer a lightweight client component and a feature-rich, high-performance server framework.
 
-The library compiles with both OpenSSL and wolfSSL. The asynchronous model is built on asio completion tokens and feels like an extension of asio rather than part of a different library, in other words, the library is designed to feel like a pleasant addition to asio, but it doesn't adhere to the asio style as strictly as, say, Boost-Beast.
+The library compiles with either OpenSSL or wolfSSL. The asynchronous model is built on asio completion tokens and feels like an extension of asio rather than part of a different library, in other words, the library is designed to feel like a pleasant addition to asio, but it doesn't adhere to the asio style as strictly as, say, Boost-Beast.
 
 > [!WARNING]
 >
@@ -378,7 +378,7 @@ Aero can be built without TLS when you want the lightest possible setup, or with
 Supported configurations include:
 
 - OpenSSL
-- WolfSSL[asio]
+- wolfSSL (needs the OpenSSL compatibility layer)
 - no TLS
 
 ## Important API contract notes
@@ -401,7 +401,7 @@ that data must stay alive until the completion handler is called.
 
 ## WebSocket interface
 
-Websocket connection `aero::websocket::basic_connection`):
+Websocket connection `aero::websocket::basic_connection`:
 ```cpp
 template <websocket::role Role>
 class basic_connection {
@@ -553,17 +553,13 @@ auto completion_future = client.async_connect("ws://example.com/", asio::use_fut
 |`async_force_close(...)`|void(std::error_code)|
 |`async_read(...)`|void(std::error_code, aero::websocket::message)|
 
-> [!NOTE]
->
-> Aero implements a non-copying API, which means that the caller must ensure that the buffer passed to `async_send_text(text)`, `async_send_binary(data)`, `async_ping(data)`, `async_pong(data)`, `async_close(..., close_reason)` remains valid until the operation is complete.
-
 ### Threadsafety
 Please note that all references to functions apply to both synchronous and asynchronous variants. For example, if `async_connect` is mentioned, this implies all overloads of this function and its synchronous variant `connect`.
 
 |Operation|Contract|
 |-|-|
 |`async_connect`|Allowed only on a closed connection. When called while the connection is open, connecting or closing, it returns `websocket::protocol_error::connection_not_closed` and leaves the current session untouched. When `async_connect` is called twice concurrently, the second call gets `connection_not_closed`. Any running `async_read`/`async_close` must have completed before reconnecting.|
-|`async_send_text`, `async_send_binary`, `async_ping`, `async_pong`|Can be called concurrently with any operation except `async_connect`. Transport layer should serialize all write operations using strand/mutex/etc. Not meaningful concurrently with `async_connect` before open, because it returns `websocket::protocol_error::connection_closed`. Can be called concurrently with `async_close`, but the result depends on strand ordering - once in closing, it will return `websocket::protocol_error::connection_closed`.|
+|`async_send_text`, `async_send_binary`, `async_ping`, `async_pong`|Can be called concurrently with any operation except `async_connect`. The connection serializes all writes internally on its strand. A write issued before the connection is open returns `websocket::protocol_error::connection_closed`. Can be called concurrently with `async_close`, but the result depends on strand ordering - once in closing, it will return `websocket::protocol_error::connection_closed`.|
 |`async_close`|Threadsafe, but correct usage is only one close at a time. A second concurrent call returns `websocket::protocol_error::already_closing`. Forbidden concurrently with `async_connect` (possible competing reads). Allowed to use with `async_read` concurrently, and if `async_close` starts first, it may start reading and an external `async_read` will return `websocket::protocol_error::already_reading`|
 |`async_force_close`|Threadsafe, cancels all running operations|
 |`is_open_for_writing`, `is_connecting`, `is_closed`, `is_closing`, `get_executor`|Threadsafe getters|
