@@ -30,36 +30,31 @@ jobs:
             vcpkg_triplet: x86-windows
             build_dir_suffix: x86
         tls:
-          - name: No TLS
-            cmake_arg: ""
-            build_dir: build-no-tls
-            use_vcpkg: false
-          - name: wolfSSL
-            cmake_arg: "-DAERO_TLS_BACKEND=wolfssl"
-            build_dir: build-wolfssl
-            use_vcpkg: true
+          - { name: No TLS,  backend: none }
+          - { name: wolfSSL, backend: wolfssl, vcpkg_port: "wolfssl[asio]" }
+          - { name: OpenSSL, backend: openssl, vcpkg_port: openssl }
 
     steps:
       - uses: actions/checkout@v6
 
       - name: Setup vcpkg
-        if: matrix.tls.use_vcpkg
+        if: matrix.tls.vcpkg_port
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: 29f10019c26142cc4689b53b8c91da519db09e5c
 
-      - name: Install wolfSSL (vcpkg)
-        if: matrix.tls.use_vcpkg
+      - name: Install ${{ matrix.tls.name }} (vcpkg)
+        if: matrix.tls.vcpkg_port
         shell: pwsh
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install "wolfssl[asio]" --triplet "${{ matrix.arch.vcpkg_triplet }}" --overlay-triplets "$env:GITHUB_WORKSPACE/cmake/vcpkg-triplets"
+          & "$env:VCPKG_ROOT\vcpkg.exe" install "${{ matrix.tls.vcpkg_port }}" --triplet "${{ matrix.arch.vcpkg_triplet }}" --overlay-triplets "$env:GITHUB_WORKSPACE/cmake/vcpkg-triplets"
 
       - name: Configure CMake
         shell: pwsh
         run: |
-          $buildDir = "${{ github.workspace }}/${{ matrix.tls.build_dir }}-${{ matrix.arch.build_dir_suffix }}-${{ matrix.build_type }}"
+          $buildDir = "${{ github.workspace }}/build-${{ matrix.tls.backend }}-${{ matrix.arch.build_dir_suffix }}-${{ matrix.build_type }}"
           $vcpkgCmakeArgs = @()
-          if ("${{ matrix.tls.use_vcpkg }}" -eq "true") {
+          if ("${{ matrix.tls.vcpkg_port }}") {
             $vcpkgCmakeArgs += "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
             $vcpkgCmakeArgs += "-DVCPKG_TARGET_TRIPLET=${{ matrix.arch.vcpkg_triplet }}"
           }
@@ -70,18 +65,18 @@ jobs:
             -DCMAKE_CXX_STANDARD_REQUIRED=ON `
             -DCMAKE_CXX_EXTENSIONS=OFF `
             -DCMAKE_CXX_FLAGS_DEBUG="/bigobj" `
-            ${{ matrix.tls.cmake_arg }} `
+            -DAERO_TLS_BACKEND=${{ matrix.tls.backend }} `
             $vcpkgCmakeArgs
 
       - name: Build
         shell: pwsh
         run: |
-          $buildDir = "${{ github.workspace }}/${{ matrix.tls.build_dir }}-${{ matrix.arch.build_dir_suffix }}-${{ matrix.build_type }}"
+          $buildDir = "${{ github.workspace }}/build-${{ matrix.tls.backend }}-${{ matrix.arch.build_dir_suffix }}-${{ matrix.build_type }}"
           cmake --build $buildDir --config ${{ matrix.build_type }} --parallel
 
       - name: Test
         shell: pwsh
         working-directory: ${{ github.workspace }}
         run: |
-          $buildDir = "${{ github.workspace }}/${{ matrix.tls.build_dir }}-${{ matrix.arch.build_dir_suffix }}-${{ matrix.build_type }}"
+          $buildDir = "${{ github.workspace }}/build-${{ matrix.tls.backend }}-${{ matrix.arch.build_dir_suffix }}-${{ matrix.build_type }}"
           ctest --test-dir $buildDir --output-on-failure --timeout 30 -C ${{ matrix.build_type }}
