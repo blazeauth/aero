@@ -21,14 +21,9 @@ jobs:
         build_type: [Debug]
         std: [23]
         tls:
-          - name: No TLS
-            cmake_arg: ""
-            build_dir: build-no-tls
-            use_vcpkg: false
-          - name: wolfSSL
-            cmake_arg: "-DAERO_TLS_BACKEND=wolfssl"
-            build_dir: build-wolfssl
-            use_vcpkg: true
+          - { name: No TLS,  backend: none }
+          - { name: wolfSSL, backend: wolfssl, vcpkg_port: "wolfssl[asio]" }
+          - { name: OpenSSL, backend: openssl, vcpkg_port: openssl }
 
     env:
       VCPKG_DEFAULT_TRIPLET: x64-windows
@@ -37,37 +32,37 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Setup vcpkg
-        if: matrix.tls.use_vcpkg
+        if: matrix.tls.vcpkg_port
         uses: lukka/run-vcpkg@v11
         with:
           vcpkgGitCommitId: 29f10019c26142cc4689b53b8c91da519db09e5c
 
-      - name: Install wolfSSL (vcpkg)
-        if: matrix.tls.use_vcpkg
+      - name: Install ${{ matrix.tls.name }} (vcpkg)
+        if: matrix.tls.vcpkg_port
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install "wolfssl[asio]" --triplet "$env:VCPKG_DEFAULT_TRIPLET" --overlay-triplets "$env:GITHUB_WORKSPACE/cmake/vcpkg-triplets"
+          & "$env:VCPKG_ROOT\vcpkg.exe" install "${{ matrix.tls.vcpkg_port }}" --triplet "$env:VCPKG_DEFAULT_TRIPLET" --overlay-triplets "$env:GITHUB_WORKSPACE/cmake/vcpkg-triplets"
 
       - name: Configure CMake
         shell: pwsh
         run: |
           $vcpkgCmakeArgs = @()
-          if ("${{ matrix.tls.use_vcpkg }}" -eq "true") {
+          if ("${{ matrix.tls.vcpkg_port }}") {
             $vcpkgCmakeArgs += "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
             $vcpkgCmakeArgs += "-DVCPKG_TARGET_TRIPLET=$env:VCPKG_DEFAULT_TRIPLET"
           }
 
-          cmake -B "${{ github.workspace }}/${{ matrix.tls.build_dir }}" `
+          cmake -B "${{ github.workspace }}/build-${{ matrix.tls.backend }}" `
             -DCMAKE_CXX_STANDARD=${{ matrix.std }} `
             -DCMAKE_CXX_STANDARD_REQUIRED=ON `
             -DCMAKE_CXX_EXTENSIONS=OFF `
             -A x64 `
             -T ClangCL `
-            ${{ matrix.tls.cmake_arg }} `
+            -DAERO_TLS_BACKEND=${{ matrix.tls.backend }} `
             $vcpkgCmakeArgs
 
       - name: Build
-        run: cmake --build "${{ github.workspace }}/${{ matrix.tls.build_dir }}" --config ${{ matrix.build_type }} --parallel
+        run: cmake --build "${{ github.workspace }}/build-${{ matrix.tls.backend }}" --config ${{ matrix.build_type }} --parallel
 
       - name: Test
-        working-directory: ${{ github.workspace }}/${{ matrix.tls.build_dir }}
+        working-directory: ${{ github.workspace }}/build-${{ matrix.tls.backend }}
         run: ctest --output-on-failure --timeout 30 -C ${{ matrix.build_type }}
