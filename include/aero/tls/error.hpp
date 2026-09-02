@@ -27,7 +27,6 @@ namespace aero::tls {
     cert_untrusted,
     cert_signature_invalid,
     cert_eku_invalid,
-    cert_chain_incomplete,
     cert_revocation_unknown,
   };
 
@@ -105,8 +104,6 @@ namespace aero::tls {
           return "peer certificate signature is invalid";
         case certificate_error::cert_eku_invalid:
           return "peer certificate is not valid for authentication (EKU)";
-        case certificate_error::cert_chain_incomplete:
-          return "peer certificate chain is incomplete";
         case certificate_error::cert_revocation_unknown:
           return "peer certificate revocation status could not be determined";
         default:

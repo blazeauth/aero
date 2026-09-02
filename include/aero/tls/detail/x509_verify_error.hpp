@@ -63,11 +63,10 @@ namespace aero::tls::detail {
       return certificate_error::cert_hostname_mismatch;
     case x509_verify_error::crl_unavailable:
       return certificate_error::cert_revocation_unknown;
-    case x509_verify_error::issuer_not_found:
-    case x509_verify_error::issuer_certificate_missing:
-      return certificate_error::cert_chain_incomplete;
     case x509_verify_error::certificate_not_trusted:
       return certificate_error::cert_untrusted;
+    case x509_verify_error::issuer_not_found:
+    case x509_verify_error::issuer_certificate_missing:
     case x509_verify_error::self_signed_certificate:
     case x509_verify_error::self_signed_in_chain:
     case x509_verify_error::unable_to_verify_leaf_signature:
