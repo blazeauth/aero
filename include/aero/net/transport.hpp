@@ -26,6 +26,11 @@
 #include "aero/tls/detail/alert_capture.hpp"
 #include "aero/tls/detail/x509_verify_error.hpp"
 #include "aero/tls/peer_identity.hpp"
+
+#ifdef AERO_USE_WOLFSSL
+#include "aero/tls/detail/wolfssl_error.hpp"
+#endif
+
 #include <asio/ssl.hpp>
 #include <asio/ssl/error.hpp>
 #include <asio/ssl/stream.hpp>
@@ -56,19 +61,28 @@ namespace aero::net {
 
             auto [handshake_ec] = co_await self->tls_stream_->async_handshake(asio::ssl::stream_base::client);
 
-            auto alert = tls_alerts.get_last_tls_alert();
-            if (alert) {
-              auto alert_ec = tls::detail::tls_alert_to_error_code(*alert);
-              if (alert_ec) {
-                co_return alert_ec.value();
+#ifdef AERO_USE_WOLFSSL
+            if (handshake_ec) {
+              auto wolfssl_error = ::SSL_get_error(self->tls_stream_->native_handle(), 0);
+              if (auto cert_error = tls::detail::wolfssl_error_to_cert_error(wolfssl_error)) {
+                co_return cert_error.value();
               }
             }
+#endif
 
             auto verify_result = static_cast<x509_verify_error>(::SSL_get_verify_result(self->tls_stream_->native_handle()));
             if (verify_result != x509_verify_error::ok) {
               auto cert_error = tls::detail::verify_error_to_cert_error(verify_result);
               if (cert_error) {
                 co_return cert_error.value();
+              }
+            }
+
+            auto alert = tls_alerts.get_last_tls_alert();
+            if (alert) {
+              auto alert_ec = tls::detail::tls_alert_to_error_code(*alert);
+              if (alert_ec) {
+                co_return alert_ec.value();
               }
             }
 
