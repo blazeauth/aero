@@ -119,9 +119,6 @@ namespace aero::websocket::detail {
   };
 
   class data_message_state {
-    using message_reader_error = websocket::message_reader_error;
-    using protocol_error = websocket::protocol_error;
-
     struct message_in_progress {
       detail::opcode opcode{};
       std::vector<std::byte> payload;
@@ -146,7 +143,7 @@ namespace aero::websocket::detail {
         // Received continuation frame without previously receiving initiation
         // frame (with FIN=0): unexpected continuation
         if (!message_) {
-          return message_reader_error::unexpected_continuation;
+          return protocol_error::unexpected_continuation;
         }
         return {};
       }
@@ -154,7 +151,7 @@ namespace aero::websocket::detail {
       // Received non-control & non-continuation frame while expecting
       // continuation frame for current message
       if (message_) {
-        return message_reader_error::interleaved_data_frame;
+        return protocol_error::interleaved_data_frame;
       }
 
       return {};
@@ -179,7 +176,7 @@ namespace aero::websocket::detail {
       }
 
       if (config_.max_message_size.has_value() && message_->payload.size() + chunk.size() > *config_.max_message_size) {
-        return message_reader_error::message_too_big;
+        return protocol_error::message_too_big;
       }
 
       message_->payload.append_range(chunk);
@@ -251,9 +248,6 @@ namespace aero::websocket::detail {
   };
 
   class message_reader {
-    using message_reader_error = websocket::message_reader_error;
-    using protocol_error = websocket::protocol_error;
-
     enum class reader_state : std::uint8_t {
       waiting_for_frame_header,
       reading_frame_payload,
@@ -272,7 +266,7 @@ namespace aero::websocket::detail {
 
     [[nodiscard]] std::error_code consume(std::span<const std::byte> bytes) {
       if (state_ == reader_state::closed) {
-        return message_reader_error::data_after_close;
+        return protocol_error::data_after_close;
       }
 
       receive_buffer_.append(bytes);
@@ -290,7 +284,7 @@ namespace aero::websocket::detail {
         }
 
         if (state_ == reader_state::closed && !receive_buffer_.empty()) {
-          return message_reader_error::data_after_close;
+          return protocol_error::data_after_close;
         }
       }
 

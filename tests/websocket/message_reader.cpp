@@ -20,7 +20,6 @@ using namespace ut;
 using aero::websocket::close_code;
 using aero::websocket::message;
 using aero::websocket::message_kind;
-using aero::websocket::message_reader_error;
 using aero::websocket::protocol_error;
 using aero::websocket::detail::message_reader;
 using aero::websocket::detail::message_reader_config;
@@ -142,7 +141,7 @@ int main() {
       message_reader reader;
 
       auto continuation_frame = serialize_unmasked_frame(opcode::continuation, true, to_bytes("data"));
-      expect(reader.consume(continuation_frame) == message_reader_error::unexpected_continuation);
+      expect(reader.consume(continuation_frame) == protocol_error::unexpected_continuation);
     };
 
     "rejects interleaved data frames during fragmented message"_test = [] {
@@ -152,7 +151,7 @@ int main() {
       auto interleaved_binary_frame = serialize_unmasked_frame(opcode::binary, true, to_bytes("x"));
 
       expect(reader.consume(first_text_frame) == std::error_code{});
-      expect(reader.consume(interleaved_binary_frame) == message_reader_error::interleaved_data_frame);
+      expect(reader.consume(interleaved_binary_frame) == protocol_error::interleaved_data_frame);
     };
 
     "produces ping between fragments and continues data assembly"_test = [] {
@@ -213,10 +212,10 @@ int main() {
       expect(reader.closed());
 
       auto text_frame = serialize_unmasked_frame(opcode::text, true, to_bytes("x"));
-      expect(reader.consume(text_frame) == message_reader_error::data_after_close);
+      expect(reader.consume(text_frame) == protocol_error::data_after_close);
 
       std::span<const std::byte> empty_bytes{};
-      expect(reader.consume(empty_bytes) == message_reader_error::data_after_close);
+      expect(reader.consume(empty_bytes) == protocol_error::data_after_close);
     };
 
     "accepts close with empty payload"_test = [] {
@@ -440,7 +439,7 @@ int main() {
       auto text_frame = serialize_unmasked_frame(opcode::text, true, to_bytes("HiHello"));
       expect(text_frame.size() > 4U);
 
-      expect(reader.consume(text_frame) == message_reader_error::message_too_big);
+      expect(reader.consume(text_frame) == protocol_error::message_too_big);
     };
 
     "accepts large consume chunk when each message fits maximum message size"_test = [] {
@@ -470,7 +469,7 @@ int main() {
       auto second_frame = serialize_unmasked_frame(opcode::continuation, true, to_bytes("def"));
 
       expect(reader.consume(first_frame) == std::error_code{});
-      expect(reader.consume(second_frame) == message_reader_error::message_too_big);
+      expect(reader.consume(second_frame) == protocol_error::message_too_big);
     };
 
     "produces messages in arrival order"_test = [] {
