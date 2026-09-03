@@ -16,9 +16,5 @@ int main() {
     "all handshake errors have messages"_test = [] {
       test_enum_error_code_messages<websocket::handshake_error>(websocket::handshake_error_category());
     };
-
-    "all message reader errors have messages"_test = [] {
-      test_enum_error_code_messages<websocket::message_reader_error>(websocket::message_reader_category());
-    };
   };
 }

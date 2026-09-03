@@ -32,6 +32,10 @@ namespace aero::websocket {
     already_closing,
     already_reading,
     connection_not_closed,
+    unexpected_continuation,
+    interleaved_data_frame,
+    message_too_big,
+    data_after_close,
   };
 
   enum class handshake_error : std::uint8_t {
@@ -41,13 +45,6 @@ namespace aero::websocket {
     status_code_invalid,
     accept_challenge_failed,
     header_name_reserved,
-  };
-
-  enum class message_reader_error : std::uint8_t {
-    unexpected_continuation = 1,
-    interleaved_data_frame,
-    message_too_big,
-    data_after_close,
   };
 
   namespace detail {
@@ -110,6 +107,14 @@ namespace aero::websocket {
           return "already reading";
         case protocol_error::connection_not_closed:
           return "connect requires a closed connection";
+        case protocol_error::unexpected_continuation:
+          return "unexpected continuation frame";
+        case protocol_error::interleaved_data_frame:
+          return "data frame interleaved into fragmented message";
+        case protocol_error::message_too_big:
+          return "message too big";
+        case protocol_error::data_after_close:
+          return "data after close";
         default:
           return "unknown websocket protocol error";
         }
@@ -142,28 +147,6 @@ namespace aero::websocket {
         }
       }
     };
-
-    class message_reader_error_category final : public std::error_category {
-     public:
-      [[nodiscard]] const char* name() const noexcept override {
-        return "aero.websocket.message_reader";
-      }
-
-      [[nodiscard]] std::string message(int condition) const override {
-        switch (static_cast<message_reader_error>(condition)) {
-        case message_reader_error::unexpected_continuation:
-          return "unexpected continuation frame";
-        case message_reader_error::interleaved_data_frame:
-          return "data frame interleaved into fragmented message";
-        case message_reader_error::message_too_big:
-          return "message too big";
-        case message_reader_error::data_after_close:
-          return "data after close";
-        default:
-          return "unknown websocket message reader error";
-        }
-      }
-    };
   } // namespace detail
 
   const inline std::error_category& protocol_error_category() noexcept {
@@ -176,11 +159,6 @@ namespace aero::websocket {
     return category;
   }
 
-  const inline std::error_category& message_reader_category() noexcept {
-    static const detail::message_reader_error_category category;
-    return category;
-  }
-
   inline std::error_code make_error_code(protocol_error value) {
     return {static_cast<int>(value), websocket::protocol_error_category()};
   }
@@ -189,22 +167,8 @@ namespace aero::websocket {
     return {static_cast<int>(value), websocket::handshake_error_category()};
   }
 
-  inline std::error_code make_error_code(message_reader_error value) noexcept {
-    return {static_cast<int>(value), websocket::message_reader_category()};
-  }
-
   [[nodiscard]] inline bool is_protocol_violation(const std::error_code& ec) {
-    if (ec.category() == protocol_error_category()) {
-      return true;
-    }
-
-    if (ec == make_error_code(message_reader_error::unexpected_continuation) ||
-        ec == make_error_code(message_reader_error::data_after_close) ||
-        ec == make_error_code(message_reader_error::interleaved_data_frame)) {
-      return true;
-    }
-
-    return false;
+    return ec.category() == protocol_error_category();
   }
 
   [[nodiscard]] inline bool is_invalid_payload(const std::error_code& ec) {
@@ -223,5 +187,3 @@ template <>
 struct std::is_error_code_enum<aero::websocket::protocol_error> : std::true_type {};
 template <>
 struct std::is_error_code_enum<aero::websocket::handshake_error> : std::true_type {};
-template <>
-struct std::is_error_code_enum<aero::websocket::message_reader_error> : std::true_type {};

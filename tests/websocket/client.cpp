@@ -313,7 +313,7 @@ int main() {
         expect(not static_cast<bool>(connect_ec));
 
         auto message = client.read();
-        expect(!message.has_value() && message.error() == websocket::message_reader_error::message_too_big);
+        expect(!message.has_value() && message.error() == websocket::protocol_error::message_too_big);
         expect(client.is_closed()) << "an oversized message must fail the connection, not leave it open for reuse";
         expect(received_close_code == 1009U)
           << "close frame should carry close code 1009 (message too big), got: " << received_close_code;

@@ -747,19 +747,18 @@ namespace aero::websocket {
     }
 
     static bool is_fatal_websocket_error(std::error_code ec) {
-      return websocket::is_invalid_payload(ec) || websocket::is_protocol_violation(ec) ||
-             ec == websocket::message_reader_error::message_too_big;
+      return websocket::is_invalid_payload(ec) || websocket::is_protocol_violation(ec);
     }
 
     static websocket::close_code close_code_for_error(std::error_code ec) {
       if (websocket::is_invalid_payload(ec)) {
         return close_code::invalid_payload;
       }
+      if (ec == websocket::protocol_error::message_too_big) {
+        return close_code::message_too_big;
+      }
       if (websocket::is_protocol_violation(ec)) {
         return close_code::protocol_error;
-      }
-      if (ec == websocket::message_reader_error::message_too_big) {
-        return close_code::message_too_big;
       }
 
       return {};
